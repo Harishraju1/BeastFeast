@@ -1,0 +1,94 @@
+# DEVELOPMENT STATUS — BEAST FEAST 5.0
+
+Last updated: 2026-11-16 (BEAST PROJECT GARAGE added)
+
+## Completed modules
+
+| Module | State | Notes |
+| --- | --- | --- |
+| Design system & app shell | ✅ | Dark futuristic theme (#080A0F, orange/cyan accents), Space Grotesk / Inter / JetBrains Mono, animated grid, sidebar, top bar with search (Ctrl K), notifications, help, settings, autosave indicator |
+| Command Center | ✅ | Interactive 3D hero robot; workspace stats; continue building; weekly missions; achievements & streaks; featured tutorials; leaderboard preview; competition updates |
+| Authentication & profiles | ✅ local / ⚠️ Supabase untested | Local mode uses salted SHA-256 hashes in browser storage. The Supabase adapter and schema are written but not yet run against a live project |
+| Component catalogue | ✅ | 552/552 master-list entries, 0 missing, 0 duplicate IDs. Classes A/B/C. Honest GREEN/BLUE/YELLOW/GREY status. 75 datasheet-referenced pinouts, 220 function-standard pinouts. In-app completeness validator (can compare a newly uploaded list) |
+| Component library UI | ✅ | Category tree, search by model/category/manufacturer, filters (voltage, protocol, competition, simulation status, class). Inspector with generated pinout, front/side/top/3D procedural views, specs (unknown = "unverified"), compatibility, datasheet link. Workshop-equipment tab |
+| 3D Robot Designer | ✅ | Add by click or drag-drop; move/rotate gizmo (snapping); duplicate/delete; wheels snap onto motor shafts; chassis builder (19 chassis types, size, material, mounting holes); exploded view with assembly order; assembly tree / console / warnings |
+| Mechanical validation | ✅ | Wheel attachment, motor orientation, one-sided drive, axle alignment, wheel size mismatch, overlaps, wheel/chassis interference, ground clearance, centre of mass vs support polygon, sensor height/placement, sumo size/mass limits (admin configurable) |
+| Circuit Studio | ✅ | Pin-to-pin wiring, colour conventions, labels, delete, pin inspector (live voltages and peers), animated flow on powered nets, zoom/pan/fit, grid snap, undo/redo, JSON netlist export |
+| Electrical validation engine | ✅ | ~35 rules: missing components, short circuits, supply conflicts, reverse polarity, over/under-voltage (full-charge aware), missing power/ground, no common ground, motor on GPIO, motor wiring, driver inputs/enables/standby, L298N jumper logic, PWM assignment, duplicate GPIO, analog vs digital pins, logic-level mismatch, I²C/SPI/UART wiring, current limits, LEDs without resistors, suggestions. Scores computed from issues. FIX IT navigates and highlights the part/pin |
+| Code Studio | ✅ | Monaco (self-hosted, works offline), Arduino autocomplete, live diagnostics, format, templates (8), versions, .ino download/import, static explanation, pin-map panel. Circuit-aware checks (pin mismatch, unwired pins, writing to sensor outputs, missing pinMode …). Unlocked only after validation passes |
+| Code execution | ✅ | **BEAST interpreter**: sandboxed tree-walking interpreter for a documented Arduino C/C++ subset (no eval, step and time limits, unsupported features reported). **AVR emulator**: real compiled .hex for Uno R3/Nano via avr8js |
+| Physics & simulation arena | ✅ | Planar rigid-body dynamics, DC motor model, tyre friction circle, battery sag, collisions, ramps; 1 ms fixed step separate from rendering; 4 cameras; START/PAUSE/STOP/RESTART/RESET/step; 0.25–4× speed; telemetry, sensor bars, controller pins, serial monitor; WASD/SHIFT/SPACE/↑↓ plus on-screen controller; keys sent to Bluetooth Serial when an HC-05/06 is wired |
+| Robo Race | ✅ | Laps, checkpoints in order, off-track, collisions, lap times, max/avg speed, records, ghost of best run |
+| Line Following | ✅ | Reflectance sensors sample the real track under each sensor footprint; analog/digital/array outputs reach the code only through the wired pins. Verified: the PID template completes a lap; with sensors unplugged it cannot |
+| Sumo | ✅ | Circular/rectangular arenas, ring-out, wedge load transfer, match timer, start delay; 4 AI opponents (search/approach/attack/retreat/edge-avoid using only their own sensors) |
+| Debugging assistant | ✅ | Runtime errors, compile failures, runtime warnings, motors not responding (only when code commands motion), wrong motor direction, off-track, ring-out, battery low, collisions. Separates verified facts from possible causes; can pause the simulation |
+| Track Designer | ✅ | Race/line/sumo tools, endpoint snapping, drag/rotate/resize/duplicate/delete, undo/redo, zoom/pan, free-draw lines, surface friction, difficulty, laps, arena settings, 3D preview, save/load/import/export, 9 example tracks |
+| Beast Topics | ✅ | 84 topics (30 line, 28 race, 26 sumo), all required sections, generated diagrams, mark complete, bookmark, continue reading, YouTube search links and admin-curated embeds |
+| Quiz & challenge engine | ✅ | 350 questions across all 10 types; topic quizzes, 3 competition quizzes, 2 weekly quizzes, 3 engineering challenges, final exam; immediate feedback; XP once per question |
+| Gamification | ✅ | XP rules table, ranks, 9 achievements derived from recorded events, streaks, 9 leaderboards |
+| Admin dashboard | ✅ | Students and roles, component editing (images, 3D URL, datasheet, verification, pin JSON), lesson overrides and extra questions, videos, weekly missions, announcements, competition rules, featured projects, analytics |
+| BEAST PROJECT GARAGE | ✅ | 9 reference robots (3 per competition) built from catalogue parts through the normal project pipeline; Garage page with Line Following Lab / Robo Race Garage / Sumo Battle Workshop; VIEW / LOAD / SIMULATE NOW / CUSTOMISE; project view with OVERVIEW, 3D ASSEMBLY, CIRCUIT, CODE, SIMULATION, COMPONENTS tabs; 12-step loader that really builds, compiles, validates and starts the simulation; read-only originals + student copies; 14-check readiness test (all 9: READY TO SIMULATE); live tuning panel (sliders send the firmware's own Serial commands) and firmware telemetry panel; keyboard → Bluetooth serial → firmware for the manual racers |
+| Supabase schema | ✅ written / ⚠️ not yet run | Tables for all 25 entities, normalised project tables kept in sync by trigger, RLS on every table, `award_xp` / `complete_lesson` / `submit_quiz` security-definer functions, leaderboard view, seed script |
+
+## In progress / pending
+
+- **Supabase mode end-to-end test.** No credentials were available in this session, so `SupabaseBackend`, the SQL migration and `seed:supabase` have not been run against a real project. Run them before relying on cloud mode.
+- **Accurate 3D models and verified photos.** None exist yet (0/552). Every part uses a clearly labelled procedural model built from its dimensions. Admins can attach images and glTF URLs; the glTF URL is stored but the designer does not load glTF files yet.
+- **Pinouts for 257 entries** (mostly mechanical/workshop items, plus some boards: ESP32-S3/C3, XIAO, STM32, Teensy, nRF52840, VNH-series drivers). These are shown as "pending verification". Admins can add them in Admin → Components.
+- **Admin sign-off.** "Datasheet-referenced" values were entered from manufacturer documentation but are not yet marked admin-verified.
+- **Wokwi integration** was not used (licensing); the AVR path uses the open-source avr8js core directly.
+- **Persisted achievements in Supabase.** Achievements are derived client-side from XP events; the `user_achievements` table is not written yet.
+
+## BEAST PROJECT GARAGE — test results
+
+Full report: `GARAGE_TEST_REPORT.md` (`npm run garage:report`).
+- **Readiness:** all 9 reference projects pass all 14 checks (READY TO SIMULATE).
+- **Required behaviour scenarios:** 45 / 45 passing.
+- **Line:** straight, curves, sharp turns, 12 mm and 30 mm lines, intersections, lost-line recovery and calibration.
+- **Race:** forward, reverse, left, right and stop over Bluetooth; acceleration and braking; collisions; custom track; encoder accuracy; autonomous laps.
+- **Sumo:** edge detection, boundary recovery, detection, attack and distance accuracy.
+- **Observed-behaviour runs:** 16 recorded (custom 18 cm-radius student course for each line robot, RR-03 on the obstacle course, all sumo robots against every AI level); 15 succeeded.
+- **Browser checks:** Garage readiness badges, the 12-step loader, autostart, live Kp change confirmed from the firmware's own telemetry (0.090 → 0.300), read-only original refusing a delete, fork + edit, and all six project-view tabs.
+
+Simulator fixes found while building the Garage:
+- **Encoder edges.** Encoders used to fire their interrupt on every quadrature count, regardless of the attachInterrupt mode, and the ISR read the pin levels at the end of the physics step. The bridge now emits real per-pin rising/falling edges, honours RISING/FALLING/CHANGE, and runs each ISR while the pins show their state at that edge. Quadrature decoding is now exact.
+- **Code check.** "Wired but unused" warnings are no longer raised when the firmware accesses pins through arrays or variables, which can't be resolved statically.
+- **Sharp IR outputs.** These now carry their datasheet output range (≈3.1 V max), so logic-level checks on 3.3 V boards are correct.
+
+## Testing results
+
+`npm test` → **612 tests in 15 files, all passing**. `tsc` and ESLint are clean, and `next build` succeeds.
+
+| Required scenario | Automated test | Browser check |
+| --- | --- | --- |
+| 1. 2WD robot (Uno, L298N, 2 DC motors, wheels, battery) | `tests/circuit/validation.test.ts` | Built from an empty project in the UI, wired pin by pin, validated → "ROBOT SYSTEMS VERIFIED", scores 100/100/96/98 |
+| 2. IR sensor array line follower | validation + `tests/integration/workflow.test.ts` (PID template completes a lap; fails with sensors unplugged) | Arena: PID code reaches 99% of the oval using the 5-channel array |
+| 3. Incorrect motor driver wiring | missing common ground, ENA on non-PWM pin, IN1 open, motor on GPIO, reverse polarity, short circuit, over-voltage | UI report lists the exact pin; FIX IT jumps to Circuit Studio and highlights it |
+| 4. Code GPIO differs from circuit | `C_PIN_MISMATCH` test | Monaco shows "Circuit: D5 → DRV1 ENA. Code (line 2): ENA = 11 (D11)" |
+| 5. Manual WASD driving | session test (forward, right turn, e-stop; no power without ground) | W 0.5 m/s forward, D turns right, SPACE stops, page does not scroll |
+| 6. Custom race track | custom TrackDef test | Track built in the Track Designer (snapping confirmed), robot driven on it, obstacle collision registered |
+| 7. Sumo vs opponent | sumo template vs AI | Sumo code waits 5 s, then beats the Intermediate opponent ("VICTORY!") |
+| 8. Save → log out → log in | — | Projects, verification state and XP persist (local mode, same device) |
+| 9. Topic + quiz → XP & progress | `tests/learning` (content integrity) | Lesson +20 XP; quiz XP only for newly correct answers (+25, then +50, then +0 on retry); topic marked complete |
+| 10. Catalogue vs master list | `tests/catalogue/completeness.test.ts` | Library → Completeness report: COMPLETE 552/552 |
+
+Bugs found and fixed during browser testing:
+- Global keyboard shortcuts crashed on non-element event targets.
+- The debugger raised a false "motors not responding" alarm during a sumo start delay.
+- FIX IT camera focus was overridden by fit-to-view.
+- Wheel labels were duplicated.
+- The arena loop stalled when animation frames are throttled.
+- Circuit Studio layout was cramped at laptop widths.
+
+## Technical limitations (stated honestly in the UI too)
+
+- **Garage sumo matches:** the reference sumo robots (25GA370 motors, sticky sumo tyres, wedge) out-push the built-in AI opponent robots, so head-on matches are usually won in the first push. That outcome comes from the physics, not a script.
+- **RR-03 on obstacles:** RR-03 keeps itself on the road with two floor sensors but has no obstacle sensor, so it hits obstacles on the obstacle tracks. This is documented in the project as an extension exercise.
+- **Tight student tracks:** line robots can lose the line on very tight custom curves (18 cm radius). They then search for it, as a real robot would.
+
+- **Physics** is planar (top-down 2.5D). There is no tipping, wheel lift-off or dynamic weight transfer. Ramps are force zones. Floor sensors do not see robots. Parameters marked "estimated" (motor curves, tyre μ) are typical values, editable per part.
+- **The interpreter** runs a subset of Arduino C/C++. Classes, structs, pointers, templates, most libraries (Wire, SoftwareSerial, QTRSensors, VL53L0X …) and sprintf are reported as unsupported. Timing is approximate, not cycle-accurate. For full C++, upload a compiled .hex (Uno R3/Nano only).
+- **QTR-RC timing sensors, I²C sensors (ToF, IMU) and servos** are design/connection-supported (BLUE) but not simulated.
+- **Local mode** is per-browser and not tamper-proof. Use Supabase for real competitions.
+- **Dev server quirk:** with Turbopack, newly added Tailwind classes occasionally do not appear until the dev server restarts. Production builds are unaffected.
+- The UI is optimised for laptop/desktop. Phones can browse, learn and take quizzes; the 3D/circuit editors need a mouse and ≥1024 px width.

@@ -1,0 +1,8 @@
+{
+  "note": "Throwaway local-mode test account used for browser verification. Local mode stores accounts only in the browser's localStorage.",
+  "name": "Asha Tester",
+  "email": "asha.tester@beast.test",
+  "password": "beast-test-2026",
+  "campus": "KKH Main",
+  "studentId": "TEST-001"
+}
