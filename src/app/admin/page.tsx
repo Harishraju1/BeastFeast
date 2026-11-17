@@ -10,14 +10,15 @@ import { allComponents, getComponent } from "@/lib/catalogue";
 import { TOPICS, WEEKLY_MISSIONS_DEFAULT } from "@/lib/learning";
 import type { QuizQuestion } from "@/lib/learning/types";
 import { youtubeId } from "@/lib/youtube";
+import { AdminManagement } from "@/components/admin/AdminManagement";
+import { ROLE_LABEL, isStaff } from "@/lib/roles";
 
-type Tab = "students" | "components" | "learning" | "videos" | "missions" | "announcements" | "competitions" | "featured" | "analytics";
+type Tab = "admins" | "students" | "components" | "learning" | "videos" | "missions" | "announcements" | "competitions" | "featured" | "analytics";
 const rid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 
 function Students() {
   const [list, setList] = useState<Profile[]>([]);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
-  const me = useApp((s) => s.user);
   const load = async () => {
     const b = await getBackend();
     const ps = await b.listProfiles();
@@ -37,13 +38,11 @@ function Students() {
             <tr key={u.id} className="border-t border-line">
               <td className="px-3 py-2">{u.name}</td>
               <td className="px-3 py-2 text-muted">{u.campus || "—"} · {u.studentId || "—"}</td>
-              <td className="px-3 py-2 font-mono text-orange">{u.xp}</td>
+              <td className="px-3 py-2 font-mono text-accent-ink">{u.xp}</td>
               <td className="px-3 py-2">{progress[u.id]?.completedTopics.length ?? "—"}</td>
               <td className="px-3 py-2">{progress[u.id]?.quizAttempts.length ?? "—"}</td>
               <td className="px-3 py-2">
-                <select className="bf-input !w-auto !py-1" value={u.role} disabled={u.id === me?.id} onChange={async (e) => { const b = await getBackend(); await b.setRole(u.id, e.target.value as Profile["role"]); await load(); }}>
-                  <option value="student">student</option><option value="admin">admin</option>
-                </select>
+                <Badge tone={u.role === "super_admin" ? "accent" : u.role === "admin" ? "brand" : "dim"}>{ROLE_LABEL[u.role]}</Badge>
               </td>
             </tr>
           ))}
@@ -92,7 +91,7 @@ function Components() {
         <input className="bf-input mb-2" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="max-h-[60vh] overflow-auto">
           {comps.map((x) => (
-            <button key={x.id} onClick={() => setId(x.id)} className={`flex w-full justify-between rounded px-2 py-1 text-left text-sm ${id === x.id ? "bg-orange/15 text-orange" : "hover:bg-panel2"}`}>
+            <button key={x.id} onClick={() => setId(x.id)} className={`flex w-full justify-between rounded px-2 py-1 text-left text-sm ${id === x.id ? "bg-accent/15 text-accent-ink" : "hover:bg-panel2"}`}>
               <span className="truncate">{x.name}</span><span className="font-mono text-[10px] text-dim">{x.simStatus}</span>
             </button>
           ))}
@@ -257,7 +256,7 @@ function Competitions() {
   return (
     <Panel title="Competition rules" actions={<Button size="sm" variant="primary" onClick={async () => { await saveContent({ rules: r }); toast("success", "Rules saved — used by validation and the arena"); }}>Save</Button>}>
       <div className="grid gap-6 md:grid-cols-3">
-        <div className="space-y-2"><div className="bf-label text-orange">Sumo</div>
+        <div className="space-y-2"><div className="bf-label text-accent-ink">Sumo</div>
           <Field label="Max length (mm)"><input className="bf-input" type="number" value={r.sumo.maxLength_mm} onChange={(e) => setR({ ...r, sumo: { ...r.sumo, maxLength_mm: num(e.target.value) } })} /></Field>
           <Field label="Max width (mm)"><input className="bf-input" type="number" value={r.sumo.maxWidth_mm} onChange={(e) => setR({ ...r, sumo: { ...r.sumo, maxWidth_mm: num(e.target.value) } })} /></Field>
           <Field label="Max mass (g)"><input className="bf-input" type="number" value={r.sumo.maxMass_g} onChange={(e) => setR({ ...r, sumo: { ...r.sumo, maxMass_g: num(e.target.value) } })} /></Field>
@@ -265,12 +264,12 @@ function Competitions() {
           <Field label="Start delay (s)"><input className="bf-input" type="number" value={r.sumo.startDelayS} onChange={(e) => setR({ ...r, sumo: { ...r.sumo, startDelayS: num(e.target.value) } })} /></Field>
           <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={r.bluetoothAllowedInSumo} onChange={(e) => setR({ ...r, bluetoothAllowedInSumo: e.target.checked })} /> Bluetooth / RC allowed in sumo</label>
         </div>
-        <div className="space-y-2"><div className="bf-label text-orange">Robo Race</div>
+        <div className="space-y-2"><div className="bf-label text-accent-ink">Robo Race</div>
           <Field label="Laps"><input className="bf-input" type="number" value={r.race.laps} onChange={(e) => setR({ ...r, race: { ...r.race, laps: num(e.target.value) } })} /></Field>
           <Field label="Max length (mm)"><input className="bf-input" type="number" value={r.race.maxLength_mm} onChange={(e) => setR({ ...r, race: { ...r.race, maxLength_mm: num(e.target.value) } })} /></Field>
           <Field label="Max width (mm)"><input className="bf-input" type="number" value={r.race.maxWidth_mm} onChange={(e) => setR({ ...r, race: { ...r.race, maxWidth_mm: num(e.target.value) } })} /></Field>
         </div>
-        <div className="space-y-2"><div className="bf-label text-orange">Line Following</div>
+        <div className="space-y-2"><div className="bf-label text-accent-ink">Line Following</div>
           <Field label="Time limit (s)"><input className="bf-input" type="number" value={r.line.timeLimitS} onChange={(e) => setR({ ...r, line: { ...r.line, timeLimitS: num(e.target.value) } })} /></Field>
           <Field label="Max length (mm)"><input className="bf-input" type="number" value={r.line.maxLength_mm} onChange={(e) => setR({ ...r, line: { ...r.line, maxLength_mm: num(e.target.value) } })} /></Field>
           <Field label="Max width (mm)"><input className="bf-input" type="number" value={r.line.maxWidth_mm} onChange={(e) => setR({ ...r, line: { ...r.line, maxWidth_mm: num(e.target.value) } })} /></Field>
@@ -307,7 +306,7 @@ function Analytics() {
     <div className="grid gap-4 md:grid-cols-2">
       <Panel title="Platform activity">
         <dl className="grid grid-cols-2 gap-2 text-sm">
-          {([["Projects", all.length], ["Validated robots", count("validation-pass")], ["Simulation runs", sims.length], ["Tracks completed", count("lap-complete")], ["Sumo wins", count("sumo-win")], ["Lessons completed", count("lesson-complete")], ["Quiz passes", count("quiz-pass")], ["Tracks designed", count("track-created")]] as [string, number][]).map(([k, v]) => <div key={k} className="contents"><dt className="text-muted">{k}</dt><dd className="font-mono text-orange">{v}</dd></div>)}
+          {([["Projects", all.length], ["Validated robots", count("validation-pass")], ["Simulation runs", sims.length], ["Tracks completed", count("lap-complete")], ["Sumo wins", count("sumo-win")], ["Lessons completed", count("lesson-complete")], ["Quiz passes", count("quiz-pass")], ["Tracks designed", count("track-created")]] as [string, number][]).map(([k, v]) => <div key={k} className="contents"><dt className="text-muted">{k}</dt><dd className="font-mono text-accent-ink">{v}</dd></div>)}
         </dl>
       </Panel>
       <Panel title="Simulation statistics">
@@ -329,14 +328,16 @@ const mostCommon = (xs: string[]) => {
 
 function Inner() {
   const user = useApp((s) => s.user);
-  const [tab, setTab] = useState<Tab>("students");
-  if (user?.role !== "admin") return <div className="p-10 text-center text-bad">Administrator access required.</div>;
+  const [tab, setTab] = useState<Tab>("admins");
+  // The server layout already checked the role in cloud mode; this guards local mode and stale client state.
+  if (!isStaff(user?.role)) return <div className="p-10 text-center text-bad">Administrator access required.</div>;
   return (
     <div className="mx-auto max-w-7xl px-5 py-8">
-      <PageHeader kicker="ROBOTICS CLUB KKH" title="Admin Dashboard" />
+      <PageHeader kicker={user?.role === "super_admin" ? "SUPER ADMIN · ROBOTICS CLUB KKH" : "ADMIN · ROBOTICS CLUB KKH"} title="Admin Dashboard" />
       <div className="mb-5 overflow-x-auto">
-        <Tabs value={tab} onChange={setTab} items={(["students", "components", "learning", "videos", "missions", "announcements", "competitions", "featured", "analytics"] as Tab[]).map((t) => ({ value: t, label: t[0].toUpperCase() + t.slice(1) }))} />
+        <Tabs value={tab} onChange={setTab} items={(["admins", "students", "components", "learning", "videos", "missions", "announcements", "competitions", "featured", "analytics"] as Tab[]).map((t) => ({ value: t, label: t === "admins" ? "Admin Management" : t[0].toUpperCase() + t.slice(1) }))} />
       </div>
+      {tab === "admins" && <AdminManagement />}
       {tab === "students" && <Students />}
       {tab === "components" && <Components />}
       {tab === "learning" && <Learning />}

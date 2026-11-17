@@ -61,7 +61,7 @@ export default function LeaderboardPage() {
         </PageHeader>
         <div className="mb-4 flex flex-wrap gap-1.5">
           {BOARDS.map((x) => (
-            <button key={x.id} onClick={() => setBoard(x.id)} className={`rounded-full border px-3 py-1 text-xs ${board === x.id ? "border-orange bg-orange/10 text-orange" : "border-line text-muted hover:text-text"}`}>{x.title}</button>
+            <button key={x.id} onClick={() => setBoard(x.id)} className={`rounded-full border px-3 py-1 text-xs ${board === x.id ? "border-accent bg-accent/10 text-accent-ink" : "border-line text-muted hover:text-text"}`}>{x.title}</button>
           ))}
         </div>
         <div className="overflow-hidden rounded-lg border border-line">
@@ -73,17 +73,17 @@ export default function LeaderboardPage() {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.u.id} className={`border-t border-line ${r.u.id === me?.id ? "bg-orange/5" : ""}`}>
-                  <td className="px-4 py-2 font-mono">{i < 3 ? <Trophy size={16} className={i === 0 ? "text-orange" : i === 1 ? "text-muted" : "text-[#b07040]"} /> : i + 1}</td>
+                <tr key={r.u.id} className={`border-t border-line ${r.u.id === me?.id ? "bg-accent/5" : ""}`}>
+                  <td className="px-4 py-2 font-mono">{i < 3 ? <Trophy size={16} className={i === 0 ? "text-accent-ink" : i === 1 ? "text-muted" : "text-[#d9a066]"} /> : i + 1}</td>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-panel2 text-xs text-cyan">{r.u.avatar ? <img src={r.u.avatar} alt="" className="h-full w-full object-cover" /> : r.u.name[0]}</span>
+                      <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-panel2 text-xs text-brand">{r.u.avatar ? <img src={r.u.avatar} alt="" className="h-full w-full object-cover" /> : r.u.name[0]}</span>
                       <span>{r.u.name}</span>
                       <Badge>{rankFor(r.u.xp).name}</Badge>
                     </div>
                   </td>
                   <td className="hidden px-4 py-2 text-muted sm:table-cell">{r.u.campus || "—"}</td>
-                  <td className="px-4 py-2 text-right font-mono text-orange">{r.v}</td>
+                  <td className="px-4 py-2 text-right font-mono text-accent-ink">{r.v}</td>
                   <td className="hidden px-4 py-2 text-right font-mono md:table-cell">{r.u.xp}</td>
                   <td className="hidden px-4 py-2 text-right md:table-cell">{BACKEND_MODE === "local" || r.u.id === me?.id ? r.projects : "—"}</td>
                 </tr>

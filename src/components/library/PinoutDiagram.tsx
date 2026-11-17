@@ -1,16 +1,17 @@
 "use client";
 import type { ComponentRecord, PinDef, PinFunction } from "@/lib/types";
+import { PIN_HEX, THEME } from "@/lib/theme";
 
 export const PIN_COLOR: Partial<Record<PinFunction, string>> = {
-  vin: "#ff3b4e", vout: "#ff6b1a", "bat+": "#ff3b4e", gnd: "#9aa3ad", "bat-": "#9aa3ad",
-  gpio: "#00d9ff", "in-pwm": "#f5b301", "in-digital": "#f5b301", "in-analog": "#f5b301",
-  "out-digital": "#22c55e", "out-analog": "#22c55e", "out-pwm": "#22c55e",
-  "motor-out": "#c084fc", "motor-term": "#c084fc", "i2c-sda": "#3b82f6", "i2c-scl": "#3b82f6",
-  "spi-mosi": "#3b82f6", "spi-miso": "#3b82f6", "spi-sck": "#3b82f6", "spi-cs": "#3b82f6", "uart-tx": "#3b82f6", "uart-rx": "#3b82f6",
+  vin: PIN_HEX.power, vout: PIN_HEX.powerOut, "bat+": PIN_HEX.power, gnd: PIN_HEX.ground, "bat-": PIN_HEX.ground,
+  gpio: PIN_HEX.gpio, "in-pwm": PIN_HEX.input, "in-digital": PIN_HEX.input, "in-analog": PIN_HEX.input,
+  "out-digital": PIN_HEX.output, "out-analog": PIN_HEX.output, "out-pwm": PIN_HEX.output,
+  "motor-out": PIN_HEX.motor, "motor-term": PIN_HEX.motor, "i2c-sda": PIN_HEX.bus, "i2c-scl": PIN_HEX.bus,
+  "spi-mosi": PIN_HEX.bus, "spi-miso": PIN_HEX.bus, "spi-sck": PIN_HEX.bus, "spi-cs": PIN_HEX.bus, "uart-tx": PIN_HEX.bus, "uart-rx": PIN_HEX.bus,
 };
 
 export function pinColor(p: PinDef) {
-  return PIN_COLOR[p.fn] ?? "#5f6b80";
+  return PIN_COLOR[p.fn] ?? PIN_HEX.other;
 }
 
 export function pinFunctionText(p: PinDef): string {
@@ -42,8 +43,8 @@ export function PinoutDiagram({ comp, highlight, compact }: { comp: ComponentRec
   const bx = w / 2 - 55;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label={`${comp.name} pinout`}>
-      <rect x={bx} y={10} width={110} height={h - 20} rx={6} fill="#10141d" stroke="#33405a" />
-      <text x={w / 2} y={h / 2} textAnchor="middle" fill="#95a1b5" fontSize={10} fontFamily="JetBrains Mono" transform={`rotate(-90 ${w / 2} ${h / 2})`}>
+      <rect x={bx} y={10} width={110} height={h - 20} rx={6} fill={THEME.sageDeep} stroke={THEME.hairline2} />
+      <text x={w / 2} y={h / 2} textAnchor="middle" fill={THEME.ivoryMuted} fontSize={10} fontFamily="JetBrains Mono" transform={`rotate(-90 ${w / 2} ${h / 2})`}>
         {(comp.model ?? comp.name).slice(0, 34)}
       </text>
       {left.map((p, i) => {
@@ -53,7 +54,7 @@ export function PinoutDiagram({ comp, highlight, compact }: { comp: ComponentRec
           <g key={p.id}>
             <line x1={bx - 26} y1={y} x2={bx} y2={y} stroke={pinColor(p)} strokeWidth={hl ? 3 : 1.5} />
             <circle cx={bx - 26} cy={y} r={hl ? 4 : 2.5} fill={pinColor(p)} />
-            <text x={bx - 32} y={y + 3} textAnchor="end" fill={hl ? "#ff6b1a" : "#f4f7fb"} fontSize={compact ? 8.5 : 10} fontFamily="JetBrains Mono">
+            <text x={bx - 32} y={y + 3} textAnchor="end" fill={hl ? THEME.accentText : THEME.ivory} fontSize={compact ? 8.5 : 10} fontFamily="JetBrains Mono">
               {p.label}
             </text>
           </g>
@@ -66,7 +67,7 @@ export function PinoutDiagram({ comp, highlight, compact }: { comp: ComponentRec
           <g key={p.id}>
             <line x1={bx + 110} y1={y} x2={bx + 136} y2={y} stroke={pinColor(p)} strokeWidth={hl ? 3 : 1.5} />
             <circle cx={bx + 136} cy={y} r={hl ? 4 : 2.5} fill={pinColor(p)} />
-            <text x={bx + 142} y={y + 3} fill={hl ? "#ff6b1a" : "#f4f7fb"} fontSize={compact ? 8.5 : 10} fontFamily="JetBrains Mono">
+            <text x={bx + 142} y={y + 3} fill={hl ? THEME.accentText : THEME.ivory} fontSize={compact ? 8.5 : 10} fontFamily="JetBrains Mono">
               {p.label}
             </text>
           </g>

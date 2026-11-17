@@ -17,6 +17,7 @@ import { LibraryBrowser } from "@/components/library/LibraryBrowser";
 import { Button, Field, SimBadge, Tabs } from "@/components/ui";
 import { IssueCard } from "../Validation";
 import { isTypingTarget } from "@/lib/keyboard";
+import { THEME } from "@/lib/theme";
 
 const MM = 0.001;
 
@@ -53,10 +54,10 @@ function Scene({ project, exploded, mode, onCommit }: { project: Project; explod
 
   return (
     <>
-      <color attach="background" args={["#090c12"]} />
+      <color attach="background" args={[THEME.sceneBg]} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[0.4, 0.8, 0.3]} intensity={2} castShadow />
-      <pointLight position={[-0.4, 0.3, -0.4]} intensity={2} color="#00d9ff" />
+      <pointLight position={[-0.4, 0.3, -0.4]} intensity={1.6} color={THEME.fillLight} />
       <group position={[0, -ground, 0]}>
         <group position={[0, exploded * -0.1, 0]} onPointerDown={(e) => { e.stopPropagation(); select(null); }}>
           <ChassisMesh project={project} highlight={focus?.issue?.area === "mechanical" && !focus.partUid} />
@@ -92,7 +93,7 @@ function Scene({ project, exploded, mode, onCommit }: { project: Project; explod
         )}
         <ContactShadows position={[0, ground - 0.0005, 0]} opacity={0.5} scale={0.8} blur={2} far={0.2} />
       </group>
-      <Grid position={[0, 0, 0]} args={[2, 2]} cellSize={0.01} sectionSize={0.05} cellColor="#13202b" sectionColor="#1d4152" fadeDistance={1.2} infiniteGrid />
+      <Grid position={[0, 0, 0]} args={[2, 2]} cellSize={0.01} sectionSize={0.05} cellColor={THEME.gridMinor} sectionColor={THEME.gridMajor} fadeDistance={1.2} infiniteGrid />
       <OrbitControls makeDefault minDistance={0.08} maxDistance={1.5} target={[0, 0.04, 0]} />
       <CameraFocus target={focusPart ? (() => { const t = toThree(focusPart.position); return [t[0], t[1] - ground, t[2]] as [number, number, number]; })() : null} />
       <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
@@ -215,15 +216,15 @@ export default function Designer({ project }: { project: Project }) {
             <Scene project={project} exploded={exploded} mode={mode} onCommit={commit} />
           </Canvas>
           <div className="absolute left-3 top-3 flex gap-1">
-            <Button size="sm" variant={mode === "translate" ? "cyan" : "outline"} onClick={() => setMode("translate")} title="Move (G)"><Move3d size={14} /> Move</Button>
-            <Button size="sm" variant={mode === "rotate" ? "cyan" : "outline"} onClick={() => setMode("rotate")} title="Rotate (R)"><RotateCw size={14} /> Rotate</Button>
+            <Button size="sm" variant={mode === "translate" ? "secondary" : "outline"} onClick={() => setMode("translate")} title="Move (G)"><Move3d size={14} /> Move</Button>
+            <Button size="sm" variant={mode === "rotate" ? "secondary" : "outline"} onClick={() => setMode("rotate")} title="Rotate (R)"><RotateCw size={14} /> Rotate</Button>
             <Button size="sm" variant={explodeTarget ? "primary" : "outline"} onClick={() => { setExplodeTarget(explodeTarget ? 0 : 1); select(null); }}>
               {explodeTarget ? <Shrink size={14} /> : <Expand size={14} />} {explodeTarget ? "RESTORE ROBOT" : "EXPLODED VIEW"}
             </Button>
           </div>
           {explodeTarget > 0 && (
             <div className="bf-panel absolute right-3 top-3 w-56 p-3 text-xs">
-              <div className="bf-label mb-1 text-orange">Assembly order</div>
+              <div className="bf-label mb-1 text-accent-ink">Assembly order</div>
               <ol className="list-decimal space-y-0.5 pl-4 text-muted">
                 <li>Chassis plate ({project.chassis?.material})</li>
                 {ordered.map((p) => (
@@ -254,7 +255,7 @@ export default function Designer({ project }: { project: Project }) {
                   const att = p.attachedTo ? project.parts.find((x) => x.uid === p.attachedTo)?.label : null;
                   return (
                     <li key={p.uid}>
-                      <button onClick={() => select(p.uid)} className={`flex w-full items-center gap-2 rounded px-2 py-0.5 text-left ${selected === p.uid ? "bg-orange/15 text-orange" : "hover:bg-panel"}`}>
+                      <button onClick={() => select(p.uid)} className={`flex w-full items-center gap-2 rounded px-2 py-0.5 text-left ${selected === p.uid ? "bg-accent/15 text-accent-ink" : "hover:bg-panel"}`}>
                         <span className="w-28 truncate font-mono">{p.label}</span>
                         <span className="flex-1 truncate text-muted">{c.name}{att ? ` → on ${att} shaft` : ""}</span>
                         <SimBadge status={c.simStatus} />

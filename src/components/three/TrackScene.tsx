@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import type { CompiledTrack, Vec2 } from "@/lib/sim/types";
+import { THEME } from "@/lib/theme";
 
 /** Ribbon mesh along a polyline (world x,y → three x,-z), lying on the floor at height h. */
 export function ribbonGeometry(points: Vec2[], width: number, h = 0.0005): THREE.BufferGeometry {
@@ -50,12 +51,12 @@ export function TrackScene({ track }: { track: CompiledTrack }) {
     h = bounds.maxY - bounds.minY;
   const cx = (bounds.maxX + bounds.minX) / 2,
     cy = (bounds.maxY + bounds.minY) / 2;
-  const floorColor = def.kind === "line" ? "#f2f2ee" : def.kind === "sumo" ? "#20242c" : "#3c6b3f";
+  const floorColor = def.kind === "line" ? "#f2f2ee" : THEME.sageDeeper;
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0, -cy]} receiveShadow>
         <planeGeometry args={[w, h]} />
-        <meshStandardMaterial color={def.kind === "race" ? "#27452a" : floorColor} roughness={1} />
+        <meshStandardMaterial color={def.kind === "race" ? THEME.sageDeeper : floorColor} roughness={1} />
       </mesh>
       {track.roads.map((r, i) => (
         <Ribbon key={`r${i}`} points={r.points} width={r.width} color={def.surface.color || "#2b2f36"} h={0.0004} />
@@ -97,32 +98,32 @@ export function TrackScene({ track }: { track: CompiledTrack }) {
         o.kind === "box" ? (
           <mesh key={`o${i}`} position={[o.cx, 0.04, -o.cy]} rotation={[0, o.rotation, 0]} castShadow>
             <boxGeometry args={[o.w, 0.08, o.h]} />
-            <meshStandardMaterial color="#ff6b1a" />
+            <meshStandardMaterial color={THEME.accent} />
           </mesh>
         ) : (
           <mesh key={`o${i}`} position={[o.cx, 0.04, -o.cy]} castShadow>
             <cylinderGeometry args={[o.r, o.r, 0.08, 24]} />
-            <meshStandardMaterial color="#ff6b1a" />
+            <meshStandardMaterial color={THEME.accent} />
           </mesh>
         ),
       )}
       {track.ramps.map((r, i) => (
         <mesh key={`ramp${i}`} position={[0, 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <shapeGeometry args={[new THREE.Shape(r.polygon.map((p) => new THREE.Vector2(p.x, p.y)))]} />
-          <meshStandardMaterial color="#6b7280" side={THREE.DoubleSide} />
+          <meshStandardMaterial color="#8E9A90" side={THREE.DoubleSide} />
         </mesh>
       ))}
       {track.checkpoints.map((c) => (
-        <Segment key={`c${c.index}`} a={c.seg.a} b={c.seg.b} color="#00d9ff" width={0.015} />
+        <Segment key={`c${c.index}`} a={c.seg.a} b={c.seg.b} color={THEME.warn} width={0.015} />
       ))}
-      {track.startLine && <Segment a={track.startLine.a} b={track.startLine.b} color="#22c55e" />}
+      {track.startLine && <Segment a={track.startLine.a} b={track.startLine.b} color={THEME.ok} />}
       {track.finishLine && <Segment a={track.finishLine.a} b={track.finishLine.b} color="#ffffff" />}
       {track.walls.map((s, i) => {
         const len = Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y);
         return (
           <mesh key={`w${i}`} position={[(s.a.x + s.b.x) / 2, 0.025, -(s.a.y + s.b.y) / 2]} rotation={[0, Math.atan2(s.b.y - s.a.y, s.b.x - s.a.x), 0]}>
             <boxGeometry args={[len, 0.05, 0.02]} />
-            <meshStandardMaterial color="#334155" />
+            <meshStandardMaterial color={THEME.sageLight} />
           </mesh>
         );
       })}

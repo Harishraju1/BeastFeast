@@ -19,7 +19,7 @@ export default function ChallengesPage() {
     return (
       <div className="mx-auto max-w-3xl px-5 py-8">
         <button className="mb-3 text-xs text-muted hover:text-text" onClick={() => setActive(null)}>← All challenges</button>
-        <Panel title={quiz.title} actions={<Badge tone="orange">Pass {quiz.passPercent}%</Badge>}>
+        <Panel title={quiz.title} actions={<Badge tone="accent">Pass {quiz.passPercent}%</Badge>}>
           <QuizRunner quizId={quiz.id} questions={quiz.questionIds.map((id) => getQuestion(id)!).filter(Boolean)} title={quiz.title} passPercent={quiz.passPercent} />
         </Panel>
       </div>
@@ -38,13 +38,13 @@ export default function ChallengesPage() {
             {QUIZZES.filter((q) => q.kind === kind).map((q) => {
               const b = best(q.id);
               return (
-                <div key={q.id} className={`bf-panel flex flex-col justify-between p-4 ${kind === "final" ? "bf-glow-orange" : ""}`}>
+                <div key={q.id} className={`bf-panel flex flex-col justify-between p-4 ${kind === "final" ? "bf-glow-accent" : ""}`}>
                   <div>
-                    <div className="flex items-center gap-2">{kind === "final" ? <Award className="text-orange" size={18} /> : <Swords className="text-cyan" size={16} />}<span className="font-display font-semibold">{q.title}</span></div>
+                    <div className="flex items-center gap-2">{kind === "final" ? <Award className="text-accent-ink" size={18} /> : <Swords className="text-brand" size={16} />}<span className="font-display font-semibold">{q.title}</span></div>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
                       <Badge>{q.questionIds.length} questions</Badge>
-                      <Badge tone="orange">pass {q.passPercent}%</Badge>
-                      {q.pathId && <Badge tone="cyan">{q.pathId}</Badge>}
+                      <Badge tone="accent">pass {q.passPercent}%</Badge>
+                      {q.pathId && <Badge tone="brand">{q.pathId}</Badge>}
                       {q.timeLimitS && <Badge><Clock size={10} className="mr-1" />{Math.round(q.timeLimitS / 60)} min</Badge>}
                     </div>
                   </div>
@@ -65,7 +65,7 @@ export default function ChallengesPage() {
           <li>▸ Win a sumo match — <b className="text-text">+60 XP</b> per opponent level per arena (Advanced/Beast unlock <i>Simulation Champion</i>)</li>
           <li>▸ Complete a line track with your own code — unlocks <i>Sensor Expert</i></li>
         </ul>
-        <Link href="/projects" className="mt-3 inline-block text-sm text-orange">Open a project → Simulation Arena</Link>
+        <Link href="/projects" className="mt-3 inline-block text-sm text-accent-ink">Open a project → Simulation Arena</Link>
       </Panel>
     </div>
   );

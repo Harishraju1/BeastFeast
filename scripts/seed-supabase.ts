@@ -10,6 +10,11 @@ import { createClient } from "@supabase/supabase-js";
 import { CATALOGUE } from "../src/lib/catalogue";
 import { LEARNING_PATHS, QUIZZES, TOPICS, WEEKLY_MISSIONS_DEFAULT } from "../src/lib/learning";
 
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  /* variables may come from the environment instead */
+}
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) {

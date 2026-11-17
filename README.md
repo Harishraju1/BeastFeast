@@ -28,6 +28,10 @@ With no Supabase variables set, the app runs in **local mode**: accounts, projec
 | `npm run lint` | ESLint |
 | `npm run catalogue:import [file.md]` | Re-imports the master list. Regenerates `src/data/*.generated.*`, `supabase/seed/components.json` and `COMPONENT_CATALOGUE_REPORT.md`, and exits non-zero if any entry is missing |
 | `npm run garage:report` | Runs the readiness test and every BEAST PROJECT GARAGE behaviour scenario and writes `GARAGE_TEST_REPORT.md` |
+| `npm run roles:smoke [baseUrl]` | Creates temporary student/admin/super-admin accounts and runs 23 checks on role security, email promotion, the audit log and the server-side `/admin` gate against a running app (default `http://localhost:3210`), then deletes them |
+| `npm run admin:bootstrap -- <email>` | Makes a registered account the **Super Admin** (server-side, uses the secret key; audited) |
+| `npm run cloud:smoke` | Creates two temporary accounts in the configured Supabase project, runs 19 security and XP checks, then deletes them |
+| `npm run db:push` | Applies `supabase/migrations/*.sql` to the database in `SUPABASE_DB_URL` (Supabase CLI) |
 | `npm run seed:supabase` | Loads catalogue and learning content (including hidden quiz answer keys) into Supabase |
 
 ### Updating the component master list
@@ -52,12 +56,48 @@ To add a reference robot:
 2. Bump its `version` whenever you change it; students' read-only originals of the old version are then replaced on the next load.
 3. Run `npm test` and `npm run garage:report`.
 
+## Brand colours
+
+The official palette is defined once, as CSS variables, at the top of `src/app/globals.css`. Three.js scenes, SVG drawings and the Monaco editor read the matching constants in `src/lib/theme.ts`. Change colours there, never in components.
+
+| Colour | Hex | Role (about this share of the screen) |
+| --- | --- | --- |
+| Forest Sage | `#4B5A50` | Dominant background: pages, sidebar, header, sections, cards, 3D/circuit canvases (~70 %) |
+| Warm Ivory | `#F1EEE3` | Foreground: headings, text, icons, form inputs, sign-in card, key information cards (~25 %) |
+| Signal Red | `#F20B0B` | Attention: primary buttons, active navigation, selected tabs, important badges, alerts, progress, key numbers (~5 %) |
+
+Components use semantic utilities (`bg-panel`, `text-muted`, `bg-accent`, `text-accent-ink` ...).
+- **`.bf-on-ivory`:** re-tints those utilities for dark-on-ivory surfaces.
+- **`.bf-on-sage`:** gives the deeper sage used by the sidebar and hero bands.
+- **Red text on sage:** uses a lighter Signal Red tint (`#FF7B6E`) so it stays legible; solid Signal Red is used for fills, borders and markers.
+
+Physical colours stay true to life: wire colours (red supply, black ground ...), the white line-following board, the black sumo ring, and part materials such as the FR4 green PCB.
+
+## Admin dashboard and roles
+
+Roles: `student` (default), `admin`, `super_admin`. `/admin` has no link in the student navigation; staff see a shield icon in the top bar.
+
+Every layer enforces access:
+1. **`src/proxy.ts`** refreshes the session cookie and sends signed-out visitors to the login page.
+2. **`src/app/admin/layout.tsx`** (Server Component) verifies the session with Supabase Auth and reads the role from the database for every request. Students get "Access denied".
+3. **The database** decides what can happen:
+   - RLS and the `is_admin()` / `is_super_admin()` checks.
+   - A trigger stops any browser update from changing `role` or `xp`.
+   - Role changes go only through `admin_set_role()`. It allows the Super Admin only, refuses changes to your own role, protects super_admin accounts, can only grant `admin`, and writes an append-only `role_audit_log` row.
+   - Looking up accounts by email (`admin_find_user()`) is Super Admin only.
+
+**Admin Management, MAKE AS ADMIN**: the Super Admin enters a registered email, sees the name, email and current role, confirms, and clicks **MAKE ADMIN**. Unregistered emails get a "register first" message. Admins can be revoked from the same screen, and the audit log lists every change.
+
+`super_admin` can never be granted from the app. Create it with `npm run admin:bootstrap -- <email>` (secret key, run on your machine) or in the Supabase SQL editor.
+
+Local mode (no Supabase) applies the same rules in the browser, and the first account on a device becomes its Super Admin. Local mode is single-device and not tamper-proof. `node scripts/dev.mjs 3211 --local` runs the app in local mode even when `.env.local` has Supabase settings.
+
 ## Cloud mode (Supabase)
 
-1. Create a Supabase project. In **SQL Editor**, run `supabase/migrations/0001_init.sql`, or run `supabase db push` with the Supabase CLI. This creates the tables, row-level security, and the `award_xp`, `complete_lesson` and `submit_quiz` functions.
-2. Copy `.env.example` to `.env.local` and set:
+1. Create a Supabase project, copy `.env.example` to `.env.local` and fill in all five values (step 2). Then run `npm run db:push`. It applies `supabase/migrations/0001–0005`, which create the tables, row-level security, the `award_xp`, `complete_lesson` and `submit_quiz` functions, and the table grants.
+2. The values in `.env.local`:
    - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (public anon key only).
-   - For seeding only, on your machine: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Never prefix the service key with `NEXT_PUBLIC_`, and never commit it.
+   - For seeding only, on your machine: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. For `db:push`: `SUPABASE_DB_URL` (Supabase → Connect → Session pooler URI, with your database password). Never prefix the service key with `NEXT_PUBLIC_`, and never commit it.
 3. Run `npm run seed:supabase`.
 4. In Supabase Auth, enable email/password sign-in. Make your first administrator by running in SQL: `update profiles set role = 'admin' where id = '<user uuid>';`
 
@@ -75,6 +115,10 @@ Any Node host that runs Next.js 16 works (Vercel, Netlify, a VM with `npm run bu
 2. Make sure `npm install` runs `postinstall`, which copies Monaco into `public/monaco`.
 3. Build with `npm run build`.
 
+### Vercel
+
+Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the project's environment variables. The web app needs nothing else: the secret key and database URL are only for the scripts on your machine, so never add them to Vercel. `src/proxy.ts` runs as Next.js Proxy (formerly Middleware). In Supabase, Authentication, URL Configuration, set the Site URL to the Vercel domain.
+
 ## Architecture
 
 ```
@@ -90,6 +134,8 @@ src/
                              session (code ↔ circuit ↔ physics coupling, 1 ms fixed step), debugging assistant
   lib/track/                 track compiler and example tracks
   lib/garage/                Project Garage: template format, 9 reference robots, readiness test, scenarios
+  lib/theme.ts               brand colours for 3D / SVG / Monaco (CSS tokens live in app/globals.css)
+  lib/roles.ts, lib/supabase role helpers; server-side Supabase client for the /admin gate (proxy.ts is in src/)
   lib/learning/              84 Beast Topics, 350 questions, quizzes, weekly missions
   lib/data/                  Backend interface: LocalBackend (browser) and SupabaseBackend
   app/                       pages: Command Center, projects, workspace/[id]/(design|circuit|code|arena),

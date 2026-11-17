@@ -1,21 +1,69 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   BEAST FEAST 5.0 — official brand colours (mandatory hierarchy)
+     Forest Sage  #4B5A50   DOMINANT background: pages, nav, sidebar, header, sections   (~70 %)
+     Warm Ivory   #F1EEE3   foreground: headings, text, icons, inputs, info cards        (~25 %)
+     Signal Red   #F20B0B   attention: CTAs, active state, badges, alerts, key numbers   (~5 %)
+   Every colour in the app comes from these tokens. Change them here, nowhere else.
+   ───────────────────────────────────────────────────────────────────────────── */
 :root {
-  --bg: #080a0f;
-  --bg2: #10141d;
-  --panel: #171d28;
-  --panel2: #1d2533;
-  --line: #263044;
-  --line2: #33405a;
-  --orange: #ff6b1a;
-  --cyan: #00d9ff;
-  --green: #22c55e;
-  --amber: #f5b301;
-  --red: #ff3b4e;
-  --blue: #3b82f6;
-  --text: #f4f7fb;
-  --muted: #95a1b5;
-  --dim: #5f6b80;
+  /* brand primitives */
+  --forest-sage: #4b5a50;
+  --warm-ivory: #f1eee3;
+  --signal-red: #f20b0b;
+
+  /* sage scale (derived from Forest Sage) */
+  --sage-950: #1c241f;
+  --sage-900: #26302a;
+  --sage-850: #2e3932;
+  --sage-800: #36433a;
+  --sage-750: #3e4b42;
+  --sage-700: #445248;
+  --sage-600: #4b5a50; /* = Forest Sage */
+  --sage-550: #536259;
+  --sage-500: #5b6b60;
+  --sage-400: #6f7e73;
+
+  /* ivory scale (derived from Warm Ivory) */
+  --ivory-50: #fbfaf5;
+  --ivory-100: #f6f4ec;
+  --ivory-200: #f1eee3; /* = Warm Ivory */
+  --ivory-300: #e4e0d2;
+  --ivory-400: #cfcfc4;
+
+  /* red (derived from Signal Red) */
+  --signal-red-hover: #ff2a2a;
+  --signal-red-text: #ff7b6e; /* Signal Red tint for red text & icons on sage (≥ 3:1, large text) */
+  --signal-red-ink: #c40808; /* Signal Red for small text on ivory (≥ 4.5:1) */
+
+  /* semantic roles — components use these (Forest Sage context) */
+  --bg: var(--forest-sage); /* page */
+  --bg2: var(--sage-750); /* recessed wells, tables heads, canvases */
+  --panel: var(--sage-550); /* cards & panels, a step lighter than the page */
+  --panel2: var(--sage-500); /* nested / hover surfaces */
+  --line: rgba(241, 238, 227, 0.14); /* ivory hairline on sage */
+  --line2: rgba(241, 238, 227, 0.28);
+  --heading: var(--warm-ivory);
+  --text: var(--warm-ivory); /* 6.3:1 on Forest Sage */
+  --muted: #dbd9ce; /* 5.5:1 */
+  --dim: #c6cabf; /* 4.5:1, labels */
+  --accent: var(--signal-red);
+  --accent-hover: var(--signal-red-hover);
+  --accent-ink: var(--signal-red-text);
+  --brand: var(--warm-ivory); /* secondary emphasis on sage = ivory */
+  --brand-hover: var(--ivory-300);
+  --on-brand: var(--forest-sage); /* text on an ivory (secondary) button */
+  --ok: #8fd3a5;
+  --warn: #f2c46b;
+  --bad: var(--signal-red-text);
+  --info: #a9d1e6;
+  --shadow-sm: 0 1px 2px rgba(20, 26, 22, 0.25);
+  --shadow-md: 0 1px 2px rgba(20, 26, 22, 0.2), 0 10px 24px -12px rgba(20, 26, 22, 0.55);
+  --shadow-lg: 0 2px 6px rgba(20, 26, 22, 0.25), 0 28px 56px -24px rgba(20, 26, 22, 0.7);
+
+  /* 3D viewports and drawings read these (see src/lib/theme.ts) */
+  --scene-bg: var(--sage-800);
 }
 
 @theme inline {
@@ -25,26 +73,81 @@
   --color-panel2: var(--panel2);
   --color-line: var(--line);
   --color-line2: var(--line2);
-  --color-orange: var(--orange);
-  --color-cyan: var(--cyan);
-  --color-ok: var(--green);
-  --color-warn: var(--amber);
-  --color-bad: var(--red);
-  --color-info: var(--blue);
+  --color-heading: var(--heading);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-dim: var(--dim);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-on-brand: var(--on-brand);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-info: var(--info);
+  --color-sage: var(--forest-sage);
+  --color-sage-950: var(--sage-950);
+  --color-sage-900: var(--sage-900);
+  --color-sage-800: var(--sage-800);
+  --color-sage-750: var(--sage-750);
+  --color-ivory: var(--warm-ivory);
+  --color-ivory-50: var(--ivory-50);
+  --color-signal: var(--signal-red);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", "Inter", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
-html,
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
+/* Deep-sage surfaces: sidebar and hero bands sit one step darker than the page. */
+.bf-on-sage {
+  --panel: rgba(241, 238, 227, 0.07);
+  --panel2: rgba(241, 238, 227, 0.12);
+  background-color: var(--sage-750);
+}
+
+/* Warm Ivory surfaces (sign-in card, key information panels, schematic parts):
+   the same utilities re-tint themselves for dark-on-light. */
+.bf-on-ivory {
+  --bg2: var(--ivory-50);
+  --panel: var(--warm-ivory);
+  --panel2: var(--ivory-300);
+  --line: rgba(75, 90, 80, 0.2);
+  --line2: rgba(75, 90, 80, 0.36);
+  --heading: var(--forest-sage);
+  --text: var(--sage-950);
+  --muted: #4f5c53;
+  --dim: #5f6b62;
+  --accent-ink: var(--signal-red-ink);
+  --brand: var(--forest-sage);
+  --brand-hover: var(--sage-750);
+  --on-brand: var(--warm-ivory);
+  --ok: #2f7a4a;
+  --warn: #9a5d08;
+  --bad: var(--signal-red-ink);
+  --info: #2f6383;
+  background-color: var(--warm-ivory);
+  color: var(--sage-950);
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    color: var(--heading);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
 * {
@@ -53,21 +156,22 @@ body {
 }
 
 ::selection {
-  background: rgba(255, 107, 26, 0.35);
+  background: rgba(242, 11, 11, 0.45);
+  color: #fff;
 }
 
 .font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
-/* animated engineering grid */
+/* engineering grid — fine sage lines on ivory */
 .bf-grid {
   background-image:
-    linear-gradient(rgba(0, 217, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 217, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(241, 238, 227, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(241, 238, 227, 0.045) 1px, transparent 1px);
   background-size: 40px 40px;
-  animation: bf-grid-move 30s linear infinite;
+  animation: bf-grid-move 40s linear infinite;
 }
 @keyframes bf-grid-move {
   to {
@@ -78,13 +182,28 @@ body {
 .bf-panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
 }
-.bf-glow-orange {
-  box-shadow: 0 0 0 1px rgba(255, 107, 26, 0.5), 0 0 24px -6px rgba(255, 107, 26, 0.55);
+.bf-raised {
+  box-shadow: var(--shadow-lg);
 }
-.bf-glow-cyan {
-  box-shadow: 0 0 0 1px rgba(0, 217, 255, 0.45), 0 0 24px -6px rgba(0, 217, 255, 0.5);
+.bf-lift {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+.bf-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+/* emphasis rings (the old neon glows, now quiet) */
+.bf-glow-accent {
+  box-shadow: 0 0 0 1px rgba(242, 11, 11, 0.55), var(--shadow-md);
+}
+.bf-glow-brand {
+  box-shadow: 0 0 0 1px rgba(241, 238, 227, 0.45), var(--shadow-md);
 }
 
 .bf-label {
@@ -96,25 +215,40 @@ body {
 }
 
 .bf-input {
-  background: var(--bg2);
-  border: 1px solid var(--line);
-  border-radius: 7px;
+  background: var(--ivory-100);
+  border: 1px solid transparent;
+  border-radius: 8px;
   padding: 7px 10px;
-  color: var(--text);
+  color: var(--sage-950);
   font-size: 13px;
   outline: none;
   width: 100%;
+  box-shadow: inset 0 1px 2px rgba(28, 36, 31, 0.12);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.bf-input::placeholder {
+  color: #6a756d;
 }
 .bf-input:focus {
-  border-color: var(--cyan);
+  border-color: var(--signal-red);
+  box-shadow: 0 0 0 3px rgba(242, 11, 11, 0.22);
+}
+.bf-input:disabled {
+  opacity: 0.6;
+}
+.bf-input option {
+  color: var(--sage-950);
+  background: var(--ivory-100);
 }
 
 @keyframes bf-pulse-ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 59, 78, 0.7);
+    box-shadow: 0 0 0 0 rgba(242, 11, 11, 0.55);
   }
   100% {
-    box-shadow: 0 0 0 14px rgba(255, 59, 78, 0);
+    box-shadow: 0 0 0 14px rgba(242, 11, 11, 0);
   }
 }
 .bf-pulse-error {
@@ -143,25 +277,66 @@ body {
   animation: bf-dash 0.6s linear infinite;
 }
 
+@keyframes bf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.bf-rise {
+  animation: bf-rise 0.35s ease-out both;
+}
+
 .prose-bf p {
   margin: 0 0 0.8em;
-  line-height: 1.65;
-  color: #cfd6e2;
+  line-height: 1.7;
+  color: var(--muted);
 }
 .prose-bf ul {
   margin: 0 0 0.8em 1.1em;
   list-style: disc;
-  color: #cfd6e2;
+  color: var(--muted);
 }
 .prose-bf li {
   margin: 0.2em 0;
+}
+.prose-bf strong {
+  color: var(--heading);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .bf-grid,
   .bf-scanline,
   .bf-flow,
-  .bf-pulse-error {
+  .bf-pulse-error,
+  .bf-rise {
     animation: none !important;
   }
+  .bf-lift:hover {
+    transform: none;
+  }
+}
+
+/* code & terminal blocks: deep forest ink with ivory type */
+.bf-code {
+  background: var(--sage-900);
+  color: #ebe7da;
+  border: 1px solid rgba(241, 238, 227, 0.1);
+}
+.bf-code .bf-code-dim {
+  color: #9aa69d;
+}
+
+.bf-on-ivory .bf-input {
+  background: var(--ivory-50);
+  border-color: rgba(75, 90, 80, 0.3);
+  box-shadow: none;
+}
+.bf-on-ivory .bf-input:focus {
+  border-color: var(--signal-red);
+  box-shadow: 0 0 0 3px rgba(242, 11, 11, 0.15);
 }

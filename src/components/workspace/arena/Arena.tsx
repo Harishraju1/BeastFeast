@@ -21,6 +21,7 @@ import { RobotAssembly } from "@/components/three/RobotParts";
 import { TrackScene } from "@/components/three/TrackScene";
 import { Badge, Button, Tabs } from "@/components/ui";
 import { isTypingTarget } from "@/lib/keyboard";
+import { THEME } from "@/lib/theme";
 
 type Cam = "robot" | "free" | "top" | "side";
 type RunState = "idle" | "running" | "paused" | "finished" | "error";
@@ -332,7 +333,7 @@ export default function Arena({ project }: { project: Project }) {
     setRun("idle");
   };
 
-  if (!track || !compiled) return <div className="p-6 text-muted">No tracks for this competition yet. <Link className="text-orange" href="/tracks">Create one</Link>.</div>;
+  if (!track || !compiled) return <div className="p-6 text-muted">No tracks for this competition yet. <Link className="text-accent-ink" href="/tracks">Create one</Link>.</div>;
   const center: [number, number] = [(compiled.bounds.minX + compiled.bounds.maxX) / 2, (compiled.bounds.minY + compiled.bounds.maxY) / 2];
   const motors = project.parts.filter((p) => getComponent(p.componentId)?.kind === "dc-motor");
   const readings = vm?.readings ?? {};
@@ -342,7 +343,7 @@ export default function Arena({ project }: { project: Project }) {
     <div className="grid h-full grid-cols-1 lg:grid-cols-[1fr_360px]">
       <div className="flex min-h-0 flex-col">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-line bg-bg2 px-2 py-1.5">
-          <select className={`bf-input !w-auto !py-1 text-xs ${highlightTracks ? "bf-glow-orange" : ""}`} value={trackId} onChange={(e) => { setTrackId(e.target.value); setHighlightTracks(false); updateProject(project.id, (p) => ({ ...p, trackId: e.target.value }), { history: false }); }} aria-label="Track">
+          <select className={`bf-input !w-auto !py-1 text-xs ${highlightTracks ? "bf-glow-accent" : ""}`} value={trackId} onChange={(e) => { setTrackId(e.target.value); setHighlightTracks(false); updateProject(project.id, (p) => ({ ...p, trackId: e.target.value }), { history: false }); }} aria-label="Track">
             {allTracks.map((t) => <option key={t.id} value={t.id}>{t.name}{t.ownerId ? " (mine)" : ""}</option>)}
           </select>
           <Tabs value={mode} onChange={setMode} items={[{ value: "code", label: <span className="inline-flex items-center gap-1"><Code2 size={12} /> My code</span> }, { value: "manual", label: <span className="inline-flex items-center gap-1"><Gamepad2 size={12} /> Manual</span> }]} />
@@ -352,7 +353,7 @@ export default function Arena({ project }: { project: Project }) {
             </select>
           )}
           <div className="mx-1 h-5 w-px bg-line" />
-          {run === "running" ? <Button size="sm" variant="cyan" onClick={() => setRun("paused")}><Pause size={13} /> PAUSE</Button> : <Button size="sm" variant="primary" onClick={start} disabled={!vm && !!err}><Play size={13} /> {run === "paused" ? "RESUME" : "START"}</Button>}
+          {run === "running" ? <Button size="sm" variant="secondary" onClick={() => setRun("paused")}><Pause size={13} /> PAUSE</Button> : <Button size="sm" variant="primary" onClick={start} disabled={!vm && !!err}><Play size={13} /> {run === "paused" ? "RESUME" : "START"}</Button>}
           <Button size="sm" onClick={stop} disabled={run === "idle"}><Square size={13} /> STOP</Button>
           <Button size="sm" onClick={restart}><RotateCcw size={13} /> RESTART</Button>
           <Button size="sm" onClick={reset}>RESET</Button>
@@ -367,33 +368,33 @@ export default function Arena({ project }: { project: Project }) {
           <div className="space-y-0.5 border-b border-line bg-bg2 px-3 py-1 text-xs">
             {vstate !== "passed" && <div className="text-warn">⚠ Your robot {vstate === "stale" ? "changed since it was validated" : "has not passed validation"} — it will behave exactly as wired, faults included.</div>}
             {mode === "code" && !project.codeCheck?.ok && <div className="text-warn">⚠ Code not validated against the circuit yet (Code Studio → VALIDATE CODE).</div>}
-            {hex && mode === "code" && <div className="text-cyan">Running uploaded {hex.name} on the AVR emulator.</div>}
+            {hex && mode === "code" && <div className="text-brand">Running uploaded {hex.name} on the AVR emulator.</div>}
             {err && <div className="text-bad">✖ {err}</div>}
           </div>
         )}
-        <div ref={containerRef} tabIndex={0} className="relative min-h-0 flex-1 outline-none focus:ring-1 focus:ring-cyan/40" aria-label="Simulation view — click to focus keyboard control">
+        <div ref={containerRef} tabIndex={0} className="relative min-h-0 flex-1 outline-none focus:ring-1 focus:ring-brand/40" aria-label="Simulation view — click to focus keyboard control">
           <Canvas shadows camera={{ position: [1, 1.4, 1.8], fov: 45, near: 0.01, far: 50 }} dpr={[1, 1.75]}>
-            <color attach="background" args={["#07090d"]} />
-            <hemisphereLight args={["#bcd7ff", "#1b1f27", 0.6]} />
+            <color attach="background" args={[THEME.sceneBg]} />
+            <hemisphereLight args={[THEME.hemiSky, THEME.hemiGround, 0.75]} />
             <directionalLight position={[2, 4, 1.5]} intensity={2.2} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-3} shadow-camera-right={3} shadow-camera-top={3} shadow-camera-bottom={-3} />
             <TrackScene track={compiled} />
             <RobotView project={project} snap={snap} groundOffset={groundOffset} />
-            {track.kind === "sumo" && <BoxBot snap={snap} pick="opp" color="#ff3b4e" size={[0.1, 0.05, 0.1]} />}
-            {best && ghostOn && <BoxBot snap={snap} pick="ghost" color="#00d9ff" size={[(project.chassis?.length_mm ?? 150) / 1000, 0.04, (project.chassis?.width_mm ?? 120) / 1000]} opacity={0.3} />}
+            {track.kind === "sumo" && <BoxBot snap={snap} pick="opp" color={THEME.accent} size={[0.1, 0.05, 0.1]} />}
+            {best && ghostOn && <BoxBot snap={snap} pick="ghost" color={THEME.ivory} size={[(project.chassis?.length_mm ?? 150) / 1000, 0.04, (project.chassis?.width_mm ?? 120) / 1000]} opacity={0.3} />}
             <CameraRig mode={cam} snap={snap} center={center} />
             {cam === "free" && <OrbitControls makeDefault target={[center[0], 0, -center[1]]} />}
           </Canvas>
           {/* HUD */}
           <div className="pointer-events-none absolute left-3 top-3 grid grid-cols-3 gap-x-4 gap-y-1 rounded border border-line bg-bg/80 px-3 py-2 font-mono text-[11px] backdrop-blur">
             <span className="text-dim">TIME</span><span className="col-span-2 text-text">{(vm?.time ?? 0).toFixed(2)} s</span>
-            <span className="text-dim">SPEED</span><span className="col-span-2 text-cyan">{(tel?.speed ?? 0).toFixed(2)} m/s</span>
+            <span className="text-dim">SPEED</span><span className="col-span-2 text-brand">{(tel?.speed ?? 0).toFixed(2)} m/s</span>
             {track.kind !== "sumo" && <><span className="text-dim">LAP</span><span className="col-span-2">{tel?.race?.lap ?? 0}{track.laps ? ` / ${track.laps}` : ""} · {(((tel?.race?.progress ?? 0) * 100) | 0)}%</span></>}
             {track.kind === "sumo" && <><span className="text-dim">MATCH</span><span className="col-span-2">{Math.max(0, (track.arena?.timeLimitS ?? 180) - (vm?.time ?? 0)).toFixed(0)} s left</span></>}
             <span className="text-dim">STATE</span><span className={`col-span-2 ${run === "running" ? "text-ok" : run === "error" ? "text-bad" : "text-warn"}`}>{run.toUpperCase()}</span>
           </div>
           {run === "finished" && vm && (
-            <div className="absolute left-1/2 top-1/2 w-80 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-orange bg-bg/95 p-5 text-center shadow-2xl">
-              <div className="font-display text-2xl font-bold text-orange">{track.kind === "sumo" ? (vm.out[1] ? "VICTORY!" : vm.out[0] ? "PUSHED OUT!" : "DRAW") : "TRACK COMPLETE!"}</div>
+            <div className="absolute left-1/2 top-1/2 w-80 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-accent bg-bg/95 p-5 text-center shadow-2xl">
+              <div className="font-display text-2xl font-bold text-accent-ink">{track.kind === "sumo" ? (vm.out[1] ? "VICTORY!" : vm.out[0] ? "PUSHED OUT!" : "DRAW") : "TRACK COMPLETE!"}</div>
               <div className="mt-2 space-y-0.5 text-sm text-muted">
                 <div>Time {vm.time.toFixed(2)} s · max {vm.maxSpeed.toFixed(2)} m/s</div>
                 {tel?.race?.lapTimes.length ? <div>Best lap {Math.min(...tel.race.lapTimes).toFixed(2)} s</div> : null}
@@ -406,7 +407,7 @@ export default function Arena({ project }: { project: Project }) {
           <div className="absolute bottom-3 left-3 grid grid-cols-3 gap-1 select-none" aria-label="On-screen controller">
             {[["", ""], ["w", "▲"], ["", ""], ["a", "◀"], [" ", "■"], ["d", "▶"], ["", ""], ["s", "▼"], ["shift", "⚡"]].map(([k, l], i) =>
               k ? (
-                <button key={i} className={`h-10 w-10 rounded-md border text-sm ${k === " " ? "border-bad/60 text-bad" : "border-line2 text-text"} bg-bg/80 active:bg-orange active:text-black`}
+                <button key={i} className={`h-10 w-10 rounded-md border text-sm ${k === " " ? "border-bad/60 text-bad" : "border-line2 text-text"} bg-bg/80 active:bg-accent active:text-black`}
                   onPointerDown={(e) => { e.preventDefault(); keys.current.add(k); }} onPointerUp={() => keys.current.delete(k)} onPointerLeave={() => keys.current.delete(k)} title={k === " " ? "Emergency stop (SPACE)" : k === "shift" ? "Boost (SHIFT)" : k.toUpperCase()}>
                   {l}
                 </button>
@@ -440,7 +441,7 @@ export default function Arena({ project }: { project: Project }) {
                 <div className="bf-label mb-1">Motors</div>
                 {motors.map((m) => (
                   <div key={m.uid} className="mb-1 font-mono">
-                    <div className="flex justify-between"><span>{m.label}</span><span className="text-cyan">{(tel.motorRpm[m.uid] ?? 0).toFixed(0)} rpm</span></div>
+                    <div className="flex justify-between"><span>{m.label}</span><span className="text-brand">{(tel.motorRpm[m.uid] ?? 0).toFixed(0)} rpm</span></div>
                     <div className="flex justify-between text-dim"><span>{(tel.motorVoltage[m.uid] ?? 0).toFixed(2)} V</span><span>{(tel.motorCurrentA[m.uid] ?? 0).toFixed(2)} A</span></div>
                   </div>
                 ))}
@@ -472,15 +473,15 @@ export default function Arena({ project }: { project: Project }) {
                       <div className="flex items-end gap-1">
                         {r.darkness.map((d, i) => (
                           <div key={i} className="flex flex-1 flex-col items-center gap-0.5">
-                            <div className="flex h-16 w-full items-end rounded bg-bg"><div className="w-full rounded bg-gradient-to-t from-orange to-orange/60" style={{ height: `${d * 100}%` }} /></div>
+                            <div className="flex h-16 w-full items-end rounded bg-bg"><div className="w-full rounded bg-gradient-to-t from-accent to-accent/60" style={{ height: `${d * 100}%` }} /></div>
                             <span className="font-mono text-[9px]">{d.toFixed(2)}</span>
-                            <span className={`font-mono text-[9px] ${d > 0.5 ? "text-orange" : "text-dim"}`}>{d > 0.5 ? "BLACK" : "white"}</span>
+                            <span className={`font-mono text-[9px] ${d > 0.5 ? "text-accent-ink" : "text-dim"}`}>{d > 0.5 ? "BLACK" : "white"}</span>
                           </div>
                         ))}
                       </div>
                     )}
                     {r.kind === "distance" && <div className="font-mono">{r.distance === null ? "nothing in range" : `${(r.distance * 100).toFixed(1)} cm`}</div>}
-                    {r.kind === "bumper" && <div className={r.pressed ? "text-orange" : "text-dim"}>{r.pressed ? "PRESSED" : "released"}</div>}
+                    {r.kind === "bumper" && <div className={r.pressed ? "text-accent-ink" : "text-dim"}>{r.pressed ? "PRESSED" : "released"}</div>}
                     {r.kind === "encoder" && <div className="font-mono">count {r.count} · {r.rpm.toFixed(0)} rpm</div>}
                     {r.kind === "imu" && <div className="font-mono">yaw rate {r.yawRate.toFixed(2)} rad/s</div>}
                   </div>
@@ -491,10 +492,10 @@ export default function Arena({ project }: { project: Project }) {
           )}
           {panel === "serial" && (
             <div className="flex h-full flex-col gap-2">
-              <pre className="min-h-40 flex-1 overflow-auto whitespace-pre-wrap rounded bg-black p-2 font-mono text-[11px] text-ok">{vm?.serial.slice(-6000) || "(no Serial output)"}</pre>
+              <pre className="min-h-40 flex-1 overflow-auto whitespace-pre-wrap bf-code rounded-lg p-2 font-mono text-[11px]">{vm?.serial.slice(-6000) || "(no Serial output)"}</pre>
               <form onSubmit={(e) => { e.preventDefault(); session.current?.sendSerial(serialIn); setSerialIn(""); }} className="flex gap-1">
                 <input className="bf-input" value={serialIn} onChange={(e) => setSerialIn(e.target.value)} placeholder="Send to Serial…" />
-                <Button size="sm" variant="cyan">Send</Button>
+                <Button size="sm" variant="secondary">Send</Button>
               </form>
             </div>
           )}
@@ -503,17 +504,17 @@ export default function Arena({ project }: { project: Project }) {
             <div className="space-y-2">
               {!vm?.findings.length && <div className="text-dim">The debugging assistant watches the simulation and reports problems here.</div>}
               {[...(vm?.findings ?? [])].reverse().map((f) => (
-                <div key={f.id} className={`rounded border p-2 ${f.id === finding?.id ? "border-orange" : f.severity === "critical" ? "border-bad/50" : f.severity === "warning" ? "border-warn/40" : "border-line"}`}>
+                <div key={f.id} className={`rounded border p-2 ${f.id === finding?.id ? "border-accent" : f.severity === "critical" ? "border-bad/50" : f.severity === "warning" ? "border-warn/40" : "border-line"}`}>
                   <div className="font-display text-sm font-semibold">{f.title}</div>
                   <div className="font-mono text-[10px] text-dim">t = {f.t.toFixed(2)} s</div>
                   {f.verified.length > 0 && <div className="mt-1"><span className="text-ok">Verified:</span><ul className="list-disc pl-4 text-muted">{f.verified.map((v, i) => <li key={i}>{v}</li>)}</ul></div>}
                   {f.possible.length > 0 && <div className="mt-1"><span className="text-warn">Possible causes (not verified):</span><ul className="list-disc pl-4 text-muted">{f.possible.map((v, i) => <li key={i}>{v}</li>)}</ul></div>}
-                  {f.steps.length > 0 && <div className="mt-1"><span className="text-cyan">Steps:</span><ol className="list-decimal pl-4 text-muted">{f.steps.map((v, i) => <li key={i}>{v}</li>)}</ol></div>}
+                  {f.steps.length > 0 && <div className="mt-1"><span className="text-brand">Steps:</span><ol className="list-decimal pl-4 text-muted">{f.steps.map((v, i) => <li key={i}>{v}</li>)}</ol></div>}
                   <details className="mt-1"><summary className="cursor-pointer text-dim">Telemetry at that moment</summary><div className="font-mono text-[10px]">{Object.entries(f.telemetry).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</div></details>
                   <div className="mt-2 flex flex-wrap gap-1">
                     <Button size="sm" onClick={() => { setCam("top"); }}><Eye size={12} /> SHOW ME THE ISSUE</Button>
-                    <Link className="rounded border border-line2 px-2 py-1 hover:border-cyan" href={`/workspace/${project.id}/circuit`}>FIX MY CIRCUIT</Link>
-                    <Link className="rounded border border-line2 px-2 py-1 hover:border-cyan" href={`/workspace/${project.id}/code`}>GO TO CODE{f.codeLines?.length ? ` (line ${f.codeLines[0]})` : ""}</Link>
+                    <Link className="rounded border border-line2 px-2 py-1 hover:border-brand" href={`/workspace/${project.id}/circuit`}>FIX MY CIRCUIT</Link>
+                    <Link className="rounded border border-line2 px-2 py-1 hover:border-brand" href={`/workspace/${project.id}/code`}>GO TO CODE{f.codeLines?.length ? ` (line ${f.codeLines[0]})` : ""}</Link>
                   </div>
                 </div>
               ))}
@@ -544,14 +545,14 @@ function TunePanel({ project, serial, send, running, values, setValues }: { proj
           <div className="bf-label">Live parameters (sent to the firmware over Serial)</div>
           {cfg.tunables.map((t) => (
             <label key={t.key} className="block">
-              <div className="flex justify-between text-xs"><span>{t.label}</span><span className="font-mono text-orange">{values[t.key]}</span></div>
+              <div className="flex justify-between text-xs"><span>{t.label}</span><span className="font-mono text-accent-ink">{values[t.key]}</span></div>
               <input
                 type="range"
                 min={t.min}
                 max={t.max}
                 step={t.step}
                 value={values[t.key]}
-                className="w-full accent-[#ff6b1a]"
+                className="w-full accent-[var(--signal-red)]"
                 onChange={(e) => setValues({ ...values, [t.key]: Number(e.target.value) })}
                 onPointerUp={(e) => sendValue(t.command, (e.target as HTMLInputElement).value)}
                 onKeyUp={(e) => sendValue(t.command, (e.target as HTMLInputElement).value)}
@@ -579,8 +580,8 @@ function TunePanel({ project, serial, send, running, values, setValues }: { proj
           )}
           {hist.length > 2 && (
             <svg viewBox="0 0 200 60" className="mt-2 w-full rounded border border-line bg-bg" aria-label="telemetry history">
-              <line x1="0" y1="30" x2="200" y2="30" stroke="#33405a" strokeWidth="0.5" />
-              <polyline fill="none" stroke="#00d9ff" strokeWidth="1.2" points={hist.map((v, i) => `${(i / (hist.length - 1)) * 200},${30 - (v / max) * 27}`).join(" ")} />
+              <line x1="0" y1="30" x2="200" y2="30" stroke={THEME.hairline2} strokeWidth="0.5" />
+              <polyline fill="none" stroke={THEME.accent} strokeWidth="1.2" points={hist.map((v, i) => `${(i / (hist.length - 1)) * 200},${30 - (v / max) * 27}`).join(" ")} />
             </svg>
           )}
           {hist.length > 2 && <div className="text-[10px] text-dim">{cfg.telemetryFields?.[0]} over the last {hist.length} samples</div>}

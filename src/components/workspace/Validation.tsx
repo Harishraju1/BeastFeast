@@ -33,9 +33,9 @@ export function ScanOverlay() {
   const scanning = useWorkspace((s) => s.scanning);
   if (!scanning) return null;
   return (
-    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden bg-black/45">
-      <div className="bf-scanline absolute left-0 right-0 h-24 bg-gradient-to-b from-transparent via-cyan/25 to-transparent" />
-      <div className="absolute left-1/2 top-6 -translate-x-1/2 rounded border border-cyan/50 bg-bg/80 px-4 py-2 font-mono text-xs tracking-[0.3em] text-cyan">SCANNING ROBOT SYSTEMS…</div>
+    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden bg-sage-900/25">
+      <div className="bf-scanline absolute left-0 right-0 h-24 bg-gradient-to-b from-transparent via-brand/25 to-transparent" />
+      <div className="absolute left-1/2 top-6 -translate-x-1/2 rounded border border-brand/50 bg-bg/80 px-4 py-2 font-mono text-xs tracking-[0.3em] text-brand">SCANNING ROBOT SYSTEMS…</div>
     </div>
   );
 }
@@ -97,8 +97,8 @@ export function ValidationReportModal({ project }: { project: Project }) {
     if (!location.pathname.endsWith(`/${tab}`)) router.push(`/workspace/${project.id}/${tab}`);
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onMouseDown={() => ws.set({ reportOpen: false })}>
-      <div className={`bf-panel max-h-[88vh] w-full max-w-3xl overflow-hidden ${rep.passed ? "bf-glow-cyan" : "bf-glow-orange"}`} onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-sage-900/45 p-4 backdrop-blur-sm" onMouseDown={() => ws.set({ reportOpen: false })}>
+      <div className={`bf-panel max-h-[88vh] w-full max-w-3xl overflow-hidden ${rep.passed ? "bf-glow-brand" : "bf-glow-accent"}`} onMouseDown={(e) => e.stopPropagation()}>
         <header className={`flex items-center justify-between px-5 py-4 ${rep.passed ? "bg-ok/10" : "bg-bad/10"}`}>
           <div className="flex items-center gap-3">
             {rep.passed ? <CheckCircle2 className="text-ok" size={28} /> : <ShieldAlert className="text-bad" size={28} />}

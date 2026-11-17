@@ -63,20 +63,20 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
         <span className="font-semibold text-text">{title}</span>
         <span>Question {i + 1} / {questions.length}</span>
       </div>
-      <Progress value={((i + (revealed ? 1 : 0)) / questions.length) * 100} tone="cyan" />
+      <Progress value={((i + (revealed ? 1 : 0)) / questions.length) * 100} tone="brand" />
       <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider">
-        <span className="text-orange">{TYPE_LABEL[q.type]}</span>
+        <span className="text-accent-ink">{TYPE_LABEL[q.type]}</span>
         <span className="text-dim">difficulty {q.difficulty} · {q.xp} XP{already.has(q.id) ? " (already earned)" : ""}</span>
       </div>
       <div className="whitespace-pre-line text-base">{q.prompt}</div>
-      {q.code && <pre className="overflow-auto rounded border border-line bg-black p-3 font-mono text-xs text-[#cfe3ff]">{q.code}</pre>}
+      {q.code && <pre className="bf-code overflow-auto rounded-lg p-3 font-mono text-xs text-[#cfe3ff]">{q.code}</pre>}
       {q.diagram && <Diagram spec={q.diagram} />}
       <div className="grid gap-2">
         {q.options.map((o, k) => {
           const isRight = k === q.answerIndex;
           const state = !revealed ? (chosen === k ? "sel" : "") : isRight ? "right" : chosen === k ? "wrong" : "";
           return (
-            <button key={k} disabled={revealed} onClick={() => setAnswers({ ...answers, [q.id]: k })} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${state === "sel" ? "border-cyan bg-cyan/10" : state === "right" ? "border-ok bg-ok/10" : state === "wrong" ? "border-bad bg-bad/10" : "border-line hover:border-line2"}`}>
+            <button key={k} disabled={revealed} onClick={() => setAnswers({ ...answers, [q.id]: k })} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${state === "sel" ? "border-brand bg-brand/10" : state === "right" ? "border-ok bg-ok/10" : state === "wrong" ? "border-bad bg-bad/10" : "border-line hover:border-line2"}`}>
               <span className="w-5 font-mono text-dim">{String.fromCharCode(65 + k)}</span>
               <span className="flex-1">{o}</span>
               {state === "right" && <CheckCircle2 size={16} className="text-ok" />}
@@ -93,7 +93,7 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
       )}
       <div className="flex justify-end gap-2">
         {!revealed ? (
-          <Button variant="cyan" disabled={chosen === undefined} onClick={() => setRevealed(true)}>Check answer</Button>
+          <Button variant="secondary" disabled={chosen === undefined} onClick={() => setRevealed(true)}>Check answer</Button>
         ) : i < questions.length - 1 ? (
           <Button variant="primary" onClick={() => { setI(i + 1); setRevealed(false); }}>Next →</Button>
         ) : (

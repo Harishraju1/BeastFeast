@@ -4,9 +4,10 @@
  * SECURITY DEFINER functions (award_xp, complete_lesson, submit_quiz) defined in supabase/migrations.
  */
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import type { AdminContent, Backend, Progress, QuizAttempt, XpEvent, XpEventType } from "./types";
+import type { AdminContent, Backend, Progress, QuizAttempt, RoleAuditEntry, StaffAccount, XpEvent, XpEventType } from "./types";
 import { EMPTY_CONTENT } from "./local";
 
 interface ProfileRow {
@@ -15,7 +16,7 @@ interface ProfileRow {
   campus: string;
   student_id: string;
   avatar: string | null;
-  role: "student" | "admin";
+  role: Profile["role"];
   xp: number;
   created_at: string;
 }
@@ -30,7 +31,10 @@ export class SupabaseBackend implements Backend {
   readonly mode = "supabase" as const;
   private sb: SupabaseClient;
   constructor(url: string, anonKey: string) {
-    this.sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+    // Session lives in cookies (not localStorage) so the server can verify who is signed in — the /admin
+    // layout checks the user's role on the server before rendering anything.
+    // Outside a browser (tests, scripts, pre-rendering) there are no cookies: use a session-less client.
+    this.sb = typeof window === "undefined" ? createClient(url, anonKey, { auth: { persistSession: false } }) : createBrowserClient(url, anonKey);
   }
 
   private async uid() {
@@ -69,8 +73,22 @@ export class SupabaseBackend implements Backend {
   async listProfiles() {
     return (check(await this.sb.from("profiles").select("*")) as ProfileRow[]).map(toProfile);
   }
-  async setRole(userId: string, role: Profile["role"]) {
-    check(await this.sb.from("profiles").update({ role }).eq("id", userId));
+  async setRole(userId: string, role: "student" | "admin", note?: string) {
+    // admin_set_role() checks the caller is the Super Admin, protects super_admin accounts and writes the audit log
+    check(await this.sb.rpc("admin_set_role", { p_user: userId, p_role: role, p_note: note ?? null }));
+  }
+  async findUserByEmail(email: string): Promise<StaffAccount | null> {
+    const rows = check(await this.sb.rpc("admin_find_user", { p_email: email })) as { id: string; name: string; email: string; role: Profile["role"]; created_at: string }[];
+    const r = rows?.[0];
+    return r ? { id: r.id, name: r.name, email: r.email, role: r.role, createdAt: r.created_at } : null;
+  }
+  async listStaff(): Promise<StaffAccount[]> {
+    const rows = check(await this.sb.rpc("admin_list_staff")) as { id: string; name: string; email: string; role: Profile["role"]; created_at: string }[];
+    return rows.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, createdAt: r.created_at }));
+  }
+  async listRoleAudit(): Promise<RoleAuditEntry[]> {
+    const rows = check(await this.sb.from("role_audit_log").select("*").order("at", { ascending: false }).limit(200)) as Record<string, unknown>[];
+    return rows.map((r) => ({ id: String(r.id), at: String(r.at), actorEmail: (r.actor_email as string) ?? null, targetEmail: (r.target_email as string) ?? null, oldRole: (r.old_role as string) ?? null, newRole: String(r.new_role), action: r.action as RoleAuditEntry["action"], note: (r.note as string) ?? null }));
   }
 
   async listProjects(ownerId: string) {

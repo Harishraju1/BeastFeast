@@ -15,9 +15,10 @@ import { Badge, Button, Panel, SimBadge, Tabs } from "@/components/ui";
 import { LoadFlow } from "@/components/garage/LoadFlow";
 import { RobotTopView } from "@/components/garage/RobotTopView";
 import { useReadiness } from "@/components/garage/useGarage";
+import { WIRE_HEX as THEME_WIRES } from "@/lib/theme";
 
 const Preview3D = dynamic(() => import("@/components/garage/Preview3D"), { ssr: false });
-const WIRE_HEX: Record<string, string> = { red: "#ff3b4e", black: "#7c8696", yellow: "#f5c518", blue: "#3b82f6", green: "#22c55e", orange: "#ff8a3d", white: "#e5e7eb", purple: "#a855f7" };
+const WIRE_HEX: Record<string, string> = THEME_WIRES;
 type Tab = "overview" | "assembly" | "circuit" | "code" | "simulation" | "components";
 
 export default function GarageProjectPage() {
@@ -30,7 +31,7 @@ export default function GarageProjectPage() {
   const [flow, setFlow] = useState<"load" | "simulate" | "customise" | null>(null);
   const [fresh, setFresh] = useState<ReturnType<typeof runReadiness> | null>(null);
   const { user } = useApp();
-  if (!t || !project) return <div className="p-8 text-muted">Project not found. <Link href="/garage" className="text-orange">Back to the garage</Link></div>;
+  if (!t || !project) return <div className="p-8 text-muted">Project not found. <Link href="/garage" className="text-accent-ink">Back to the garage</Link></div>;
   const report = fresh ?? reports[t.metadata.id];
   const mass = massSummary(project);
   const bom = Object.values(
@@ -49,18 +50,18 @@ export default function GarageProjectPage() {
       <Link href="/garage" className="text-xs text-muted hover:text-text">← BEAST PROJECT GARAGE</Link>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="bf-label text-orange">{t.metadata.id} · v{t.metadata.version} · {t.metadata.author}</div>
+          <div className="bf-label text-accent-ink">{t.metadata.id} · v{t.metadata.version} · {t.metadata.author}</div>
           <h1 className="font-display text-3xl font-bold">{t.metadata.name}</h1>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Badge tone={t.metadata.difficulty === "beginner" ? "ok" : t.metadata.difficulty === "intermediate" ? "warn" : "bad"}>{t.metadata.difficulty}</Badge>
-            <Badge tone="cyan">{t.metadata.competition === "line" ? "Line Following" : t.metadata.competition === "race" ? "Robo Race" : "Robo War / Sumo"}</Badge>
+            <Badge tone="brand">{t.metadata.competition === "line" ? "Line Following" : t.metadata.competition === "race" ? "Robo Race" : "Robo War / Sumo"}</Badge>
             {report ? <Badge tone={report.status === "READY TO SIMULATE" ? "ok" : report.status === "READY WITH WARNINGS" ? "warn" : "bad"}>{report.status}</Badge> : <Badge>readiness test running…</Badge>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => act("load")}><Upload size={14} /> LOAD PROJECT</Button>
           <Button variant="primary" onClick={() => act("simulate")}><Play size={14} /> SIMULATE NOW</Button>
-          <Button variant="cyan" onClick={() => act("customise")}><Copy size={14} /> CUSTOMISE (MY COPY)</Button>
+          <Button variant="secondary" onClick={() => act("customise")}><Copy size={14} /> CUSTOMISE (MY COPY)</Button>
         </div>
       </div>
 
@@ -74,7 +75,7 @@ export default function GarageProjectPage() {
             <Panel title="What it is"><p className="text-sm text-muted">{t.metadata.description}</p></Panel>
             <Panel title="Working principle"><p className="text-sm leading-relaxed text-muted">{t.metadata.workingPrinciple}</p></Panel>
             <Panel title="Learning objectives">
-              <ul className="space-y-1 text-sm">{t.metadata.learningObjectives.map((o) => <li key={o} className="flex gap-2"><Target size={14} className="mt-0.5 shrink-0 text-orange" />{o}</li>)}</ul>
+              <ul className="space-y-1 text-sm">{t.metadata.learningObjectives.map((o) => <li key={o} className="flex gap-2"><Target size={14} className="mt-0.5 shrink-0 text-accent-ink" />{o}</li>)}</ul>
               <div className="mt-2 text-xs text-dim">Learning level: {t.metadata.learningLevel}</div>
             </Panel>
             <Panel title="Project limitations">
@@ -138,7 +139,7 @@ export default function GarageProjectPage() {
           <Panel title="Pin mapping">
             <table className="w-full text-sm">
               <thead><tr className="bf-label text-left"><th className="py-1">Controller pin</th><th>Connected to</th><th>Purpose</th></tr></thead>
-              <tbody>{t.pinMap.map((r) => <tr key={r.pin} className="border-t border-line align-top"><td className="py-1.5 font-mono text-cyan">{r.pin}</td><td className="pr-2">{r.connectedTo}</td><td className="text-muted">{r.purpose}</td></tr>)}</tbody>
+              <tbody>{t.pinMap.map((r) => <tr key={r.pin} className="border-t border-line align-top"><td className="py-1.5 font-mono text-brand">{r.pin}</td><td className="pr-2">{r.connectedTo}</td><td className="text-muted">{r.purpose}</td></tr>)}</tbody>
             </table>
             <p className="mt-3 text-xs text-dim">Wire colours follow the studio convention: red supply, black ground, yellow signal, green sensor output, blue communication/encoders, orange motor. Load the project to open the full interactive schematic in Circuit Studio.</p>
           </Panel>
@@ -147,19 +148,19 @@ export default function GarageProjectPage() {
 
       {tab === "code" && (
         <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-          <pre className="max-h-[640px] overflow-auto rounded-xl border border-line bg-[#0b0f16] p-4 font-mono text-[12px] leading-relaxed text-[#d7e3f4]">
+          <pre className="max-h-[640px] overflow-auto bf-code rounded-xl p-4 font-mono text-[12px] leading-relaxed">
             {t.firmware.source.split("\n").map((l, i) => (
-              <div key={i}><span className="mr-4 inline-block w-8 select-none text-right text-dim">{i + 1}</span><span className={l.trim().startsWith("//") ? "text-[#7f8ea3]" : l.trim().startsWith("#define") ? "text-orange" : ""}>{l}</span></div>
+              <div key={i}><span className="mr-4 inline-block w-8 select-none text-right text-dim">{i + 1}</span><span className={l.trim().startsWith("//") ? "bf-code-dim" : l.trim().startsWith("#define") ? "text-accent-ink" : ""}>{l}</span></div>
             ))}
           </pre>
           <div className="space-y-4">
             <Panel title="Board & libraries">
-              <div className="text-sm">Board profile: <span className="font-mono text-cyan">{t.firmware.board}</span></div>
+              <div className="text-sm">Board profile: <span className="font-mono text-brand">{t.firmware.board}</span></div>
               <div className="text-sm">Libraries: {t.firmware.libraries.length ? t.firmware.libraries.join(", ") : "none (core Arduino API only)"}</div>
               {t.simulation.keyboardViaSerial && <div className="mt-2 text-xs text-muted">Bluetooth commands: {BT_PROTOCOL_DOC}</div>}
             </Panel>
             <Panel title="Adjustable parameters">
-              <ul className="space-y-2 text-sm">{t.firmware.adjustable.map((a) => <li key={a.name}><span className="font-mono text-orange">{a.name}</span><div className="text-xs text-muted">{a.meaning}</div></li>)}</ul>
+              <ul className="space-y-2 text-sm">{t.firmware.adjustable.map((a) => <li key={a.name}><span className="font-mono text-accent-ink">{a.name}</span><div className="text-xs text-muted">{a.meaning}</div></li>)}</ul>
             </Panel>
           </div>
         </div>
@@ -199,13 +200,13 @@ export default function GarageProjectPage() {
           <table className="w-full text-sm">
             <thead className="bg-bg2"><tr className="bf-label text-left"><th className="px-4 py-2">Qty</th><th className="px-4 py-2">Component</th><th className="px-4 py-2">Refs</th><th className="px-4 py-2">Simulation</th></tr></thead>
             <tbody>
-              <tr className="border-t border-line"><td className="px-4 py-2">1</td><td className="px-4 py-2"><Link className="hover:text-orange" href={`/library?c=${project.chassis!.componentId}`}>{getComponent(project.chassis!.componentId)?.name}</Link></td><td className="px-4 py-2 text-dim">chassis</td><td className="px-4 py-2"><SimBadge status={getComponent(project.chassis!.componentId)!.simStatus} /></td></tr>
+              <tr className="border-t border-line"><td className="px-4 py-2">1</td><td className="px-4 py-2"><Link className="hover:text-accent-ink" href={`/library?c=${project.chassis!.componentId}`}>{getComponent(project.chassis!.componentId)?.name}</Link></td><td className="px-4 py-2 text-dim">chassis</td><td className="px-4 py-2"><SimBadge status={getComponent(project.chassis!.componentId)!.simStatus} /></td></tr>
               {bom.map((b) => {
                 const c = getComponent(b.id)!;
                 return (
                   <tr key={b.id} className="border-t border-line">
                     <td className="px-4 py-2">{b.n}</td>
-                    <td className="px-4 py-2"><Link className="hover:text-orange" href={`/library?c=${b.id}`}>{c.name}</Link><div className="text-xs text-dim">{c.model ?? c.category}</div></td>
+                    <td className="px-4 py-2"><Link className="hover:text-accent-ink" href={`/library?c=${b.id}`}>{c.name}</Link><div className="text-xs text-dim">{c.model ?? c.category}</div></td>
                     <td className="px-4 py-2 font-mono text-xs text-muted">{b.labels.join(", ")}</td>
                     <td className="px-4 py-2"><SimBadge status={c.simStatus} /></td>
                   </tr>

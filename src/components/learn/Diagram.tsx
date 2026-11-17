@@ -2,6 +2,7 @@
 import { getComponent } from "@/lib/catalogue";
 import type { DiagramSpec } from "@/lib/learning/types";
 import { PinoutDiagram } from "@/components/library/PinoutDiagram";
+import { THEME } from "@/lib/theme";
 
 /** Renders the technical diagrams that come with lessons and quiz questions. */
 export function Diagram({ spec }: { spec: DiagramSpec }) {
@@ -35,18 +36,18 @@ export function Diagram({ spec }: { spec: DiagramSpec }) {
             const a = byId.get(e.from),
               b = byId.get(e.to);
             if (!a || !b) return null;
-            const col = e.wrong ? "#ff3b4e" : e.color ?? "#f5c518";
+            const col = e.wrong ? THEME.accent : e.color ?? THEME.warn;
             return (
               <g key={i}>
                 <line x1={sx(a.x)} y1={sy(a.y)} x2={sx(b.x)} y2={sy(b.y)} stroke={col} strokeWidth={2} strokeDasharray={e.wrong ? "6 4" : undefined} />
-                {e.label && <text x={(sx(a.x) + sx(b.x)) / 2} y={(sy(a.y) + sy(b.y)) / 2 - 5} textAnchor="middle" fill="#cfd6e2" fontSize={10} fontFamily="JetBrains Mono">{e.label}</text>}
+                {e.label && <text x={(sx(a.x) + sx(b.x)) / 2} y={(sy(a.y) + sy(b.y)) / 2 - 5} textAnchor="middle" fill={THEME.ivoryMuted} fontSize={10} fontFamily="JetBrains Mono">{e.label}</text>}
               </g>
             );
           })}
           {spec.nodes.map((n) => (
             <g key={n.id}>
-              <rect x={sx(n.x) - 52} y={sy(n.y) - 14} width={104} height={28} rx={5} fill="#171d28" stroke="#33405a" />
-              <text x={sx(n.x)} y={sy(n.y) + 4} textAnchor="middle" fill="#f4f7fb" fontSize={10.5} fontFamily="Space Grotesk">{n.label.length > 18 ? n.label.slice(0, 17) + "…" : n.label}</text>
+              <rect x={sx(n.x) - 52} y={sy(n.y) - 14} width={104} height={28} rx={5} fill={THEME.card} stroke={THEME.cardLine} />
+              <text x={sx(n.x)} y={sy(n.y) + 4} textAnchor="middle" fill={THEME.cardInk} fontSize={10.5} fontFamily="Space Grotesk">{n.label.length > 18 ? n.label.slice(0, 17) + "…" : n.label}</text>
             </g>
           ))}
         </svg>
@@ -65,17 +66,17 @@ export function Diagram({ spec }: { spec: DiagramSpec }) {
       B = 30;
     const sx = (x: number) => L + ((x - minX) / Math.max(1e-9, maxX - minX)) * (W - L - 12);
     const sy = (y: number) => H - B - ((y - minY) / Math.max(1e-9, maxY - minY)) * (H - B - 14);
-    const colors = ["#ff6b1a", "#00d9ff", "#22c55e", "#f5b301"];
+    const colors = [THEME.accent, THEME.ivory, THEME.ok, THEME.warn];
     return (
       <figure className="rounded-lg border border-line bg-bg2 p-2">
         <div className="mb-1 text-xs font-semibold">{spec.title}</div>
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
-          <line x1={L} y1={H - B} x2={W - 8} y2={H - B} stroke="#5f6b80" />
-          <line x1={L} y1={10} x2={L} y2={H - B} stroke="#5f6b80" />
-          <text x={W / 2} y={H - 6} textAnchor="middle" fill="#95a1b5" fontSize={10}>{spec.xLabel}</text>
-          <text x={12} y={H / 2} fill="#95a1b5" fontSize={10} transform={`rotate(-90 12 ${H / 2})`} textAnchor="middle">{spec.yLabel}</text>
-          <text x={L - 4} y={sy(maxY) + 4} textAnchor="end" fill="#5f6b80" fontSize={9}>{maxY}</text>
-          <text x={L - 4} y={sy(minY) + 4} textAnchor="end" fill="#5f6b80" fontSize={9}>{minY}</text>
+          <line x1={L} y1={H - B} x2={W - 8} y2={H - B} stroke={THEME.hairline2} />
+          <line x1={L} y1={10} x2={L} y2={H - B} stroke={THEME.hairline2} />
+          <text x={W / 2} y={H - 6} textAnchor="middle" fill={THEME.ivoryMuted} fontSize={10}>{spec.xLabel}</text>
+          <text x={12} y={H / 2} fill={THEME.ivoryMuted} fontSize={10} transform={`rotate(-90 12 ${H / 2})`} textAnchor="middle">{spec.yLabel}</text>
+          <text x={L - 4} y={sy(maxY) + 4} textAnchor="end" fill={THEME.ivoryDim} fontSize={9}>{maxY}</text>
+          <text x={L - 4} y={sy(minY) + 4} textAnchor="end" fill={THEME.ivoryDim} fontSize={9}>{minY}</text>
           {spec.series.map((s, i) => (
             <polyline key={s.label} points={s.points.map(([x, y]) => `${sx(x)},${sy(y)}`).join(" ")} fill="none" stroke={colors[i % 4]} strokeWidth={2} />
           ))}
@@ -91,19 +92,19 @@ export function Diagram({ spec }: { spec: DiagramSpec }) {
       <figure className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-bg2 p-3 text-xs">
         {spec.steps.map((s, i) => (
           <span key={i} className="flex items-center gap-2">
-            <span className="rounded border border-cyan/40 bg-cyan/5 px-2 py-1">{s}</span>
-            {i < spec.steps.length - 1 && <span className="text-orange">→</span>}
+            <span className="rounded border border-brand/40 bg-brand/5 px-2 py-1">{s}</span>
+            {i < spec.steps.length - 1 && <span className="text-accent-ink">→</span>}
           </span>
         ))}
       </figure>
     );
   return (
     <figure className="rounded-lg border border-line bg-bg2 p-3">
-      <div className="text-center font-mono text-lg text-orange">{spec.latexish}</div>
+      <div className="text-center font-mono text-lg text-accent-ink">{spec.latexish}</div>
       <dl className="mt-2 grid grid-cols-[60px_1fr] gap-1 text-xs">
         {Object.entries(spec.legend).map(([k, v]) => (
           <div key={k} className="contents">
-            <dt className="font-mono text-cyan">{k}</dt>
+            <dt className="font-mono text-brand">{k}</dt>
             <dd className="text-muted">{v}</dd>
           </div>
         ))}

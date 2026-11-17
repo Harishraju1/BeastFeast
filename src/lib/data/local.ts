@@ -6,7 +6,8 @@
  */
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Backend, DEFAULT_RULES, type Progress, type QuizAttempt, XP_RULES, type XpEvent, type XpEventType } from "./types";
+import { type AdminContent, type Backend, DEFAULT_RULES, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, XP_RULES, type XpEvent, type XpEventType } from "./types";
+import { isStaff, isSuperAdmin } from "@/lib/roles";
 import { gradeQuiz } from "./grading";
 
 const K = {
@@ -17,6 +18,7 @@ const K = {
   progress: (u: string) => `bf5.progress.${u}`,
   xp: "bf5.xp",
   content: "bf5.content",
+  roleAudit: "bf5.roleAudit",
 };
 
 interface Account {
@@ -57,7 +59,13 @@ export class LocalBackend implements Backend {
   readonly mode = "local" as const;
 
   private accounts(): Account[] {
-    return read<Account[]>(K.accounts, []);
+    const accounts = read<Account[]>(K.accounts, []);
+    // devices set up before roles existed: the first account (the old device admin) becomes Super Admin
+    if (accounts.length && !accounts.some((a) => a.profile.role === "super_admin") && accounts[0].profile.role === "admin") {
+      accounts[0].profile.role = "super_admin";
+      write(K.accounts, accounts);
+    }
+    return accounts;
   }
 
   async currentUser() {
@@ -74,7 +82,7 @@ export class LocalBackend implements Backend {
     const salt = crypto.randomUUID();
     const profile: Profile = {
       id: rid("u"), name: input.name.trim(), campus: input.campus.trim(), studentId: input.studentId.trim(), avatar: null,
-      role: accounts.length === 0 ? "admin" : "student", // the first account on a device administers it
+      role: accounts.length === 0 ? "super_admin" : "student", // the first account on a device is its Super Admin
       xp: 0, createdAt: new Date().toISOString(),
     };
     accounts.push({ profile, email, salt, hash: await sha256(salt + input.password) });
@@ -110,13 +118,42 @@ export class LocalBackend implements Backend {
     return this.accounts().map((a) => a.profile);
   }
 
-  async setRole(userId: string, role: Profile["role"]) {
+  // Same rules as the Supabase admin_set_role() function (local mode is single-device and not tamper-proof).
+  async setRole(userId: string, role: "student" | "admin", note?: string) {
     const me = await this.currentUser();
-    if (me?.role !== "admin") throw new Error("Only administrators can change roles.");
+    if (!isSuperAdmin(me?.role)) throw new Error("Only the Super Admin can change roles");
+    if (role !== "student" && role !== "admin") throw new Error("Role must be student or admin");
+    if (userId === me!.id) throw new Error("You cannot change your own role");
     const accounts = this.accounts();
     const a = accounts.find((x) => x.profile.id === userId);
-    if (a) a.profile.role = role;
+    if (!a) throw new Error("No account with that id");
+    if (a.profile.role === "super_admin") throw new Error("The Super Admin account is protected");
+    if (a.profile.role === role) return;
+    const entry: RoleAuditEntry = { id: rid("ra"), at: new Date().toISOString(), actorEmail: accounts.find((x) => x.profile.id === me!.id)?.email ?? null, targetEmail: a.email, oldRole: a.profile.role, newRole: role, action: role === "admin" ? "promote" : "revoke", note: note ?? null };
+    a.profile.role = role;
     write(K.accounts, accounts);
+    write(K.roleAudit, [entry, ...read<RoleAuditEntry[]>(K.roleAudit, [])]);
+  }
+
+  async findUserByEmail(email: string): Promise<StaffAccount | null> {
+    const me = await this.currentUser();
+    if (!isSuperAdmin(me?.role)) throw new Error("Only the Super Admin can look up accounts");
+    const a = this.accounts().find((x) => x.email === email.trim().toLowerCase());
+    return a ? { id: a.profile.id, name: a.profile.name, email: a.email, role: a.profile.role, createdAt: a.profile.createdAt } : null;
+  }
+
+  async listStaff(): Promise<StaffAccount[]> {
+    const me = await this.currentUser();
+    if (!isStaff(me?.role)) throw new Error("Administrator access required");
+    return this.accounts()
+      .filter((a) => isStaff(a.profile.role))
+      .map((a) => ({ id: a.profile.id, name: a.profile.name, email: a.email, role: a.profile.role, createdAt: a.profile.createdAt }));
+  }
+
+  async listRoleAudit(): Promise<RoleAuditEntry[]> {
+    const me = await this.currentUser();
+    if (!isStaff(me?.role)) throw new Error("Administrator access required");
+    return read<RoleAuditEntry[]>(K.roleAudit, []);
   }
 
   async listProjects(ownerId: string) {
@@ -136,7 +173,7 @@ export class LocalBackend implements Backend {
     const me = await this.currentUser();
     const all = read<Project[]>(K.projects, []);
     const p = all.find((x) => x.id === id);
-    if (p && me && (p.ownerId === me.id || me.role === "admin")) write(K.projects, all.filter((x) => x.id !== id));
+    if (p && me && (p.ownerId === me.id || isStaff(me.role))) write(K.projects, all.filter((x) => x.id !== id));
   }
 
   async listTracks(ownerId: string | null) {
@@ -207,7 +244,7 @@ export class LocalBackend implements Backend {
   }
   async saveContent(c: Partial<AdminContent>) {
     const me = await this.currentUser();
-    if (me?.role !== "admin") throw new Error("Only administrators can edit content.");
+    if (!isStaff(me?.role)) throw new Error("Only administrators can edit content.");
     const next = { ...(await this.getContent()), ...c };
     write(K.content, next);
     return next;

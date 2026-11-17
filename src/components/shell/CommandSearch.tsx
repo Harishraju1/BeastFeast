@@ -28,8 +28,8 @@ export function CommandSearch({ open, onClose }: { open: boolean; onClose: () =>
   }, [q, projects]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/60 p-4 pt-[12vh] backdrop-blur-sm" onMouseDown={onClose}>
-      <div className="bf-panel w-full max-w-xl overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-sage-900/40 p-4 pt-[12vh] backdrop-blur-sm" onMouseDown={onClose}>
+      <div className="bf-panel bf-raised w-full max-w-xl overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={ref}
           value={q}
@@ -54,7 +54,7 @@ export function CommandSearch({ open, onClose }: { open: boolean; onClose: () =>
                   onClose();
                 }}
               >
-                <span className="w-20 shrink-0 font-mono text-[10px] uppercase text-orange">{r.kind}</span>
+                <span className="w-20 shrink-0 font-mono text-[10px] uppercase text-accent-ink">{r.kind}</span>
                 <span className="flex-1 truncate text-sm">{r.label}</span>
                 <span className="text-xs text-dim">{r.sub}</span>
               </button>

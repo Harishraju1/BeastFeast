@@ -30,8 +30,8 @@ function Inner() {
             {tracks.map((t) => (
               <div key={t.id} className="flex items-center justify-between rounded border border-line bg-bg2 p-3">
                 <Link href={`/tracks/${t.id}`} className="min-w-0">
-                  <div className="truncate font-medium hover:text-orange">{t.name}</div>
-                  <div className="flex gap-1"><Badge tone="cyan">{t.kind}</Badge><Badge>{t.difficulty}</Badge><span className="text-xs text-dim">{t.pieces.length} pieces</span></div>
+                  <div className="truncate font-medium hover:text-accent-ink">{t.name}</div>
+                  <div className="flex gap-1"><Badge tone="brand">{t.kind}</Badge><Badge>{t.difficulty}</Badge><span className="text-xs text-dim">{t.pieces.length} pieces</span></div>
                 </Link>
                 <button className="p-1.5 text-muted hover:text-bad" title="Delete" onClick={() => confirm(`Delete track "${t.name}"? This cannot be undone.`) && void deleteTrack(t.id)}><Trash2 size={14} /></button>
               </div>
@@ -45,7 +45,7 @@ function Inner() {
             <div key={t.id} className="flex items-center justify-between rounded border border-line bg-bg2 p-3">
               <div>
                 <div className="font-medium">{t.name}</div>
-                <div className="flex gap-1"><Badge tone="cyan">{t.kind}</Badge><Badge tone={t.difficulty === "beast" ? "bad" : t.difficulty === "advanced" ? "orange" : "dim"}>{t.difficulty}</Badge></div>
+                <div className="flex gap-1"><Badge tone="brand">{t.kind}</Badge><Badge tone={t.difficulty === "beast" ? "bad" : t.difficulty === "advanced" ? "accent" : "dim"}>{t.difficulty}</Badge></div>
               </div>
               <Button size="sm" onClick={() => void create({ ...structuredClone(t), id: uid("trk"), ownerId: user!.id, name: `${t.name} (copy)` })}><Copy size={13} /> Copy & edit</Button>
             </div>

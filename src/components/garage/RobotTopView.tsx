@@ -2,6 +2,7 @@
 import { getComponent } from "@/lib/catalogue";
 import { partBox } from "@/lib/mech/geometry";
 import type { Project } from "@/lib/types";
+import { THEME } from "@/lib/theme";
 
 const COLOR: Record<string, string> = {
   controller: "#0e6f8f", "motor-driver": "#8d1d24", "dc-motor": "#c9a227", wheel: "#1b1d22", caster: "#9aa3ad", battery: "#2b7de9", sensor: "#1f8a4c", regulator: "#1a5fb4", wireless: "#1c7a5a", switch: "#555",
@@ -29,11 +30,11 @@ export function RobotTopView({ project, className = "" }: { project: Project; cl
   const sorted = [...boxes].sort((a, b) => (order.indexOf(b.kind) === -1 ? 1 : 0) - (order.indexOf(a.kind) === -1 ? 1 : 0) || a.z - b.z);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className={className} role="img" aria-label={`Top view of ${project.name}`}>
-      <rect x={sx(ch.width_mm / 2)} y={sy(ch.length_mm / 2)} width={ch.width_mm} height={ch.length_mm} rx={4} fill="#7fd8ff22" stroke="#00d9ff" strokeWidth={1} />
+      <rect x={sx(ch.width_mm / 2)} y={sy(ch.length_mm / 2)} width={ch.width_mm} height={ch.length_mm} rx={4} fill="rgba(241,238,227,0.08)" stroke={THEME.ivory} strokeWidth={1} />
       {sorted.map((x, i) => (
-        <rect key={i} x={sx(x.b.maxY)} y={sy(x.b.maxX)} width={x.b.maxY - x.b.minY} height={x.b.maxX - x.b.minX} rx={1.5} fill={COLOR[x.kind] ?? "#5f6b80"} opacity={x.z < -ch.thickness_mm ? 0.75 : 0.95} stroke="#080a0f" strokeWidth={0.6} />
+        <rect key={i} x={sx(x.b.maxY)} y={sy(x.b.maxX)} width={x.b.maxY - x.b.minY} height={x.b.maxX - x.b.minX} rx={1.5} fill={COLOR[x.kind] ?? THEME.sageLight} opacity={x.z < -ch.thickness_mm ? 0.75 : 0.95} stroke={THEME.sageDeeper} strokeWidth={0.6} />
       ))}
-      <path d={`M ${W / 2 - 6} 5 L ${W / 2} 0 L ${W / 2 + 6} 5`} stroke="#ff6b1a" strokeWidth={1.5} fill="none" />
+      <path d={`M ${W / 2 - 6} 5 L ${W / 2} 0 L ${W / 2 + 6} 5`} stroke={THEME.accent} strokeWidth={1.5} fill="none" />
     </svg>
   );
 }

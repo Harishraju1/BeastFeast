@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Build. Code. Simulate. Dominate. The virtual robotics engineering platform of Robotics Club KKH.",
 };
 
-export const viewport: Viewport = { themeColor: "#080A0F", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#4B5A50", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

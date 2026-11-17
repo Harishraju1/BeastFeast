@@ -11,8 +11,8 @@ import { newProject, uid } from "@/lib/robot/assembly";
 import { reference2WD, referenceLineFollower, referenceSumo } from "@/lib/robot/reference";
 
 const CARDS: { id: CompetitionId; icon: typeof Gauge; color: string; desc: string; features: string[] }[] = [
-  { id: "race", icon: Gauge, color: "orange", desc: "Build a high-performance robot car capable of navigating racing tracks.", features: ["2WD & 4WD designs", "Motor, wheel & driver selection", "Speed & turning mechanics", "Custom tracks & lap timing", "Keyboard control", "Obstacle simulation"] },
-  { id: "line", icon: Route, color: "cyan", desc: "Build an autonomous robot that detects and follows a line using reflectance sensors.", features: ["TCRT5000 & QTR arrays", "Analog & digital sensors", "Calibration & PID", "Real-time sensor view", "Track configuration", "Speed optimisation"] },
+  { id: "race", icon: Gauge, color: "accent", desc: "Build a high-performance robot car capable of navigating racing tracks.", features: ["2WD & 4WD designs", "Motor, wheel & driver selection", "Speed & turning mechanics", "Custom tracks & lap timing", "Keyboard control", "Obstacle simulation"] },
+  { id: "line", icon: Route, color: "brand", desc: "Build an autonomous robot that detects and follows a line using reflectance sensors.", features: ["TCRT5000 & QTR arrays", "Analog & digital sensors", "Calibration & PID", "Real-time sensor view", "Track configuration", "Speed optimisation"] },
   { id: "sumo", icon: Swords, color: "red", desc: "Build an intelligent robot that detects, attacks and pushes an opponent out of the arena.", features: ["Sumo chassis & wedge", "Torque & high-grip wheels", "Opponent & edge detection", "Ultrasonic, Sharp IR, bumpers", "Attack & defence algorithms", "AI opponents"] },
 ];
 
@@ -50,12 +50,12 @@ function ProjectsInner() {
       <div className="mb-10 grid gap-5 md:grid-cols-3">
         {CARDS.map((c) => {
           const Icon = c.icon;
-          const glow = c.color === "orange" ? "hover:bf-glow-orange hover:border-orange" : c.color === "cyan" ? "hover:border-cyan" : "hover:border-bad";
+          const glow = c.color === "accent" ? "hover:bf-glow-accent hover:border-accent" : c.color === "brand" ? "hover:border-brand" : "hover:border-bad";
           return (
             <button key={c.id} onClick={() => { setCreating(c.id); setName(""); setStart("blank"); }} className={`group bf-panel relative overflow-hidden p-6 text-left transition duration-300 hover:-translate-y-1 ${glow}`} style={{ perspective: 800 }}>
               <div className="bf-grid pointer-events-none absolute inset-0 opacity-40" />
               <div className="relative">
-                <Icon size={36} className={c.color === "orange" ? "text-orange" : c.color === "cyan" ? "text-cyan" : "text-bad"} />
+                <Icon size={36} className={c.color === "accent" ? "text-accent-ink" : c.color === "brand" ? "text-brand" : "text-bad"} />
                 <div className="mt-4 font-display text-2xl font-bold uppercase">{COMPETITIONS[c.id].name}</div>
                 <p className="mt-2 text-sm text-muted">{c.desc}</p>
                 <ul className="mt-4 grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-muted">
@@ -63,7 +63,7 @@ function ProjectsInner() {
                     <li key={f}>▸ {f}</li>
                   ))}
                 </ul>
-                <div className="mt-5 font-mono text-xs tracking-widest text-orange opacity-70 group-hover:opacity-100">NEW PROJECT →</div>
+                <div className="mt-5 font-mono text-xs tracking-widest text-accent-ink opacity-70 group-hover:opacity-100">NEW PROJECT →</div>
               </div>
             </button>
           );
@@ -90,12 +90,12 @@ function ProjectsInner() {
               {projects.map((p) => (
                 <tr key={p.id} className="border-t border-line hover:bg-panel/50">
                   <td className="px-4 py-2">
-                    <Link href={`/workspace/${p.id}/design`} className="font-medium hover:text-orange">
+                    <Link href={`/workspace/${p.id}/design`} className="font-medium hover:text-accent-ink">
                       {p.name}
                     </Link>
                   </td>
                   <td className="px-4 py-2">
-                    <Badge tone="cyan">{COMPETITIONS[p.competition].short}</Badge>
+                    <Badge tone="brand">{COMPETITIONS[p.competition].short}</Badge>
                   </td>
                   <td className="hidden px-4 py-2 font-mono text-xs text-muted md:table-cell">
                     {p.parts.length} / {p.wires.length}
@@ -104,8 +104,8 @@ function ProjectsInner() {
                   <td className="hidden px-4 py-2 text-xs text-muted lg:table-cell">{new Date(p.updatedAt).toLocaleString()}</td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-1">
-                      <Link href={`/workspace/${p.id}/design`} className="rounded px-2 py-1 text-xs text-orange hover:bg-orange/10">Open</Link>
-                      <Link href={`/workspace/${p.id}/arena`} className="rounded px-2 py-1 text-xs text-cyan hover:bg-cyan/10">Simulate</Link>
+                      <Link href={`/workspace/${p.id}/design`} className="rounded px-2 py-1 text-xs text-accent-ink hover:bg-accent/10">Open</Link>
+                      <Link href={`/workspace/${p.id}/arena`} className="rounded px-2 py-1 text-xs text-brand hover:bg-brand/10">Simulate</Link>
                       <button title="Rename" className="rounded p-1.5 text-muted hover:text-text" onClick={() => setRenaming(p)}><Pencil size={14} /></button>
                       <button title="Duplicate" className="rounded p-1.5 text-muted hover:text-text" onClick={() => void duplicateProject(p.id)}><Copy size={14} /></button>
                       <button title="Delete" className="rounded p-1.5 text-muted hover:text-bad" onClick={() => setConfirmDel(p)}><Trash2 size={14} /></button>

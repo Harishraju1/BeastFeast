@@ -1,6 +1,6 @@
 # DEVELOPMENT STATUS — BEAST FEAST 5.0
 
-Last updated: 2026-11-16 (BEAST PROJECT GARAGE added)
+Last updated: 2026-11-17 (brand colour system, roles and admin management added)
 
 ## Completed modules
 
@@ -8,7 +8,7 @@ Last updated: 2026-11-16 (BEAST PROJECT GARAGE added)
 | --- | --- | --- |
 | Design system & app shell | ✅ | Dark futuristic theme (#080A0F, orange/cyan accents), Space Grotesk / Inter / JetBrains Mono, animated grid, sidebar, top bar with search (Ctrl K), notifications, help, settings, autosave indicator |
 | Command Center | ✅ | Interactive 3D hero robot; workspace stats; continue building; weekly missions; achievements & streaks; featured tutorials; leaderboard preview; competition updates |
-| Authentication & profiles | ✅ local / ⚠️ Supabase untested | Local mode uses salted SHA-256 hashes in browser storage. The Supabase adapter and schema are written but not yet run against a live project |
+| Authentication & profiles | ✅ local / ✅ Supabase connected | Local mode uses salted SHA-256 hashes in browser storage. Cloud mode uses Supabase Auth; the profile row is created by a database trigger |
 | Component catalogue | ✅ | 552/552 master-list entries, 0 missing, 0 duplicate IDs. Classes A/B/C. Honest GREEN/BLUE/YELLOW/GREY status. 75 datasheet-referenced pinouts, 220 function-standard pinouts. In-app completeness validator (can compare a newly uploaded list) |
 | Component library UI | ✅ | Category tree, search by model/category/manufacturer, filters (voltage, protocol, competition, simulation status, class). Inspector with generated pinout, front/side/top/3D procedural views, specs (unknown = "unverified"), compatibility, datasheet link. Workshop-equipment tab |
 | 3D Robot Designer | ✅ | Add by click or drag-drop; move/rotate gizmo (snapping); duplicate/delete; wheels snap onto motor shafts; chassis builder (19 chassis types, size, material, mounting holes); exploded view with assembly order; assembly tree / console / warnings |
@@ -26,13 +26,25 @@ Last updated: 2026-11-16 (BEAST PROJECT GARAGE added)
 | Beast Topics | ✅ | 84 topics (30 line, 28 race, 26 sumo), all required sections, generated diagrams, mark complete, bookmark, continue reading, YouTube search links and admin-curated embeds |
 | Quiz & challenge engine | ✅ | 350 questions across all 10 types; topic quizzes, 3 competition quizzes, 2 weekly quizzes, 3 engineering challenges, final exam; immediate feedback; XP once per question |
 | Gamification | ✅ | XP rules table, ranks, 9 achievements derived from recorded events, streaks, 9 leaderboards |
+| Brand colour system | ✅ | Forest Sage dominant / Warm Ivory foreground / Signal Red accents, defined once as CSS tokens (`globals.css`) and `src/lib/theme.ts` for 3D, SVG and Monaco. Applied to every page, including the 3D viewports, schematic canvas, track designer, diagrams and code editor. An automated colour audit found no old-palette colours on any route. |
+| Roles & admin security | ✅ | student / admin / super_admin. The `/admin` route is gated on the server (`proxy.ts` plus a Server Component layout that reads the role from the database). The database enforces everything else: RLS, `admin_set_role` / `admin_find_user` / `admin_list_staff` functions, a protect-profile trigger and an append-only `role_audit_log`. MAKE AS ADMIN by email (Super Admin only), revoke, and audit log UI. The Super Admin is bootstrapped server-side (`npm run admin:bootstrap`). |
 | Admin dashboard | ✅ | Students and roles, component editing (images, 3D URL, datasheet, verification, pin JSON), lesson overrides and extra questions, videos, weekly missions, announcements, competition rules, featured projects, analytics |
 | BEAST PROJECT GARAGE | ✅ | 9 reference robots (3 per competition) built from catalogue parts through the normal project pipeline; Garage page with Line Following Lab / Robo Race Garage / Sumo Battle Workshop; VIEW / LOAD / SIMULATE NOW / CUSTOMISE; project view with OVERVIEW, 3D ASSEMBLY, CIRCUIT, CODE, SIMULATION, COMPONENTS tabs; 12-step loader that really builds, compiles, validates and starts the simulation; read-only originals + student copies; 14-check readiness test (all 9: READY TO SIMULATE); live tuning panel (sliders send the firmware's own Serial commands) and firmware telemetry panel; keyboard → Bluetooth serial → firmware for the manual racers |
-| Supabase schema | ✅ written / ⚠️ not yet run | Tables for all 25 entities, normalised project tables kept in sync by trigger, RLS on every table, `award_xp` / `complete_lesson` / `submit_quiz` security-definer functions, leaderboard view, seed script |
+| Supabase schema | ✅ applied (2026-11-17) | Tables for all 25 entities, normalised project tables kept in sync by trigger, RLS on every table, `award_xp` / `complete_lesson` / `submit_quiz` security-definer functions, leaderboard view, seed script |
 
 ## In progress / pending
 
-- **Supabase mode end-to-end test.** No credentials were available in this session, so `SupabaseBackend`, the SQL migration and `seed:supabase` have not been run against a real project. Run them before relying on cloud mode.
+- **Supabase project connected (2026-11-17).** Migrations 0001–0003 were applied with `npm run db:push`, and the content was seeded with `npm run seed:supabase`: 552 components, 1,636 pins, 84 topics, 350 questions with hidden answer keys, 9 quizzes and 7 missions. A visitor who is not signed in was confirmed to be denied components, answer keys, profiles, projects and `award_xp`. The app runs in cloud mode (sidebar shows CLOUD SYNC · SUPABASE). **Cloud smoke test** (`npm run cloud:smoke`): creates two temporary confirmed accounts, runs 19 checks through the app's own `SupabaseBackend`, then deletes the accounts. 19 / 19 pass:
+  - **Accounts and projects:** the profile trigger runs on sign-up; a Garage LF-03 copy saves and reloads intact (12 parts, 35 wires); the normalised project tables are filled.
+  - **XP:** `award_xp` takes amounts from the server and ignores duplicates; the client cannot award quiz XP itself.
+  - **Quizzes and lessons:** quizzes are graded against the hidden answer keys with XP awarded once; lesson XP is awarded once; progress is recorded.
+  - **Profile protection:** students can rename themselves but cannot make themselves admin or set their XP.
+  - **Isolation between students:** another student cannot read, change or forge someone else's project, cannot read answer keys and cannot insert XP events.
+  - **Leaderboard:** shows the server-side XP total.
+  The first run found two schema bugs, fixed in `0004_fix_xp_totals_and_progress.sql`:
+  - XP totals never rose, because the profile-protection trigger also reverted updates made by the trusted XP functions.
+  - A first quiz taken before any progress row existed lost its correct answers.
+  Sign-in through the browser UI with a real account has not been exercised by an automated test.
 - **Accurate 3D models and verified photos.** None exist yet (0/552). Every part uses a clearly labelled procedural model built from its dimensions. Admins can attach images and glTF URLs; the glTF URL is stored but the designer does not load glTF files yet.
 - **Pinouts for 257 entries** (mostly mechanical/workshop items, plus some boards: ESP32-S3/C3, XIAO, STM32, Teensy, nRF52840, VNH-series drivers). These are shown as "pending verification". Admins can add them in Admin → Components.
 - **Admin sign-off.** "Datasheet-referenced" values were entered from manufacturer documentation but are not yet marked admin-verified.
@@ -54,6 +66,20 @@ Simulator fixes found while building the Garage:
 - **Encoder edges.** Encoders used to fire their interrupt on every quadrature count, regardless of the attachInterrupt mode, and the ISR read the pin levels at the end of the physics step. The bridge now emits real per-pin rising/falling edges, honours RISING/FALLING/CHANGE, and runs each ISR while the pins show their state at that edge. Quadrature decoding is now exact.
 - **Code check.** "Wired but unused" warnings are no longer raised when the firmware accesses pins through arrays or variables, which can't be resolved statically.
 - **Sharp IR outputs.** These now carry their datasheet output range (≈3.1 V max), so logic-level checks on 3.3 V boards are correct.
+
+## Roles & admin — test results
+
+`npm run roles:smoke`: **23 / 23 pass** against the live Supabase project and the running app, using four temporary accounts that are deleted afterwards.
+- **Students:** cannot look up accounts, promote anyone, change their own role (via the function or a direct update), read or write the audit log, or list staff.
+- **Super Admin:**
+  - finds users by email (case-insensitive), and an unregistered email returns nothing
+  - promotes to admin, with an audit row recording the actor, old role and new role
+  - cannot grant super_admin, change their own role, or demote another super_admin
+  - can revoke admin access, which is also audited
+- **Admins:** can list staff and read the audit log; cannot look up accounts by email, promote others, or raise their own role.
+- **`/admin` route:** sends signed-out visitors to login (307), shows "Access denied" to a signed-in student, and opens for an admin and for the Super Admin.
+
+`npm run cloud:smoke` still passes 19 / 19. In local mode, the MAKE AS ADMIN flow was also run in the browser: unregistered email gave "No account found"; registered email, then confirm, then MAKE ADMIN gave role Admin plus an audit-log row. A student saw no admin link, and `/admin` refused them.
 
 ## Testing results
 
@@ -81,6 +107,10 @@ Bugs found and fixed during browser testing:
 - Circuit Studio layout was cramped at laptop widths.
 
 ## Technical limitations (stated honestly in the UI too)
+
+- **Session change (2026-11-17):** cloud sessions moved from browser storage to cookies so the server can verify roles. Everyone has to sign in once more after this update.
+- **Local-mode admin:** in local mode the `/admin` gate and role rules run in the browser only. Server-side protection applies in cloud (Supabase) mode.
+- **Lint:** 12 ESLint warnings remain (hook dependency hints, `<img>` usage). There are no errors.
 
 - **Garage sumo matches:** the reference sumo robots (25GA370 motors, sticky sumo tyres, wedge) out-push the built-in AI opponent robots, so head-on matches are usually won in the first push. That outcome comes from the physics, not a script.
 - **RR-03 on obstacles:** RR-03 keeps itself on the road with two floor sensors but has no obstacle sensor, so it hits obstacles on the obstacle tracks. This is documented in the project as an extension exercise.

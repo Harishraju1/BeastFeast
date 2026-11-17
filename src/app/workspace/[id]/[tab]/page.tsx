@@ -59,10 +59,10 @@ function ReferenceBanner({ project }: { project: Project }) {
   const o = project.origin;
   if (!o) return null;
   if (o.mode === "copy")
-    return <div className="border-b border-line bg-bg2 px-3 py-1 text-[11px] text-muted">Your copy of garage project <Link className="text-orange" href={`/garage/${o.templateId}`}>{o.templateId}</Link> v{o.templateVersion} — edit anything; the original stays unchanged.</div>;
+    return <div className="border-b border-line bg-bg2 px-3 py-1 text-[11px] text-muted">Your copy of garage project <Link className="text-accent-ink" href={`/garage/${o.templateId}`}>{o.templateId}</Link> v{o.templateVersion} — edit anything; the original stays unchanged.</div>;
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-cyan/40 bg-cyan/5 px-3 py-1.5 text-xs">
-      <span className="font-mono tracking-widest text-cyan">REFERENCE PROJECT {o.templateId} · READ-ONLY</span>
+    <div className="flex flex-wrap items-center gap-3 border-b border-brand/40 bg-brand/5 px-3 py-1.5 text-xs">
+      <span className="font-mono tracking-widest text-brand">REFERENCE PROJECT {o.templateId} · READ-ONLY</span>
       <span className="text-muted">Simulate, change tracks and inspect freely. Design, wiring and code edits need your own copy.</span>
       <Button size="sm" variant="primary" className="ml-auto" onClick={async () => { const p = await loadTemplate(o.templateId, "copy"); router.push(`/workspace/${p.id}/design`); }}>CREATE MY OWN COPY</Button>
     </div>
@@ -96,19 +96,19 @@ function WorkspaceInner() {
     return () => window.removeEventListener("keydown", h);
   }, [id, undo, redo, saveNow]);
 
-  if (!project) return <Empty title="Project not found" action={<Link className="text-orange" href="/projects">Back to projects</Link>}>It may have been deleted, or it belongs to another account.</Empty>;
+  if (!project) return <Empty title="Project not found" action={<Link className="text-accent-ink" href="/projects">Back to projects</Link>}>It may have been deleted, or it belongs to another account.</Empty>;
   const h = history[id];
 
   return (
     <div className="relative flex h-[calc(100vh-56px)] flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b border-line bg-bg2 px-3 py-1.5">
         <div className="flex items-center gap-2">
-          <Badge tone="orange">{COMPETITIONS[project.competition].short}</Badge>
+          <Badge tone="accent">{COMPETITIONS[project.competition].short}</Badge>
           <span className="max-w-[220px] truncate font-display text-sm font-semibold">{project.name}</span>
         </div>
         <nav className="flex gap-0.5" aria-label="Workspace">
           {TABS.map((t) => (
-            <Link key={t.key} href={`/workspace/${id}/${t.key}`} className={`rounded px-2.5 py-1 text-xs font-medium ${tab === t.key ? "bg-orange text-black" : "text-muted hover:bg-panel hover:text-text"}`}>
+            <Link key={t.key} href={`/workspace/${id}/${t.key}`} className={`rounded px-2.5 py-1 text-xs font-medium ${tab === t.key ? "bg-accent text-white shadow-sm" : "text-muted hover:bg-panel hover:text-text"}`}>
               {t.label}
             </Link>
           ))}
@@ -139,7 +139,7 @@ function WorkspaceInner() {
       <Modal open={versionsOpen} onClose={() => setVersionsOpen(false)} title="Version history">
         <div className="space-y-3 text-sm">
           <div className="flex gap-2">
-            <Button size="sm" variant="cyan" onClick={() => snapshotVersion(id, `Manual snapshot ${new Date().toLocaleString()}`)}>Save a snapshot now</Button>
+            <Button size="sm" variant="secondary" onClick={() => snapshotVersion(id, `Manual snapshot ${new Date().toLocaleString()}`)}>Save a snapshot now</Button>
           </div>
           {project.versions.length === 0 && <div className="text-muted">No snapshots yet. Snapshots are also taken automatically before you restore one.</div>}
           {[...project.versions].reverse().map((v) => (

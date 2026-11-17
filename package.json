@@ -12,7 +12,11 @@
     "postinstall": "node scripts/copy-monaco.mjs",
     "seed:supabase": "tsx scripts/seed-supabase.ts",
     "typecheck": "tsc --noEmit -p .",
-    "garage:report": "tsx scripts/garage-report.ts"
+    "garage:report": "tsx scripts/garage-report.ts",
+    "db:push": "tsx scripts/db-push.ts",
+    "cloud:smoke": "tsx scripts/cloud-smoke.ts setup && tsx scripts/cloud-smoke.ts cleanup",
+    "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
+    "roles:smoke": "tsx scripts/roles-smoke.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

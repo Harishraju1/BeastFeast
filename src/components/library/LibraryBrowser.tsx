@@ -56,7 +56,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
 
   const tree = (
     <div className="space-y-0.5 text-sm">
-      <button onClick={() => setF({ ...f, section: null, sub: null })} className={`w-full rounded px-2 py-1 text-left ${!f.section ? "bg-orange/15 text-orange" : "text-muted hover:text-text"}`}>
+      <button onClick={() => setF({ ...f, section: null, sub: null })} className={`w-full rounded px-2 py-1 text-left ${!f.section ? "bg-accent/15 text-accent-ink" : "text-muted hover:text-text"}`}>
         All components <span className="float-right font-mono text-[10px]">{all.length}</span>
       </button>
       {MASTER_LIST.sections
@@ -71,7 +71,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
                   setF({ ...f, section: s.number, sub: null });
                   setOpen({ ...open, [s.number]: !open[s.number] || !active });
                 }}
-                className={`flex w-full items-center gap-1 rounded px-2 py-1 text-left ${active && !f.sub ? "bg-orange/15 text-orange" : "text-muted hover:text-text"}`}
+                className={`flex w-full items-center gap-1 rounded px-2 py-1 text-left ${active && !f.sub ? "bg-accent/15 text-accent-ink" : "text-muted hover:text-text"}`}
               >
                 {subs.length ? open[s.number] ? <ChevronDown size={12} /> : <ChevronRight size={12} /> : <span className="w-3" />}
                 <span className="flex-1 truncate">
@@ -81,7 +81,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
               </button>
               {open[s.number] &&
                 subs.map((sub) => (
-                  <button key={sub} onClick={() => setF({ ...f, section: s.number, sub })} className={`block w-full truncate rounded py-0.5 pl-7 pr-2 text-left text-xs ${f.sub === sub ? "text-orange" : "text-dim hover:text-text"}`}>
+                  <button key={sub} onClick={() => setF({ ...f, section: s.number, sub })} className={`block w-full truncate rounded py-0.5 pl-7 pr-2 text-left text-xs ${f.sub === sub ? "text-accent-ink" : "text-dim hover:text-text"}`}>
                     {sub}
                   </button>
                 ))}
@@ -139,7 +139,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
           onClick={() => setSelId(c.id)}
           draggable={!!onAdd && c.functionalityClass !== "C"}
           onDragStart={(e) => e.dataTransfer.setData("text/component-id", c.id)}
-          className={`group flex items-start gap-3 rounded-lg border p-2.5 text-left transition ${selId === c.id ? "border-orange bg-orange/5" : "border-line bg-bg2 hover:border-line2"}`}
+          className={`group flex items-start gap-3 rounded-lg border p-2.5 text-left transition ${selId === c.id ? "border-accent bg-accent/5" : "border-line bg-bg2 hover:border-line2"}`}
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-panel2 font-mono text-[9px] uppercase text-dim" aria-hidden>
             {c.kind.replace("-", " ").slice(0, 8)}
@@ -150,7 +150,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
             <div className="mt-1 flex items-center gap-1.5">
               <SimBadge status={c.simStatus} />
               <span className="font-mono text-[9px] text-dim">CLASS {c.functionalityClass}</span>
-              {competition && c.competitions[competition] === "required" && <span className="font-mono text-[9px] text-orange">★ NEEDED</span>}
+              {competition && c.competitions[competition] === "required" && <span className="font-mono text-[9px] text-accent-ink">★ NEEDED</span>}
             </div>
           </div>
           {onAdd && c.functionalityClass !== "C" && (
@@ -162,7 +162,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
                 e.stopPropagation();
                 onAdd(c.id);
               }}
-              className="rounded p-1 text-muted opacity-0 hover:bg-orange hover:text-black group-hover:opacity-100"
+              className="rounded p-1 text-muted opacity-0 hover:bg-accent hover:text-white group-hover:opacity-100"
             >
               <Plus size={16} />
             </span>
@@ -186,7 +186,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <SimBadge status={sel.simStatus} full />
-          <Badge tone={sel.verification === "unverified" ? "warn" : "cyan"}>{sel.verification.replace("-", " ")}</Badge>
+          <Badge tone={sel.verification === "unverified" ? "warn" : "brand"}>{sel.verification.replace("-", " ")}</Badge>
           <Badge>Class {sel.functionalityClass}</Badge>
         </div>
       </div>
@@ -253,7 +253,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
           </div>
         )}
         {sel.datasheetUrl && (
-          <a href={sel.datasheetUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-cyan hover:underline">
+          <a href={sel.datasheetUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-brand hover:underline">
             Datasheet / reference <ExternalLink size={11} />
           </a>
         )}
@@ -284,7 +284,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
         <div className="bf-label mb-1">Competition compatibility (from master list §17)</div>
         <div className="flex flex-wrap gap-1.5">
           {(Object.keys(COMPETITIONS) as CompetitionId[]).map((k) => (
-            <Badge key={k} tone={sel.competitions[k] === "required" ? "orange" : sel.competitions[k] === "optional" ? "cyan" : "dim"}>
+            <Badge key={k} tone={sel.competitions[k] === "required" ? "accent" : sel.competitions[k] === "optional" ? "brand" : "dim"}>
               {COMPETITIONS[k].short}: {sel.competitions[k]}
             </Badge>
           ))}
@@ -319,7 +319,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
           </select>
           <div className="text-[10px] text-dim">{list.length} components · drag onto the canvas or click +</div>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto p-2">{sel ? <div className="space-y-3"><button className="text-xs text-cyan" onClick={() => setSelId(null)}>← back to list</button>{inspector}</div> : grid}</div>
+        <div className="min-h-0 flex-1 overflow-auto p-2">{sel ? <div className="space-y-3"><button className="text-xs text-brand" onClick={() => setSelId(null)}>← back to list</button>{inspector}</div> : grid}</div>
       </div>
     );
 

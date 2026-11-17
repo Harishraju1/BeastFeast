@@ -12,11 +12,12 @@ import { pinColor, pinFunctionText } from "@/components/library/PinoutDiagram";
 import { Button, Field, Tabs } from "@/components/ui";
 import { IssueCard } from "../Validation";
 import { isTypingTarget } from "@/lib/keyboard";
+import { THEME, WIRE_HEX as THEME_WIRES } from "@/lib/theme";
 
 const W = 170;
 const PITCH = 16;
 const HEAD = 34;
-const WIRE_HEX: Record<WireColor, string> = { red: "#ff3b4e", black: "#7c8696", yellow: "#f5c518", blue: "#3b82f6", green: "#22c55e", orange: "#ff8a3d", white: "#e5e7eb", purple: "#a855f7" };
+const WIRE_HEX: Record<WireColor, string> = THEME_WIRES;
 
 function layout(comp: ComponentRecord) {
   const left = comp.pins.filter((p) => p.side === "L" || p.side === "T");
@@ -173,7 +174,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
         <div className="relative min-h-0 flex-1 overflow-hidden" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { const id = e.dataTransfer.getData("text/component-id"); if (id) add(id); }}>
           <svg
             ref={svgRef}
-            className="h-full w-full touch-none select-none bg-[#0a0d13]"
+            className="h-full w-full touch-none select-none bg-[var(--sage-800)]"
             onWheel={(e) => {
               const r = svgRef.current!.getBoundingClientRect();
               const k = Math.max(0.25, Math.min(2.5, view.k * (e.deltaY < 0 ? 1.1 : 0.9)));
@@ -207,8 +208,9 @@ export default function CircuitStudio({ project }: { project: Project }) {
             onPointerLeave={() => setDrag(null)}
           >
             <defs>
+              <filter id="bf-node-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1.5" stdDeviation="2" floodColor="#141A16" floodOpacity="0.45" /></filter>
               <pattern id="grid" width={20} height={20} patternUnits="userSpaceOnUse">
-                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#141c27" strokeWidth={1} />
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke={THEME.gridMinor} strokeWidth={1} />
               </pattern>
             </defs>
             <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
@@ -224,15 +226,15 @@ export default function CircuitStudio({ project }: { project: Project }) {
                 return (
                   <g key={w.id} onPointerDown={(e) => { e.stopPropagation(); setSelWire(w.id); select(null); }} className="cursor-pointer">
                     <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
-                    <path d={d} fill="none" stroke={bad ? "#ff3b4e" : WIRE_HEX[w.color]} strokeWidth={isSel || bad ? 3.5 : 2} strokeLinejoin="round" opacity={selWire && !isSel ? 0.55 : 1} />
-                    {live && <path d={d} fill="none" stroke="#fff" strokeWidth={1} opacity={0.35} className="bf-flow" />}
+                    <path d={d} fill="none" stroke={bad ? THEME.accent : WIRE_HEX[w.color]} strokeWidth={isSel || bad ? 3.5 : 2} strokeLinejoin="round" opacity={selWire && !isSel ? 0.55 : 1} />
+                    {live && <path d={d} fill="none" stroke="#fff" strokeWidth={1} opacity={0.6} className="bf-flow" />}
                   </g>
                 );
               })}
               {/* rubber band */}
               {pending && (() => {
                 const a = pinXY(pending.part, pending.pin);
-                return a ? <line x1={a.x} y1={a.y} x2={mouse.x} y2={mouse.y} stroke="#00d9ff" strokeWidth={2} strokeDasharray="6 4" /> : null;
+                return a ? <line x1={a.x} y1={a.y} x2={mouse.x} y2={mouse.y} stroke={THEME.ivory} strokeWidth={2} strokeDasharray="6 4" /> : null;
               })()}
               {/* parts */}
               {parts.map(({ p, c }) => {
@@ -241,12 +243,12 @@ export default function CircuitStudio({ project }: { project: Project }) {
                 const isFocus = focus?.partUid === p.uid;
                 return (
                   <g key={p.uid} transform={`translate(${p.schematic.x},${p.schematic.y})`}>
-                    <rect width={W} height={l.h} rx={6} fill="#141a25" stroke={isFocus ? "#ff3b4e" : isSel || scanPart === p.uid ? "#00d9ff" : "#2c3850"} strokeWidth={isFocus || isSel ? 2 : 1} />
+                    <rect width={W} height={l.h} rx={6} fill={THEME.card} stroke={isFocus || isSel || scanPart === p.uid ? THEME.accent : THEME.cardLine} filter="url(#bf-node-shadow)" strokeWidth={isFocus || isSel ? 2 : 1} />
                     <rect
                       width={W}
                       height={26}
                       rx={6}
-                      fill={c.kind === "controller" ? "#0f4c64" : c.kind === "motor-driver" ? "#5c1820" : c.kind === "battery" ? "#4c3510" : c.kind === "dc-motor" ? "#4a3f0c" : "#1d2738"}
+                      fill={c.kind === "controller" ? "#D6E2DF" : c.kind === "motor-driver" ? "#F0D9D3" : c.kind === "battery" ? "#EDE1C5" : c.kind === "dc-motor" ? "#E7E1C3" : "#E4E0D2"}
                       className="cursor-move"
                       onPointerDown={(e) => {
                         e.stopPropagation();
@@ -255,8 +257,8 @@ export default function CircuitStudio({ project }: { project: Project }) {
                         setDrag({ kind: "node", uid: p.uid, sx: e.clientX, sy: e.clientY, ox: p.schematic.x, oy: p.schematic.y });
                       }}
                     />
-                    <text x={8} y={12} fill="#f4f7fb" fontSize={10} fontWeight={600} fontFamily="Space Grotesk" pointerEvents="none">{p.label}</text>
-                    <text x={8} y={22} fill="#95a1b5" fontSize={8} fontFamily="JetBrains Mono" pointerEvents="none">{c.name.slice(0, 30)}</text>
+                    <text x={8} y={12} fill={THEME.cardInk} fontSize={10} fontWeight={600} fontFamily="Space Grotesk" pointerEvents="none">{p.label}</text>
+                    <text x={8} y={22} fill={THEME.cardMuted} fontSize={8} fontFamily="JetBrains Mono" pointerEvents="none">{c.name.slice(0, 30)}</text>
                     {c.pins.map((pin) => {
                       const pp = l.pos.get(pin.id)!;
                       const key = `${p.uid}.${pin.id}`;
@@ -266,16 +268,16 @@ export default function CircuitStudio({ project }: { project: Project }) {
                       return (
                         <g key={pin.id} onPointerEnter={() => setHoverPin({ part: p, pin })} onPointerLeave={() => setHoverPin(null)}>
                           <line x1={pp.x} y1={pp.y} x2={pp.side === "L" ? pp.x + 8 : pp.x - 8} y2={pp.y} stroke={pinColor(pin)} strokeWidth={1.5} />
-                          <text x={pp.side === "L" ? 12 : W - 12} y={pp.y + 3} textAnchor={pp.side === "L" ? "start" : "end"} fill={hl ? "#ff6b1a" : "#cfd6e2"} fontSize={8.5} fontFamily="JetBrains Mono" pointerEvents="none">
+                          <text x={pp.side === "L" ? 12 : W - 12} y={pp.y + 3} textAnchor={pp.side === "L" ? "start" : "end"} fill={hl ? THEME.accentInk : THEME.cardInk} fontSize={8.5} fontFamily="JetBrains Mono" pointerEvents="none">
                             {pin.label.length > 18 ? pin.label.slice(0, 18) + "…" : pin.label}
                           </text>
-                          {hl && <circle cx={pp.x} cy={pp.y} r={9} fill="none" stroke="#ff3b4e" strokeWidth={2}><animate attributeName="r" values="6;12;6" dur="1.2s" repeatCount="indefinite" /></circle>}
+                          {hl && <circle cx={pp.x} cy={pp.y} r={9} fill="none" stroke={THEME.accent} strokeWidth={2}><animate attributeName="r" values="6;12;6" dur="1.2s" repeatCount="indefinite" /></circle>}
                           <circle
                             cx={pp.x}
                             cy={pp.y}
                             r={isPending ? 6 : 4.2}
-                            fill={connected ? pinColor(pin) : "#0a0d13"}
-                            stroke={issuePins.has(key) ? "#ff3b4e" : pinColor(pin)}
+                            fill={connected ? pinColor(pin) : THEME.cardWell}
+                            stroke={issuePins.has(key) ? THEME.accent : pinColor(pin)}
                             strokeWidth={1.5}
                             className="cursor-crosshair"
                             data-pin={`${p.label}.${pin.id}`}
@@ -298,13 +300,13 @@ export default function CircuitStudio({ project }: { project: Project }) {
             <Button size="sm" onClick={() => setView({ ...view, k: Math.min(2.5, view.k * 1.2) })} title="Zoom in"><Plus size={14} /></Button>
             <Button size="sm" onClick={() => setView({ ...view, k: Math.max(0.25, view.k / 1.2) })} title="Zoom out"><Minus size={14} /></Button>
             <Button size="sm" onClick={fit} title="Fit"><Maximize size={14} /></Button>
-            <Button size="sm" variant={snap ? "cyan" : "outline"} onClick={() => setSnap(!snap)} title="Grid snapping"><Grid3x3 size={14} /></Button>
+            <Button size="sm" variant={snap ? "secondary" : "outline"} onClick={() => setSnap(!snap)} title="Grid snapping"><Grid3x3 size={14} /></Button>
             <Button size="sm" onClick={() => exportCircuit(project, graph)} title="Export netlist"><Download size={14} /> Export</Button>
           </div>
-          {pending && <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded border border-cyan/50 bg-bg/90 px-3 py-1 text-xs text-cyan">Wiring from {project.parts.find((p) => p.uid === pending.part)?.label}.{pending.pin} — click another pin (Esc to cancel)</div>}
+          {pending && <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded border border-brand/50 bg-bg/90 px-3 py-1 text-xs text-brand">Wiring from {project.parts.find((p) => p.uid === pending.part)?.label}.{pending.pin} — click another pin (Esc to cancel)</div>}
           {hoverPin && (
             <div className="pointer-events-none absolute bottom-3 left-3 max-w-md rounded border border-line bg-bg/95 px-3 py-2 text-xs">
-              <span className="font-mono text-cyan">{hoverPin.part.label}.{hoverPin.pin.label}</span> — {pinFunctionText(hoverPin.pin)}
+              <span className="font-mono text-brand">{hoverPin.part.label}.{hoverPin.pin.label}</span> — {pinFunctionText(hoverPin.pin)}
               {hoverPin.pin.note && <div className="text-dim">{hoverPin.pin.note}</div>}
             </div>
           )}
@@ -384,7 +386,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
                       <td className="py-1 text-muted">
                         <div>{pinFunctionText(pin)}</div>
                         {peers.length > 0 && <div className="text-text">→ {peers.map((m) => `${m.part.label}.${m.pin.label}`).join(", ")}</div>}
-                        {net?.voltage != null && !net.isGround && <div className="text-orange">{net.voltage.toFixed(2)} V</div>}
+                        {net?.voltage != null && !net.isGround && <div className="text-accent-ink">{net.voltage.toFixed(2)} V</div>}
                         {net?.isGround && <div className="text-dim">GND</div>}
                       </td>
                     </tr>

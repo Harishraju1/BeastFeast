@@ -18,11 +18,11 @@ const LABS = [
     competition: "line" as const,
     title: "LINE FOLLOWING LAB",
     kicker: "A · Sensors, calibration and PID",
-    bg: "bg-[linear-gradient(135deg,#f2f2ee0d_0%,transparent_60%)]",
+    bg: "bf-on-sage",
     accent: "text-text",
     deco: (
       <svg viewBox="0 0 600 120" className="absolute inset-x-0 bottom-0 h-24 w-full opacity-30" preserveAspectRatio="none" aria-hidden>
-        <path d="M0 80 C 120 20, 220 120, 330 60 S 520 30, 600 70" stroke="#f4f7fb" strokeWidth="6" fill="none" />
+        <path d="M0 80 C 120 20, 220 120, 330 60 S 520 30, 600 70" stroke="#F1EEE3" strokeWidth="6" fill="none" />
       </svg>
     ),
   },
@@ -30,21 +30,21 @@ const LABS = [
     competition: "race" as const,
     title: "ROBO RACE GARAGE",
     kicker: "B · Speed, traction and control",
-    bg: "bg-[repeating-linear-gradient(115deg,#ff6b1a0f_0_18px,transparent_18px_60px)]",
-    accent: "text-orange",
-    deco: <div className="absolute inset-x-0 bottom-0 h-2 bg-[repeating-linear-gradient(90deg,#ff6b1a_0_30px,#080a0f_30px_60px)] opacity-60" aria-hidden />,
+    bg: "bf-on-sage bg-[repeating-linear-gradient(115deg,rgba(241,238,227,0.035)_0_18px,transparent_18px_60px)]",
+    accent: "text-text",
+    deco: <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[repeating-linear-gradient(90deg,#F20B0B_0_30px,#F1EEE3_30px_60px)] opacity-80" aria-hidden />,
   },
   {
     competition: "sumo" as const,
     title: "SUMO BATTLE WORKSHOP",
     kicker: "C · Detect, attack, survive",
-    bg: "bg-[radial-gradient(circle_at_85%_30%,#ff3b4e26,transparent_45%)]",
-    accent: "text-bad",
+    bg: "bf-on-sage",
+    accent: "text-text",
     deco: (
       <svg viewBox="0 0 200 200" className="absolute -right-10 -top-10 h-56 w-56 opacity-20" aria-hidden>
-        <circle cx="100" cy="100" r="90" fill="#0b0b0b" stroke="#f4f4f4" strokeWidth="8" />
-        <rect x="70" y="95" width="10" height="30" fill="#8a5a2b" />
-        <rect x="120" y="75" width="10" height="30" fill="#8a5a2b" />
+        <circle cx="100" cy="100" r="90" fill="none" stroke="#F1EEE3" strokeWidth="8" />
+        <rect x="70" y="95" width="10" height="30" fill="#F20B0B" />
+        <rect x="120" y="75" width="10" height="30" fill="#F20B0B" />
       </svg>
     ),
   },
@@ -66,17 +66,17 @@ function ProjectCard({ t, project, report, onAction }: { t: ProjectTemplate; pro
   const diffTone = t.metadata.difficulty === "beginner" ? "ok" : t.metadata.difficulty === "intermediate" ? "warn" : "bad";
   const ready = report && report.status !== "NOT READY";
   return (
-    <article className="bf-panel group relative flex flex-col overflow-hidden transition hover:-translate-y-1 hover:border-orange/60">
-      <div className="relative h-44 border-b border-line bg-[#0b0f16]" onMouseEnter={() => setShow3d(true)}>
+    <article className="bf-panel group relative flex flex-col overflow-hidden transition hover:-translate-y-1 hover:border-accent/60">
+      <div className="relative h-44 border-b border-line bg-[var(--scene-bg)]" onMouseEnter={() => setShow3d(true)}>
         {show3d ? <Preview3D project={project} /> : <RobotTopView project={project} className="mx-auto h-full p-3" />}
-        <span className="absolute left-2 top-2 font-mono text-[10px] tracking-widest text-orange">{t.metadata.id}</span>
+        <span className="absolute left-2 top-2 font-mono text-[10px] tracking-widest text-accent-ink">{t.metadata.id}</span>
         <span className="pointer-events-none absolute bottom-1 right-2 font-mono text-[9px] text-dim">{show3d ? "DRAG TO ROTATE" : "HOVER FOR 3D"}</span>
       </div>
       <div className="flex flex-1 flex-col gap-2 p-4">
         <h3 className="font-display text-lg font-bold leading-tight">{t.metadata.name}</h3>
         <div className="flex flex-wrap gap-1.5">
           <Badge tone={diffTone}>{t.metadata.difficulty}</Badge>
-          <Badge tone="cyan">{t.metadata.competition === "line" ? "Line Following" : t.metadata.competition === "race" ? "Robo Race" : "Robo War"}</Badge>
+          <Badge tone="brand">{t.metadata.competition === "line" ? "Line Following" : t.metadata.competition === "race" ? "Robo Race" : "Robo War"}</Badge>
           <StatusBadge r={report} />
         </div>
         <dl className="grid grid-cols-[92px_1fr] gap-x-2 gap-y-0.5 text-xs">
@@ -90,10 +90,10 @@ function ProjectCard({ t, project, report, onAction }: { t: ProjectTemplate; pro
           <dd>{t.metadata.learningLevel}</dd>
         </dl>
         <div className="mt-auto grid grid-cols-2 gap-1.5 pt-2">
-          <Link href={`/garage/${t.metadata.id}`} className="inline-flex items-center justify-center gap-1 rounded-md border border-line2 px-2 py-1.5 text-xs hover:border-cyan hover:text-cyan"><Eye size={12} /> VIEW PROJECT</Link>
+          <Link href={`/garage/${t.metadata.id}`} className="inline-flex items-center justify-center gap-1 rounded-md border border-line2 px-2 py-1.5 text-xs hover:border-brand hover:text-brand"><Eye size={12} /> VIEW PROJECT</Link>
           <Button size="sm" onClick={() => onAction("load")}><Upload size={12} /> LOAD PROJECT</Button>
           <Button size="sm" variant="primary" disabled={!ready} onClick={() => onAction("simulate")} title={ready ? "Load the original and start the simulation" : "Waiting for the readiness test"}><Play size={12} /> SIMULATE NOW</Button>
-          <Button size="sm" variant="cyan" onClick={() => onAction("customise")}><Wrench size={12} /> CUSTOMISE</Button>
+          <Button size="sm" variant="secondary" onClick={() => onAction("customise")}><Wrench size={12} /> CUSTOMISE</Button>
         </div>
       </div>
     </article>
@@ -108,12 +108,12 @@ export default function GaragePage() {
 
   return (
     <div>
-      <section className="bf-grid relative overflow-hidden border-b border-line">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,#ff6b1a22,transparent_60%)]" />
+      <section className="bf-grid bf-on-sage relative overflow-hidden border-b border-line">
+        
         <div className="relative mx-auto max-w-7xl px-5 py-10">
-          <div className="bf-label mb-2 text-cyan">BEAST FEAST 5.0 · ROBOTICS CLUB KKH</div>
+          <div className="bf-label mb-3 flex items-center gap-2 text-muted"><span className="h-[3px] w-5 rounded-full bg-accent" />BEAST FEAST 5.0 · ROBOTICS CLUB KKH</div>
           <h1 className="font-display text-4xl font-bold tracking-tight md:text-5xl">
-            BEAST PROJECT <span className="text-orange">GARAGE</span>
+            BEAST PROJECT <span className="text-accent-ink">GARAGE</span>
           </h1>
           <p className="mt-2 font-mono text-sm tracking-[0.3em] text-muted">EXPLORE. LOAD. SIMULATE. MODIFY. MASTER.</p>
           <p className="mt-4 max-w-3xl text-sm text-muted">
@@ -133,7 +133,7 @@ export default function GaragePage() {
             {lab.deco}
             <div className="relative mb-4">
               <div className="bf-label">{lab.kicker}</div>
-              <h2 className={`font-display text-2xl font-bold tracking-wide ${lab.accent}`}>{lab.title}</h2>
+              <h2 className={`font-display text-2xl font-bold tracking-wide ${lab.accent}`}><span className="mr-2 inline-block h-5 w-1.5 translate-y-0.5 rounded-sm bg-accent" />{lab.title}</h2>
             </div>
             <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {GARAGE_TEMPLATES.filter((t) => t.metadata.competition === lab.competition).map((t) => (

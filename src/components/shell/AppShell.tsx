@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { BACKEND_MODE } from "@/lib/data";
+import { isStaff } from "@/lib/roles";
 import { Toasts } from "./Toasts";
 import { CommandSearch } from "./CommandSearch";
 
@@ -52,7 +53,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     { href: "/challenges", label: "Challenges", icon: Swords },
     { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
     { href: "/profile", label: "My Profile", icon: User },
-    ...(user?.role === "admin" ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
   ];
   const isActive = (n: (typeof nav)[number]) => ("match" in n && n.match ? path.startsWith("/workspace/") && path.endsWith(n.match) : n.href === "/" ? path === "/" : path.startsWith(n.href.split("?")[0]));
 
@@ -62,11 +62,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       {/* sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-line bg-bg2/95 backdrop-blur transition-all ${immersive ? "w-14" : "w-14 xl:w-56"} ${mobileOpen ? "!w-56 translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 bf-on-sage flex flex-col shadow-[1px_0_0_rgba(38,48,42,.25)] transition-all ${immersive ? "w-14" : "w-14 xl:w-56"} ${mobileOpen ? "!w-56 translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
         <Link href="/" className="flex h-14 items-center gap-2 border-b border-line px-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-orange font-display text-sm font-bold text-black">BF</span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent font-display text-sm font-bold tracking-tight text-white">BF</span>
           <span className={`font-display text-sm font-bold leading-tight ${immersive && !mobileOpen ? "hidden" : "hidden xl:block"} ${mobileOpen ? "!block" : ""}`}>
-            BEAST FEAST <span className="text-orange">5.0</span>
+            BEAST FEAST <span className="text-accent-ink">5.0</span>
             <span className="block font-mono text-[9px] font-normal tracking-widest text-dim">ROBOTICS CLUB KKH</span>
           </span>
         </Link>
@@ -75,8 +75,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             const Icon = n.icon;
             const active = isActive(n);
             return (
-              <Link key={n.label} href={n.href} title={n.label} className={`group flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition ${active ? "bg-orange/15 text-orange" : "highlight" in n && n.highlight ? "border border-orange/40 text-orange hover:bg-orange/10" : "text-muted hover:bg-panel hover:text-text"}`}>
-                <Icon size={18} className="shrink-0" />
+              <Link key={n.label} href={n.href} title={n.label} className={`group relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors duration-150 ${active ? "bg-panel2 font-medium text-text before:absolute before:inset-y-1.5 before:-left-2 before:w-[3px] before:rounded-r before:bg-accent" : "highlight" in n && n.highlight ? "border border-accent/70 text-text hover:bg-panel" : "text-muted hover:bg-panel hover:text-text"}`}>
+                <Icon size={18} className={`shrink-0 ${active || ("highlight" in n && n.highlight) ? "text-accent-ink" : ""}`} />
                 <span className={`truncate ${immersive && !mobileOpen ? "hidden" : "hidden xl:inline"} ${mobileOpen ? "!inline" : ""}`}>{n.label}</span>
               </Link>
             );
@@ -89,11 +89,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className={`flex min-w-0 flex-1 flex-col md:pl-14 ${immersive ? "" : "xl:pl-56"}`}>
         {/* top bar */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/85 px-3 backdrop-blur md:px-5">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/90 px-3 backdrop-blur-md md:px-5">
           <button className="text-muted md:hidden" onClick={() => setMobileOpen((v) => !v)} aria-label="Menu">
             <Menu size={20} />
           </button>
-          <button onClick={() => setSearchOpen(true)} className="flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-md border border-line bg-bg2 px-3 py-1.5 text-left text-sm text-dim hover:border-line2">
+          <button onClick={() => setSearchOpen(true)} className="flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-lg border border-line bg-bg2 px-3 py-1.5 text-left text-sm text-dim shadow-[var(--shadow-sm)] transition-colors hover:border-line2">
             <Search size={15} />
             <span className="truncate">Search components, topics, projects…</span>
             <kbd className="ml-auto hidden rounded border border-line px-1.5 font-mono text-[10px] sm:inline">Ctrl K</kbd>
@@ -108,10 +108,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="relative">
               <button className="rounded-md p-2 text-muted hover:bg-panel hover:text-text" aria-label="Notifications" onClick={() => setNotifOpen((v) => !v)}>
                 <Bell size={18} />
-                {content.announcements.length > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-orange" />}
+                {content.announcements.length > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />}
               </button>
               {notifOpen && (
-                <div className="bf-panel absolute right-0 top-11 w-80 p-3 text-sm shadow-2xl">
+                <div className="bf-panel bf-raised absolute right-0 top-11 w-80 p-3 text-sm">
                   <div className="bf-label mb-2">Announcements</div>
                   {content.announcements.length === 0 && <div className="text-muted">No announcements yet.</div>}
                   {content.announcements.slice(-5).reverse().map((a) => (
@@ -123,6 +123,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </div>
               )}
             </div>
+            {isStaff(user?.role) && (
+              <Link href="/admin" className={`rounded-md p-2 hover:bg-panel ${path.startsWith("/admin") ? "text-accent-ink" : "text-muted hover:text-text"}`} aria-label="Admin dashboard" title="Admin dashboard">
+                <Shield size={18} />
+              </Link>
+            )}
             <Link href="/learn" className="rounded-md p-2 text-muted hover:bg-panel hover:text-text" aria-label="Help" title="Help & Beast Topics">
               <HelpCircle size={18} />
             </Link>
@@ -132,13 +137,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             {user ? (
               <div className="ml-1 flex items-center gap-2 border-l border-line pl-3">
                 <Link href="/profile" className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-panel2 font-display text-sm font-semibold text-cyan">
+                  <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-brand font-display text-sm font-semibold text-on-brand">
                     {user.avatar ? <img src={user.avatar} alt="" className="h-full w-full object-cover" /> : user.name.slice(0, 1).toUpperCase()}
                   </span>
                   <span className="hidden text-right lg:block">
                     <span className="block text-xs font-medium leading-tight">{user.name}</span>
-                    <span className="block font-mono text-[10px] text-orange">
-                      {user.xp} XP {user.role === "admin" && <Crown size={9} className="inline" />}
+                    <span className="block font-mono text-[10px] text-accent-ink">
+                      {user.xp} XP {isStaff(user.role) && <Crown size={9} className="inline" />}
                     </span>
                   </span>
                 </Link>
@@ -155,7 +160,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             ) : (
               ready && (
-                <Link href="/login" className="ml-2 rounded-md bg-orange px-3 py-1.5 text-sm font-semibold text-black">
+                <Link href="/login" className="ml-2 rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover">
                   Sign in
                 </Link>
               )
@@ -181,7 +186,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <div className="flex items-center gap-3 font-mono text-xs tracking-widest text-muted">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-orange border-t-transparent" /> BOOTING BEAST SYSTEMS…
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" /> BOOTING BEAST SYSTEMS…
         </div>
       </div>
     );

@@ -100,21 +100,21 @@ export function LoadFlow({ templateId, intent, onClose }: { templateId: string; 
   }, [mode, intent, loadTemplate, templateId, t, updateProject, user, tracks, router]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur" role="dialog" aria-modal onMouseDown={onClose}>
-      <div className="bf-panel bf-glow-orange w-full max-w-xl overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-sage-900/45 p-4 backdrop-blur-sm" role="dialog" aria-modal onMouseDown={onClose}>
+      <div className="bf-panel bf-glow-accent w-full max-w-xl overflow-hidden" onMouseDown={(e) => e.stopPropagation()}>
         <div className="bf-grid border-b border-line px-5 py-4">
-          <div className="bf-label text-orange">BEAST PROJECT GARAGE · {t.metadata.id}</div>
+          <div className="bf-label text-accent-ink">BEAST PROJECT GARAGE · {t.metadata.id}</div>
           <div className="font-display text-xl font-bold">{t.metadata.name}</div>
         </div>
         {!mode ? (
           <div className="grid gap-3 p-5 sm:grid-cols-2">
-            <button onClick={() => setMode("original")} className="rounded-lg border border-line p-4 text-left hover:border-cyan">
-              <Lock className="mb-2 text-cyan" size={20} />
+            <button onClick={() => setMode("original")} className="rounded-lg border border-line p-4 text-left hover:border-brand">
+              <Lock className="mb-2 text-brand" size={20} />
               <div className="font-display font-semibold">RUN ORIGINAL PROJECT</div>
               <div className="mt-1 text-xs text-muted">Open the reference robot read-only. Simulate it, change tracks and inspect everything — the original never changes.</div>
             </button>
-            <button onClick={() => setMode("copy")} className="rounded-lg border border-line p-4 text-left hover:border-orange">
-              <Copy className="mb-2 text-orange" size={20} />
+            <button onClick={() => setMode("copy")} className="rounded-lg border border-line p-4 text-left hover:border-accent">
+              <Copy className="mb-2 text-accent-ink" size={20} />
               <div className="font-display font-semibold">CREATE MY OWN COPY</div>
               <div className="mt-1 text-xs text-muted">A new project you own: change parts, wiring, pins, code and tuning. Autosave and version history included.</div>
             </button>
@@ -124,7 +124,7 @@ export function LoadFlow({ templateId, intent, onClose }: { templateId: string; 
             <ol className="space-y-1">
               {steps.map((s, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm">
-                  {s.state === "ok" ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-ok" /> : s.state === "fail" ? <XCircle size={16} className="mt-0.5 shrink-0 text-bad" /> : s.state === "run" ? <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-cyan" /> : <span className="mt-1 h-3 w-3 shrink-0 rounded-full border border-line2" />}
+                  {s.state === "ok" ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-ok" /> : s.state === "fail" ? <XCircle size={16} className="mt-0.5 shrink-0 text-bad" /> : s.state === "run" ? <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-brand" /> : <span className="mt-1 h-3 w-3 shrink-0 rounded-full border border-line2" />}
                   <span className={s.state === "wait" ? "text-dim" : ""}>
                     {i + 1}. {s.label}
                     {s.detail && <span className="block font-mono text-[10px] text-muted">{s.detail}</span>}

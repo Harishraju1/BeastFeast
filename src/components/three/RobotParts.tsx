@@ -20,7 +20,7 @@ const MATERIAL_COLOR: Record<string, { color: string; opacity?: number; metal?: 
   "Stainless steel": { color: "#c9ced3", metal: 0.9 },
   "Carbon fibre": { color: "#1b1d22", metal: 0.3 },
   ABS: { color: "#e9e4d8" },
-  PLA: { color: "#ff6b1a" },
+  PLA: { color: "#D91A14" }, // Signal Red print — the BEAST robot colour
   PETG: { color: "#2fb5a0", opacity: 0.85 },
   Nylon: { color: "#efe9dc" },
   Polycarbonate: { color: "#cfe9ff", opacity: 0.5 },
@@ -34,7 +34,7 @@ export function ChassisMesh({ project, highlight }: { project: Project; highligh
   return (
     <mesh position={[0, (-ch.thickness_mm / 2) * MM, 0]} castShadow receiveShadow>
       <boxGeometry args={[ch.length_mm * MM, ch.thickness_mm * MM, ch.width_mm * MM]} />
-      <meshStandardMaterial color={m.color} transparent={m.opacity !== undefined} opacity={m.opacity ?? 1} metalness={m.metal ?? 0.1} roughness={0.45} emissive={highlight ? "#ff3b4e" : "#000"} emissiveIntensity={highlight ? 0.6 : 0} />
+      <meshStandardMaterial color={m.color} transparent={m.opacity !== undefined} opacity={m.opacity ?? 1} metalness={m.metal ?? 0.1} roughness={0.45} emissive={highlight ? "#F20B0B" : "#000"} emissiveIntensity={highlight ? 0.6 : 0} />
     </mesh>
   );
 }
@@ -62,7 +62,7 @@ export function PartMesh({ part, comp, selected, error, offset = [0, 0, 0], whee
   const d = partDims(part, comp);
   const [x, y, z] = [d.x * MM, d.z * MM, d.y * MM]; // three: length, height, width
   const pos = toThree(part.position);
-  const emissive = error ? "#ff3b4e" : selected ? "#00d9ff" : undefined;
+  const emissive = error ? "#F20B0B" : selected ? "#F1EEE3" : undefined;
   const body = useMemo(() => {
     switch (comp.kind) {
       case "controller": {
@@ -113,7 +113,7 @@ export function PartMesh({ part, comp, selected, error, offset = [0, 0, 0], whee
               </mesh>
               <mesh>
                 <cylinderGeometry args={[x * 0.32, x * 0.32, z * 1.04, 6]} />
-                <meshStandardMaterial color={comp.name.includes("Aluminium") || comp.name.includes("Metal") ? "#c5ccd3" : "#ff6b1a"} metalness={0.4} />
+                <meshStandardMaterial color={comp.name.includes("Aluminium") || comp.name.includes("Metal") ? "#c5ccd3" : "#D91A14"} metalness={0.4} />
               </mesh>
             </group>
           </group>
@@ -198,7 +198,7 @@ export function PartMesh({ part, comp, selected, error, offset = [0, 0, 0], whee
       {error && (
         <mesh>
           <sphereGeometry args={[Math.max(x, y, z) * 0.8, 16, 16]} />
-          <meshBasicMaterial color="#ff3b4e" transparent opacity={0.15} depthWrite={false} />
+          <meshBasicMaterial color="#F20B0B" transparent opacity={0.15} depthWrite={false} />
         </mesh>
       )}
     </group>

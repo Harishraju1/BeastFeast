@@ -10,6 +10,7 @@ import { useApp } from "@/lib/store/app";
 import type { TrackDef, TrackPiece, TrackPieceType, Vec2 } from "@/lib/sim/types";
 import { compileTrack, pieceEndpoints, pieceWorldPolylines } from "@/lib/track/compile";
 import { uid } from "@/lib/robot/assembly";
+import { THEME } from "@/lib/theme";
 
 const Preview3D = dynamic(() => import("@/components/three/TrackPreview3D"), { ssr: false });
 
@@ -67,7 +68,7 @@ function Editor() {
   }, [def?.id, mode]);
 
   const compiled = useMemo(() => (def ? safeCompile(def) : null), [def]);
-  if (!def) return <div className="p-8 text-muted">Track not found. <Link className="text-orange" href="/tracks">Back</Link></div>;
+  if (!def) return <div className="p-8 text-muted">Track not found. <Link className="text-accent-ink" href="/tracks">Back</Link></div>;
   const tools = TOOLS[def.kind];
 
   const change = (fn: (d: TrackDef) => TrackDef) => {
@@ -113,7 +114,7 @@ function Editor() {
       <div className="flex flex-wrap items-center gap-1.5 border-b border-line bg-bg2 px-3 py-1.5">
         <Link href="/tracks" className="text-xs text-muted hover:text-text">← Tracks</Link>
         <input className="bf-input !w-56 !py-1" value={def.name} onChange={(e) => change((d) => ({ ...d, name: e.target.value }))} aria-label="Track name" />
-        <Badge tone="cyan">{def.kind}</Badge>
+        <Badge tone="brand">{def.kind}</Badge>
         <select className="bf-input !w-auto !py-1 text-xs" value={def.difficulty} onChange={(e) => change((d) => ({ ...d, difficulty: e.target.value as TrackDef["difficulty"] }))} aria-label="Difficulty">
           {["beginner", "intermediate", "advanced", "beast"].map((x) => <option key={x} value={x}>{x === "beast" ? "BEAST MODE" : x.toUpperCase()}</option>)}
         </select>
@@ -124,20 +125,20 @@ function Editor() {
         <Tabs value={mode} onChange={setMode} items={[{ value: "2d", label: "Plan (edit)" }, { value: "3d", label: "3D preview" }]} />
         <div className="ml-auto flex gap-1.5">
           <Button size="sm" onClick={() => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(def, null, 2)], { type: "application/json" })); a.download = `${def.name.replace(/\W+/g, "_")}.track.json`; a.click(); }}><Download size={13} /> Export</Button>
-          <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-line2 px-2.5 py-1 text-xs hover:border-cyan"><FileUp size={13} /> Import
+          <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-line2 px-2.5 py-1 text-xs hover:border-brand"><FileUp size={13} /> Import
             <input type="file" accept=".json" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { const t = JSON.parse(await f.text()) as TrackDef; if (!t.pieces || !t.kind) throw new Error(); change(() => ({ ...t, id: def.id, ownerId: def.ownerId })); } catch { toast("error", "Not a valid track file"); } }} />
           </label>
           <Button size="sm" variant="primary" onClick={() => void save()}><Save size={13} /> {dirty ? "Save*" : "Saved"}</Button>
-          {projectId && <Link href={`/workspace/${projectId}/arena`} className="rounded-md bg-cyan px-3 py-1 text-xs font-semibold text-black">Test in arena →</Link>}
+          {projectId && <Link href={`/workspace/${projectId}/arena`} className="rounded-md bg-brand px-3 py-1 text-xs font-semibold text-on-brand">Test in arena →</Link>}
         </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[200px_1fr_270px]">
         <aside className="space-y-1 overflow-auto border-r border-line bg-bg2 p-2">
           <div className="bf-label mb-1">{def.kind} tools</div>
           {tools.map((t, i) => (
-            <button key={t.type + i} onClick={() => { setTool(tool === i ? null : i); setFreePts(t.type === "line-free" ? [] : null); }} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${tool === i ? "bg-orange text-black" : "text-muted hover:bg-panel hover:text-text"}`}>{t.label}</button>
+            <button key={t.type + i} onClick={() => { setTool(tool === i ? null : i); setFreePts(t.type === "line-free" ? [] : null); }} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${tool === i ? "bg-accent text-black" : "text-muted hover:bg-panel hover:text-text"}`}>{t.label}</button>
           ))}
-          <button onClick={() => setTool(-1)} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${tool === -1 ? "bg-ok text-black" : "text-muted hover:bg-panel"}`}>Set start position</button>
+          <button onClick={() => setTool(-1)} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${tool === -1 ? "bg-ok text-white" : "text-muted hover:bg-panel"}`}>Set start position</button>
           <p className="pt-2 text-[11px] text-dim">Pick a tool, then click on the plan. Path pieces snap to the end of the nearest piece. Drag to move, R to rotate 15°, Del to delete. Free draw: click points, double-click to finish.</p>
         </aside>
         <div className="relative min-h-0">
@@ -145,7 +146,7 @@ function Editor() {
             <svg
               ref={svg}
               className="h-full w-full touch-none select-none"
-              style={{ background: def.kind === "line" ? "#e9e9e4" : "#0d1117" }}
+              style={{ background: THEME.sceneBg }}
               onWheel={(e) => { const k = Math.max(30, Math.min(800, view.k * (e.deltaY < 0 ? 1.1 : 0.9))); const r = svg.current!.getBoundingClientRect(); const mx = e.clientX - r.left, my = e.clientY - r.top; setView({ k, x: mx - ((mx - view.x) / view.k) * k, y: my - ((my - view.y) / view.k) * k }); }}
               onDoubleClick={() => { if (freePts && freePts.length > 1) { const t = tools[tool!]; change((d) => ({ ...d, pieces: [...d.pieces, { id: uid("pc"), type: "line-free", x: 0, y: 0, rotation: 0, params: { ...t.params, points: freePts } }] })); setFreePts([]); } }}
               onPointerDown={(e) => {
@@ -182,16 +183,16 @@ function Editor() {
               }}
             >
               {/* floor */}
-              <rect x={sx(-def.size.w / 2)} y={sy(def.size.h / 2)} width={def.size.w * view.k} height={def.size.h * view.k} fill={def.kind === "line" ? "#fbfbf8" : def.kind === "race" ? "#1f3a22" : "#1a1d23"} stroke="#4b5563" />
+              <rect x={sx(-def.size.w / 2)} y={sy(def.size.h / 2)} width={def.size.w * view.k} height={def.size.h * view.k} fill={def.kind === "line" ? "#fbfbf8" : THEME.sageDeeper} stroke={THEME.hairline2} />
               {/* metre grid */}
-              {Array.from({ length: Math.ceil(def.size.w * 10) + 1 }, (_, i) => -def.size.w / 2 + i * 0.1).map((x) => <line key={`gx${x}`} x1={sx(x)} x2={sx(x)} y1={sy(def.size.h / 2)} y2={sy(-def.size.h / 2)} stroke={def.kind === "line" ? "#e5e5e0" : "#ffffff08"} />)}
+              {Array.from({ length: Math.ceil(def.size.w * 10) + 1 }, (_, i) => -def.size.w / 2 + i * 0.1).map((x) => <line key={`gx${x}`} x1={sx(x)} x2={sx(x)} y1={sy(def.size.h / 2)} y2={sy(-def.size.h / 2)} stroke={def.kind === "line" ? "#e5e5e0" : "rgba(241,238,227,0.05)"} />)}
               {compiled?.arena?.shape === "circle" && <><circle cx={sx(0)} cy={sy(0)} r={compiled.arena.radius! * view.k} fill="#f4f4f4" /><circle cx={sx(0)} cy={sy(0)} r={(compiled.arena.radius! - compiled.arena.border) * view.k} fill="#0b0b0b" /></>}
               {compiled?.roads.map((r, i) => <polyline key={`r${i}`} points={pts(r.points)} fill="none" stroke={def.surface.color} strokeWidth={r.width * view.k} strokeLinejoin="round" />)}
               {compiled?.lines.map((l, i) => <polyline key={`l${i}`} points={pts(l.points)} fill="none" stroke="#111" strokeWidth={Math.max(1.5, l.width * view.k)} strokeLinejoin="round" />)}
-              {compiled?.ramps.map((r, i) => <polygon key={`ra${i}`} points={pts(r.polygon)} fill="#6b728088" stroke="#9ca3af" />)}
-              {compiled?.obstacles.map((o, i) => o.kind === "box" ? <rect key={`o${i}`} x={sx(o.cx) - (o.w * view.k) / 2} y={sy(o.cy) - (o.h * view.k) / 2} width={o.w * view.k} height={o.h * view.k} fill="#ff6b1a" transform={`rotate(${(-o.rotation * 180) / Math.PI} ${sx(o.cx)} ${sy(o.cy)})`} /> : <circle key={`o${i}`} cx={sx(o.cx)} cy={sy(o.cy)} r={o.r * view.k} fill="#ff6b1a" />)}
-              {compiled?.checkpoints.map((c) => <line key={`c${c.index}`} x1={sx(c.seg.a.x)} y1={sy(c.seg.a.y)} x2={sx(c.seg.b.x)} y2={sy(c.seg.b.y)} stroke="#00d9ff" strokeWidth={3} strokeDasharray="6 4" />)}
-              {compiled?.startLine && <line x1={sx(compiled.startLine.a.x)} y1={sy(compiled.startLine.a.y)} x2={sx(compiled.startLine.b.x)} y2={sy(compiled.startLine.b.y)} stroke="#22c55e" strokeWidth={4} />}
+              {compiled?.ramps.map((r, i) => <polygon key={`ra${i}`} points={pts(r.polygon)} fill="#8E9A9088" stroke="#B9BEB2" />)}
+              {compiled?.obstacles.map((o, i) => o.kind === "box" ? <rect key={`o${i}`} x={sx(o.cx) - (o.w * view.k) / 2} y={sy(o.cy) - (o.h * view.k) / 2} width={o.w * view.k} height={o.h * view.k} fill={THEME.accent} transform={`rotate(${(-o.rotation * 180) / Math.PI} ${sx(o.cx)} ${sy(o.cy)})`} /> : <circle key={`o${i}`} cx={sx(o.cx)} cy={sy(o.cy)} r={o.r * view.k} fill={THEME.accent} />)}
+              {compiled?.checkpoints.map((c) => <line key={`c${c.index}`} x1={sx(c.seg.a.x)} y1={sy(c.seg.a.y)} x2={sx(c.seg.b.x)} y2={sy(c.seg.b.y)} stroke={THEME.warn} strokeWidth={3} strokeDasharray="6 4" />)}
+              {compiled?.startLine && <line x1={sx(compiled.startLine.a.x)} y1={sy(compiled.startLine.a.y)} x2={sx(compiled.startLine.b.x)} y2={sy(compiled.startLine.b.y)} stroke={THEME.ok} strokeWidth={4} />}
               {compiled?.finishLine && <line x1={sx(compiled.finishLine.a.x)} y1={sy(compiled.finishLine.a.y)} x2={sx(compiled.finishLine.b.x)} y2={sy(compiled.finishLine.b.y)} stroke="#fff" strokeWidth={4} strokeDasharray="4 4" />}
               {/* hit areas */}
               {def.pieces.map((p) => {
@@ -200,17 +201,17 @@ function Editor() {
                 const hit = polys.length ? polys : [[{ x: p.x - 0.05, y: p.y }, { x: p.x + 0.05, y: p.y }]];
                 return (
                   <g key={p.id} onPointerDown={(e) => { if (tool !== null) return; e.stopPropagation(); setSel(p.id); setPast((h) => [...h.slice(-60), def]); setDrag({ kind: "piece", id: p.id, sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y }); }} className="cursor-move">
-                    {hit.map((pl, i) => <polyline key={i} points={pts(pl)} fill="none" stroke={isSel ? "#00d9ff" : "transparent"} strokeOpacity={isSel ? 0.5 : 0} strokeWidth={Math.max(14, 0.06 * view.k)} />)}
-                    <circle cx={sx(p.x)} cy={sy(p.y)} r={isSel ? 6 : 4} fill={isSel ? "#00d9ff" : "#ff6b1a"} />
+                    {hit.map((pl, i) => <polyline key={i} points={pts(pl)} fill="none" stroke={isSel ? THEME.accent : "transparent"} strokeOpacity={isSel ? 0.5 : 0} strokeWidth={Math.max(14, 0.06 * view.k)} />)}
+                    <circle cx={sx(p.x)} cy={sy(p.y)} r={isSel ? 6 : 4} fill={isSel ? THEME.accent : THEME.warn} />
                   </g>
                 );
               })}
-              {freePts && freePts.length > 0 && <polyline points={pts(freePts)} fill="none" stroke="#ff6b1a" strokeWidth={3} strokeDasharray="5 4" />}
+              {freePts && freePts.length > 0 && <polyline points={pts(freePts)} fill="none" stroke={THEME.accent} strokeWidth={3} strokeDasharray="5 4" />}
               {/* start pose */}
               <g onPointerDown={(e) => { e.stopPropagation(); setPast((h) => [...h.slice(-60), def]); setDrag({ kind: "start", sx: e.clientX, sy: e.clientY, ox: def.start.x, oy: def.start.y }); }} className="cursor-move">
-                <circle cx={sx(def.start.x)} cy={sy(def.start.y)} r={9} fill="#22c55e" />
-                <line x1={sx(def.start.x)} y1={sy(def.start.y)} x2={sx(def.start.x + Math.cos(def.start.heading) * 0.12)} y2={sy(def.start.y + Math.sin(def.start.heading) * 0.12)} stroke="#22c55e" strokeWidth={3} />
-                <text x={sx(def.start.x) + 12} y={sy(def.start.y) - 10} fill="#22c55e" fontSize={11} fontFamily="JetBrains Mono">START</text>
+                <circle cx={sx(def.start.x)} cy={sy(def.start.y)} r={9} fill={THEME.ok} />
+                <line x1={sx(def.start.x)} y1={sy(def.start.y)} x2={sx(def.start.x + Math.cos(def.start.heading) * 0.12)} y2={sy(def.start.y + Math.sin(def.start.heading) * 0.12)} stroke={THEME.ok} strokeWidth={3} />
+                <text x={sx(def.start.x) + 12} y={sy(def.start.y) - 10} fill={THEME.ok} fontSize={11} fontFamily="JetBrains Mono">START</text>
               </g>
             </svg>
           )}

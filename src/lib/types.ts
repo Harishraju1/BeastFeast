@@ -445,7 +445,7 @@ export interface ProjectSimConfig {
 
 // ───────────────────────────── People ─────────────────────────────
 
-export type Role = "student" | "admin";
+export type Role = "student" | "admin" | "super_admin";
 
 export interface Profile {
   id: string;

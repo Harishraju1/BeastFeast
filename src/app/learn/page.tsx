@@ -31,9 +31,9 @@ function Inner() {
       {tab === "topics" && (
         <>
           {cont && (
-            <Link href={`/learn/${cont.id}`} className="mb-5 flex items-center justify-between rounded-lg border border-orange/50 bg-orange/5 px-4 py-3 hover:bg-orange/10">
+            <Link href={`/learn/${cont.id}`} className="mb-5 flex items-center justify-between rounded-lg border border-accent/50 bg-accent/5 px-4 py-3 hover:bg-accent/10">
               <span className="text-sm">Continue reading: <b>{cont.title}</b></span>
-              <span className="text-orange">→</span>
+              <span className="text-accent-ink">→</span>
             </Link>
           )}
           <div className="mb-6 grid gap-4 md:grid-cols-3">
@@ -41,11 +41,11 @@ function Inner() {
               const ids = p.topicIds;
               const pct = (ids.filter((id) => done.has(id)).length / ids.length) * 100;
               return (
-                <button key={p.id} onClick={() => setPath(p.id)} className={`bf-panel p-4 text-left transition ${path === p.id ? "bf-glow-orange border-orange" : "hover:border-line2"}`}>
+                <button key={p.id} onClick={() => setPath(p.id)} className={`bf-panel p-4 text-left transition ${path === p.id ? "bf-glow-accent border-accent" : "hover:border-line2"}`}>
                   <div className="bf-label">PATH {p.id === "line" ? "A" : p.id === "race" ? "B" : "C"}</div>
                   <div className="font-display text-lg font-bold">{p.title}</div>
                   <div className="mb-3 text-xs text-muted">{p.tagline}</div>
-                  <Progress value={pct} tone={pct >= 100 ? "ok" : "orange"} />
+                  <Progress value={pct} tone={pct >= 100 ? "ok" : "accent"} />
                   <div className="mt-1 text-[11px] text-dim">{ids.filter((id) => done.has(id)).length} / {ids.length} topics completed</div>
                 </button>
               );
@@ -57,14 +57,14 @@ function Inner() {
                 <li key={t.id} className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-0 hover:bg-panel2/50">
                   <span className="w-7 font-mono text-xs text-dim">{String(t.order).padStart(2, "0")}</span>
                   {done.has(t.id) ? <CheckCircle2 size={16} className="text-ok" /> : <span className="h-4 w-4 rounded-full border border-line2" />}
-                  <Link href={`/learn/${t.id}`} className="flex-1 hover:text-orange">
+                  <Link href={`/learn/${t.id}`} className="flex-1 hover:text-accent-ink">
                     <div className="text-sm font-medium">{t.title}</div>
                     <div className="text-xs text-muted">{t.summary}</div>
                   </Link>
                   <span className="hidden text-xs text-dim sm:inline">{t.minutes} min · {t.quiz.length} Qs</span>
                   {user && (
                     <button title={marks.has(t.id) ? "Remove bookmark" : "Bookmark"} onClick={() => void updateProgress((p) => ({ ...p, bookmarks: marks.has(t.id) ? p.bookmarks.filter((b) => b !== t.id) : [...p.bookmarks, t.id] }))}>
-                      <Bookmark size={15} className={marks.has(t.id) ? "fill-orange text-orange" : "text-dim"} />
+                      <Bookmark size={15} className={marks.has(t.id) ? "fill-accent text-accent-ink" : "text-dim"} />
                     </button>
                   )}
                 </li>
@@ -78,7 +78,7 @@ function Inner() {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-1.5">
             {["All", "Electronics", "Arduino", "Sensors", "Motor Drivers", "Chassis", "Line Following", "Robo Race", "Robo War", "Advanced Robotics"].map((c) => (
-              <button key={c} onClick={() => setVcat(c)} className={`rounded-full border px-3 py-1 text-xs ${vcat === c ? "border-orange text-orange" : "border-line text-muted"}`}>{c}</button>
+              <button key={c} onClick={() => setVcat(c)} className={`rounded-full border px-3 py-1 text-xs ${vcat === c ? "border-accent text-accent-ink" : "border-line text-muted"}`}>{c}</button>
             ))}
           </div>
           {playingVideo && youtubeId(playingVideo.url) && (
@@ -101,7 +101,7 @@ function Inner() {
                     setPlaying(v.id);
                     if (user) void updateProgress((p) => ({ ...p, watchedVideos: [...new Set([...p.watchedVideos, v.id])] }));
                   }}
-                  className="overflow-hidden rounded-lg border border-line text-left hover:border-orange"
+                  className="overflow-hidden rounded-lg border border-line text-left hover:border-accent"
                 >
                   <div className="relative aspect-video bg-bg2">
                     {youtubeId(v.url) && <img src={v.thumbnail || `https://i.ytimg.com/vi/${youtubeId(v.url)}/hqdefault.jpg`} alt="" className="h-full w-full object-cover" />}
@@ -109,7 +109,7 @@ function Inner() {
                   </div>
                   <div className="space-y-1 p-2">
                     <div className="text-sm font-medium">{v.title}</div>
-                    <div className="flex gap-1"><Badge>{v.category}</Badge><Badge tone="cyan">{v.difficulty}</Badge>{progress?.watchedVideos.includes(v.id) && <Badge tone="ok">watched</Badge>}</div>
+                    <div className="flex gap-1"><Badge>{v.category}</Badge><Badge tone="brand">{v.difficulty}</Badge>{progress?.watchedVideos.includes(v.id) && <Badge tone="ok">watched</Badge>}</div>
                   </div>
                 </button>
               ))}

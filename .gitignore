@@ -44,3 +44,6 @@ next-env.d.ts
 /public/monaco
 .npmrc
 !.env.example
+
+# Supabase CLI working files
+supabase/.temp/

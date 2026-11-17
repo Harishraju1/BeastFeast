@@ -118,6 +118,25 @@ export const DEFAULT_RULES: CompetitionRules = {
   bluetoothAllowedInSumo: false,
 };
 
+export interface StaffAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: Profile["role"];
+  createdAt: string;
+}
+
+export interface RoleAuditEntry {
+  id: string;
+  at: string;
+  actorEmail: string | null;
+  targetEmail: string | null;
+  oldRole: string | null;
+  newRole: string;
+  action: "promote" | "revoke" | "bootstrap";
+  note: string | null;
+}
+
 export interface Backend {
   readonly mode: "local" | "supabase";
   currentUser(): Promise<Profile | null>;
@@ -126,7 +145,14 @@ export interface Backend {
   signOut(): Promise<void>;
   updateProfile(p: Partial<Profile> & { id: string }): Promise<Profile>;
   listProfiles(): Promise<Profile[]>;
-  setRole(userId: string, role: Profile["role"]): Promise<void>;
+  /** Super Admin only: set a user's role to student or admin (enforced on the server in cloud mode, audited). */
+  setRole(userId: string, role: "student" | "admin", note?: string): Promise<void>;
+  /** Super Admin only: find a registered account by email. */
+  findUserByEmail(email: string): Promise<StaffAccount | null>;
+  /** Admins: accounts with admin or super_admin role. */
+  listStaff(): Promise<StaffAccount[]>;
+  /** Admins: role-change history, newest first. */
+  listRoleAudit(): Promise<RoleAuditEntry[]>;
 
   listProjects(ownerId: string): Promise<Project[]>;
   listAllProjects(): Promise<Project[]>;

@@ -9,8 +9,8 @@ export function Toasts() {
         <button
           key={t.id}
           onClick={() => dismissToast(t.id)}
-          className={`pointer-events-auto rounded-md border px-4 py-2 text-sm shadow-xl backdrop-blur ${
-            t.kind === "xp" ? "border-orange/60 bg-orange/15 font-display font-bold text-orange" : t.kind === "error" ? "border-bad/60 bg-bad/15 text-bad" : t.kind === "success" ? "border-ok/50 bg-ok/10 text-ok" : "border-line2 bg-panel text-text"
+          className={`pointer-events-auto rounded-md border px-4 py-2 text-sm shadow-[var(--shadow-lg)] bf-rise ${
+            t.kind === "xp" ? "border-accent bg-accent font-display font-bold text-white" : t.kind === "error" ? "border-bad/50 bg-panel text-bad border-l-4" : t.kind === "success" ? "border-ok/50 bg-panel text-ok border-l-4" : "border-line2 bg-panel text-text"
           }`}
         >
           {t.text}

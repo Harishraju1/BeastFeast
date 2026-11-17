@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 import type { ComponentRecord, PartInstance } from "@/lib/types";
 import { PartMesh } from "@/components/three/RobotParts";
 import { partDims } from "@/lib/mech/geometry";
+import { THEME } from "@/lib/theme";
 
 export type PreviewView = "front" | "side" | "top" | "iso";
 
@@ -30,10 +31,10 @@ export default function ComponentPreview({ comp, view }: { comp: ComponentRecord
   const size = Math.max(d.x, d.y, d.z) / 1000;
   return (
     <Canvas camera={{ fov: 35, near: 0.001, far: 10 }} dpr={[1, 2]}>
-      <color attach="background" args={["#0c1017"]} />
+      <color attach="background" args={[THEME.sceneBg]} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[1, 2, 1]} intensity={2} />
-      <pointLight position={[-1, 0.5, -1]} intensity={1.5} color="#00d9ff" />
+      <pointLight position={[-1, 0.5, -1]} intensity={1.4} color={THEME.fillLight} />
       <PartMesh part={part} comp={comp} />
       <Cam view={view} size={size} />
       <OrbitControls enablePan={false} />

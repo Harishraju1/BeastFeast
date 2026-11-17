@@ -39,8 +39,8 @@ function Inner() {
         <Panel title="Profile" className="lg:col-span-1">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-panel2 font-display text-2xl text-cyan">{form.avatar ? <img src={form.avatar} alt="" className="h-full w-full object-cover" /> : form.name[0]}</span>
-              <label className="cursor-pointer text-xs text-cyan">Change picture
+              <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-panel2 font-display text-2xl text-brand">{form.avatar ? <img src={form.avatar} alt="" className="h-full w-full object-cover" /> : form.name[0]}</span>
+              <label className="cursor-pointer text-xs text-brand">Change picture
                 <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
@@ -60,8 +60,8 @@ function Inner() {
         <div className="space-y-6 lg:col-span-2">
           <Panel title="Rank & XP">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Stat label="XP" value={user!.xp} tone="orange" />
-              <Stat label="Rank" value={rank.name} tone="cyan" sub={rank.next ? `${rank.toNext} XP to ${rank.next}` : "Top rank"} />
+              <Stat label="XP" value={user!.xp} tone="accent" />
+              <Stat label="Rank" value={rank.name} tone="brand" sub={rank.next ? `${rank.toNext} XP to ${rank.next}` : "Top rank"} />
               <Stat label="Projects" value={projects.length} />
               <Stat label="Streak" value={`${streakDays(events)} d`} />
             </div>
@@ -70,8 +70,8 @@ function Inner() {
           <Panel title={`Achievements (${earned.size}/${ACHIEVEMENTS.length})`}>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {ACHIEVEMENTS.map((a) => (
-                <div key={a.id} className={`rounded-lg border p-3 ${earned.has(a.id) ? "border-orange bg-orange/10" : "border-line opacity-60"}`}>
-                  <Trophy size={18} className={earned.has(a.id) ? "text-orange" : "text-dim"} />
+                <div key={a.id} className={`rounded-lg border p-3 ${earned.has(a.id) ? "border-accent bg-accent/10" : "border-line opacity-60"}`}>
+                  <Trophy size={18} className={earned.has(a.id) ? "text-accent-ink" : "text-dim"} />
                   <div className="mt-1 text-sm font-semibold">{a.title}</div>
                   <div className="text-[11px] text-muted">{a.description}</div>
                 </div>
@@ -84,7 +84,7 @@ function Inner() {
               return (
                 <div key={p.id} className="mb-2">
                   <div className="flex justify-between text-sm"><span>{p.title}</span><span className="text-muted">{n}/{p.topicIds.length}</span></div>
-                  <Progress value={(n / p.topicIds.length) * 100} tone="cyan" />
+                  <Progress value={(n / p.topicIds.length) * 100} tone="brand" />
                 </div>
               );
             })}
@@ -92,7 +92,7 @@ function Inner() {
           </Panel>
           <Panel title="Project history">
             {projects.length === 0 ? <div className="text-sm text-muted">No projects yet.</div> : projects.map((p) => (
-              <Link key={p.id} href={`/workspace/${p.id}/design`} className="flex items-center justify-between border-b border-line py-2 text-sm last:border-0 hover:text-orange">
+              <Link key={p.id} href={`/workspace/${p.id}/design`} className="flex items-center justify-between border-b border-line py-2 text-sm last:border-0 hover:text-accent-ink">
                 <span>{p.name}</span>
                 <span className="flex gap-2 text-xs text-muted"><Badge>{p.competition}</Badge>{p.simulations.length} runs · {p.codeVersions.length} code versions · {new Date(p.updatedAt).toLocaleDateString()}</span>
               </Link>
@@ -103,7 +103,7 @@ function Inner() {
               {[...events].reverse().map((e) => (
                 <div key={e.id} className="flex justify-between border-b border-line/60 py-1">
                   <span>{XP_RULES[e.type].label} <span className="text-dim">({e.refId})</span></span>
-                  <span className="font-mono text-orange">+{e.amount}</span>
+                  <span className="font-mono text-accent-ink">+{e.amount}</span>
                 </div>
               ))}
               {!events.length && <div className="text-muted">No XP yet. XP is earned for learning, passing quizzes, validating robots and completing simulations — not for visiting pages.</div>}

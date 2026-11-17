@@ -150,11 +150,11 @@ export default function CodeStudio({ project }: { project: Project }) {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="bf-panel max-w-lg space-y-3 p-6 text-center">
-          <Lock className="mx-auto text-orange" size={32} />
+          <Lock className="mx-auto text-accent-ink" size={32} />
           <div className="font-display text-xl font-bold">{vstate === "stale" ? "YOUR DESIGN CHANGED — VALIDATE AGAIN" : vstate === "failed" ? "FIX YOUR ROBOT FIRST" : "VALIDATE YOUR ROBOT FIRST"}</div>
           <p className="text-sm text-muted">Code Studio checks your code against your real circuit, so the circuit has to pass validation (no critical errors) before you continue.</p>
           <div className="flex justify-center gap-2">
-            <Link href={`/workspace/${project.id}/circuit`} className="rounded-md bg-orange px-4 py-2 text-sm font-semibold text-black">Open Circuit Studio</Link>
+            <Link href={`/workspace/${project.id}/circuit`} className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white">Open Circuit Studio</Link>
             <Link href={`/workspace/${project.id}/design`} className="rounded-md border border-line2 px-4 py-2 text-sm">Robot Designer</Link>
           </div>
           {project.validation && vstate === "failed" && <div className="text-xs text-bad">{project.validation.issues.filter((i) => i.severity === "critical").length} critical issue(s) remain.</div>}
@@ -172,11 +172,11 @@ export default function CodeStudio({ project }: { project: Project }) {
           <Button size="sm" onClick={() => setCode(formatCode(code))}><Wand2 size={13} /> Format</Button>
           <Button size="sm" onClick={saveVersion}><Save size={13} /> Save version</Button>
           <Button size="sm" onClick={download}><Download size={13} /> .ino</Button>
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line2 px-2.5 py-1 text-xs hover:border-cyan">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line2 px-2.5 py-1 text-xs hover:border-brand">
             <FileUp size={13} /> Import
             <input type="file" accept=".ino,.cpp,.c,.h,.txt" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setCode(await f.text()); }} />
           </label>
-          <Link href={`/workspace/${project.id}/arena`} className="ml-auto inline-flex items-center gap-1 rounded-md bg-cyan px-3 py-1 text-xs font-semibold text-black"><Play size={13} /> Simulate</Link>
+          <Link href={`/workspace/${project.id}/arena`} className="ml-auto inline-flex items-center gap-1 rounded-md bg-brand px-3 py-1 text-xs font-semibold text-on-brand"><Play size={13} /> Simulate</Link>
         </div>
         {stale && <div className="border-b border-warn/40 bg-warn/10 px-3 py-1 text-xs text-warn">Your circuit changed after the last code check — press VALIDATE CODE again.</div>}
         <div className="min-h-0 flex-1">
@@ -190,7 +190,30 @@ export default function CodeStudio({ project }: { project: Project }) {
             onMount={(ed, monaco) => {
               editorRef.current = ed;
               monacoRef.current = monaco;
-              monaco.editor.defineTheme("beast", { base: "vs-dark", inherit: true, rules: [{ token: "keyword", foreground: "ff6b1a" }, { token: "number", foreground: "00d9ff" }], colors: { "editor.background": "#0b0f16" } });
+              monaco.editor.defineTheme("beast", {
+                base: "vs-dark",
+                inherit: true,
+                rules: [
+                  { token: "", foreground: "F1EEE3" },
+                  { token: "keyword", foreground: "FF7B6E", fontStyle: "bold" },
+                  { token: "number", foreground: "F2C46B" },
+                  { token: "string", foreground: "A9DDB8" },
+                  { token: "comment", foreground: "AEB7AC", fontStyle: "italic" },
+                  { token: "type", foreground: "A9D1E6" },
+                ],
+                colors: {
+                  "editor.background": "#36433A",
+                  "editor.foreground": "#F1EEE3",
+                  "editorLineNumber.foreground": "#8E9A90",
+                  "editorLineNumber.activeForeground": "#F1EEE3",
+                  "editor.lineHighlightBackground": "#3E4B42",
+                  "editor.selectionBackground": "#F20B0B55",
+                  "editorCursor.foreground": "#F20B0B",
+                  "editorGutter.background": "#36433A",
+                  "editorWidget.background": "#2E3932",
+                  "editorIndentGuide.background1": "#45534A",
+                },
+              });
               monaco.editor.setTheme("beast");
               monaco.languages.registerCompletionItemProvider("cpp", {
                 provideCompletionItems: (model: MonacoEditor.ITextModel, position: { lineNumber: number; column: number }) => {
@@ -236,8 +259,8 @@ export default function CodeStudio({ project }: { project: Project }) {
               <p className="text-muted">Pins wired to your controller in Circuit Studio (click to insert a #define):</p>
               {wired.length === 0 && <div className="text-dim">Nothing is wired to the controller yet.</div>}
               {wired.map((w, i) => (
-                <button key={i} className="flex w-full justify-between rounded border border-line px-2 py-1 font-mono hover:border-cyan" onClick={() => editorRef.current?.trigger("keyboard", "type", { text: `#define ${w.modulePin.replace(/\W/g, "_")} ${w.arduinoPin}  // ${w.pinLabel} → ${w.module} ${w.modulePin}\n` })}>
-                  <span className="text-cyan">{w.pinLabel} ({w.arduinoPin})</span>
+                <button key={i} className="flex w-full justify-between rounded border border-line px-2 py-1 font-mono hover:border-brand" onClick={() => editorRef.current?.trigger("keyboard", "type", { text: `#define ${w.modulePin.replace(/\W/g, "_")} ${w.arduinoPin}  // ${w.pinLabel} → ${w.module} ${w.modulePin}\n` })}>
+                  <span className="text-brand">{w.pinLabel} ({w.arduinoPin})</span>
                   <span>→ {w.module}.{w.modulePin}</span>
                 </button>
               ))}
@@ -249,15 +272,15 @@ export default function CodeStudio({ project }: { project: Project }) {
                 <div key={i} className="rounded border border-line p-2">
                   <div className="font-semibold text-text">{e.title}</div>
                   <div className="text-muted">{e.body}</div>
-                  {e.line && <button className="mt-1 text-cyan" onClick={() => goToLine(e.line!)}>Go to line {e.line}</button>}
+                  {e.line && <button className="mt-1 text-brand" onClick={() => goToLine(e.line!)}>Go to line {e.line}</button>}
                 </div>
               ))}
             </div>
           )}
           {tab === "features" && (
             <div className="space-y-3 text-xs">
-              <div className="rounded border border-cyan/40 bg-cyan/5 p-2 text-muted">
-                <b className="text-cyan">How your code runs:</b> the BEAST interpreter executes a documented subset of Arduino C/C++ in a sandbox inside your browser (no server, no access to anything outside the simulator, time and step limits). Unsupported features are reported — never silently guessed.
+              <div className="rounded border border-brand/40 bg-brand/5 p-2 text-muted">
+                <b className="text-brand">How your code runs:</b> the BEAST interpreter executes a documented subset of Arduino C/C++ in a sandbox inside your browser (no server, no access to anything outside the simulator, time and step limits). Unsupported features are reported — never silently guessed.
               </div>
               <div>
                 <div className="bf-label mb-1">Supported</div>
@@ -271,7 +294,7 @@ export default function CodeStudio({ project }: { project: Project }) {
                 <div className="bf-label mb-1">Advanced: run a real compiled binary</div>
                 <p className="text-muted">For {AVR_SUPPORTED_BOARDS.join(" / ").toUpperCase()} you can upload the .hex from Arduino IDE (Sketch → Export Compiled Binary). It runs on a cycle-level ATmega328P emulator (avr8js), so any code the real compiler accepts will execute.</p>
                 {AVR_SUPPORTED_BOARDS.includes(board.key) ? (
-                  <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded border border-line2 px-2 py-1 hover:border-cyan">
+                  <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded border border-line2 px-2 py-1 hover:border-brand">
                     <FileUp size={12} /> {hex ? "Replace .hex" : "Upload .hex"}
                     <input type="file" accept=".hex" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setHex(project.id, await f.text(), f.name); }} />
                   </label>
@@ -288,10 +311,10 @@ export default function CodeStudio({ project }: { project: Project }) {
         <p className="mb-3 text-sm text-muted">Templates are starting points — you can always write your own. Inserting a template replaces the editor contents (your current code is saved as a version first). Check the #define pin numbers against your circuit!</p>
         <div className="grid gap-2 md:grid-cols-2">
           {CODE_TEMPLATES.map((t) => (
-            <button key={t.id} className="rounded border border-line p-3 text-left hover:border-orange" onClick={() => { saveVersion(); setCode(t.code); setTplOpen(false); }}>
+            <button key={t.id} className="rounded border border-line p-3 text-left hover:border-accent" onClick={() => { saveVersion(); setCode(t.code); setTplOpen(false); }}>
               <div className="font-semibold">{t.title}</div>
               <div className="text-xs text-muted">{t.description}</div>
-              <div className="mt-1 font-mono text-[10px] uppercase text-orange">{t.competition}</div>
+              <div className="mt-1 font-mono text-[10px] uppercase text-accent-ink">{t.competition}</div>
             </button>
           ))}
         </div>
@@ -299,7 +322,7 @@ export default function CodeStudio({ project }: { project: Project }) {
           <div className="mt-4">
             <div className="bf-label mb-1">Your saved versions</div>
             {[...project.codeVersions].reverse().slice(0, 8).map((v) => (
-              <button key={v.id} className="mr-2 mt-1 rounded border border-line px-2 py-1 text-xs hover:border-cyan" onClick={() => { setCode(v.source); setTplOpen(false); }}>{v.note}</button>
+              <button key={v.id} className="mr-2 mt-1 rounded border border-line px-2 py-1 text-xs hover:border-brand" onClick={() => { setCode(v.source); setTplOpen(false); }}>{v.note}</button>
             ))}
           </div>
         )}

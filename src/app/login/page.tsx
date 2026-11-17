@@ -32,13 +32,13 @@ function LoginInner() {
 
   return (
     <div className="bf-grid relative flex min-h-[calc(100vh-56px)] items-center justify-center p-4">
-      <form onSubmit={submit} className="bf-panel bf-glow-orange relative w-full max-w-md space-y-4 p-7">
+      <form onSubmit={submit} className="bf-panel bf-on-ivory bf-raised relative w-full max-w-md space-y-4 border-t-4 !border-t-accent p-7">
         <div>
-          <div className="bf-label text-orange">BEAST FEAST 5.0 · ROBOTICS CLUB KKH</div>
+          <div className="bf-label text-accent-ink">BEAST FEAST 5.0 · ROBOTICS CLUB KKH</div>
           <h1 className="font-display text-2xl font-bold">{mode === "in" ? "Enter the lab" : "Create your engineer account"}</h1>
           <p className="mt-1 text-xs text-muted">
             {BACKEND_MODE === "local"
-              ? "Local mode: accounts and projects are stored in this browser only. The first account created on this device becomes its administrator."
+              ? "Local mode: accounts and projects are stored in this browser only. The first account created on this device becomes its Super Admin."
               : "Cloud mode: your projects sync across devices."}
           </p>
         </div>
@@ -67,7 +67,7 @@ function LoginInner() {
         <Button variant="primary" size="lg" className="w-full" disabled={busy}>
           {busy ? "…" : mode === "in" ? "SIGN IN" : "CREATE ACCOUNT"}
         </Button>
-        <button type="button" className="w-full text-center text-sm text-cyan hover:underline" onClick={() => setMode(mode === "in" ? "up" : "in")}>
+        <button type="button" className="w-full text-center text-sm text-brand hover:underline" onClick={() => setMode(mode === "in" ? "up" : "in")}>
           {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
         </button>
       </form>
