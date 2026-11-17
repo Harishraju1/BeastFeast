@@ -45,6 +45,8 @@ export default function LeaderboardPage() {
     [myTracks],
   );
   const b = BOARDS.find((x) => x.id === board)!;
+  // the Overall board already ranks by XP, so the separate XP column would repeat it
+  const showXp = b.metric !== "XP";
   const rows = profiles
     .map((u) => {
       const ev = events.filter((e) => e.userId === u.id);
@@ -59,33 +61,33 @@ export default function LeaderboardPage() {
         <PageHeader kicker="GLOBAL RANKINGS" title="Leaderboard">
           {BACKEND_MODE === "local" ? "Local mode: rankings include the accounts on this device. Connect Supabase for a campus-wide, server-validated leaderboard." : "Scores come from server-validated XP events."}
         </PageHeader>
-        <div className="mb-4 flex flex-wrap gap-1.5">
+        <div className="mb-5 flex flex-wrap gap-2">
           {BOARDS.map((x) => (
-            <button key={x.id} onClick={() => setBoard(x.id)} className={`rounded-full border px-3 py-1 text-xs ${board === x.id ? "border-accent bg-accent/10 text-accent-ink" : "border-line text-muted hover:text-text"}`}>{x.title}</button>
+            <button key={x.id} onClick={() => setBoard(x.id)} className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${board === x.id ? "border-accent bg-accent text-white" : "border-line text-muted hover:border-line2 hover:text-text"}`}>{x.title}</button>
           ))}
         </div>
-        <div className="overflow-hidden rounded-lg border border-line">
+        <div className="bf-panel overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-bg2">
               <tr className="bf-label text-left">
-                <th className="px-4 py-2">Rank</th><th className="px-4 py-2">Student</th><th className="hidden px-4 py-2 sm:table-cell">Campus</th><th className="px-4 py-2 text-right">{b.metric}</th><th className="hidden px-4 py-2 text-right md:table-cell">XP</th><th className="hidden px-4 py-2 text-right md:table-cell">Projects</th>
+                <th className="w-16 px-5 py-3">Rank</th><th className="px-5 py-3">Student</th><th className="hidden px-5 py-3 sm:table-cell">Campus</th><th className="px-5 py-3 text-right">{b.metric}</th>{showXp && <th className="hidden px-5 py-3 text-right md:table-cell">XP</th>}<th className="hidden px-5 py-3 text-right md:table-cell">Projects</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.u.id} className={`border-t border-line ${r.u.id === me?.id ? "bg-accent/5" : ""}`}>
-                  <td className="px-4 py-2 font-mono">{i < 3 ? <Trophy size={16} className={i === 0 ? "text-accent-ink" : i === 1 ? "text-muted" : "text-[#d9a066]"} /> : i + 1}</td>
-                  <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
+                  <td className="px-5 py-3 font-mono">{i < 3 ? <Trophy size={16} className={i === 0 ? "text-accent-ink" : i === 1 ? "text-muted" : "text-[#d9a066]"} /> : i + 1}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2.5">
                       <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-panel2 text-xs text-brand">{r.u.avatar ? <img src={r.u.avatar} alt="" className="h-full w-full object-cover" /> : r.u.name[0]}</span>
                       <span>{r.u.name}</span>
                       <Badge>{rankFor(r.u.xp).name}</Badge>
                     </div>
                   </td>
-                  <td className="hidden px-4 py-2 text-muted sm:table-cell">{r.u.campus || "—"}</td>
-                  <td className="px-4 py-2 text-right font-mono text-accent-ink">{r.v}</td>
-                  <td className="hidden px-4 py-2 text-right font-mono md:table-cell">{r.u.xp}</td>
-                  <td className="hidden px-4 py-2 text-right md:table-cell">{BACKEND_MODE === "local" || r.u.id === me?.id ? r.projects : "—"}</td>
+                  <td className="hidden px-5 py-3 text-muted sm:table-cell">{r.u.campus || "—"}</td>
+                  <td className="px-5 py-3 text-right font-mono font-semibold text-accent-ink">{r.v}</td>
+                  {showXp && <td className="hidden px-5 py-3 text-right font-mono md:table-cell">{r.u.xp}</td>}
+                  <td className="hidden px-5 py-3 text-right md:table-cell">{BACKEND_MODE === "local" || r.u.id === me?.id ? r.projects : "—"}</td>
                 </tr>
               ))}
               {!rows.length && <tr><td colSpan={6} className="p-6 text-center text-muted">No students yet.</td></tr>}

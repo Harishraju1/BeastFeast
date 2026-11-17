@@ -2,6 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import mark from "@/assets/brand/beast-feast-mark.webp";
+import logo from "@/assets/brand/beast-feast-logo.webp";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
@@ -65,12 +66,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       {/* sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 bf-on-sage flex flex-col shadow-[1px_0_0_rgba(38,48,42,.25)] transition-all ${immersive ? "w-14" : "w-14 xl:w-56"} ${mobileOpen ? "!w-56 translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
-        <Link href="/" className="flex h-14 items-center gap-2 border-b border-line px-3">
-          <Image src={mark} alt="BEAST FEAST" className="h-9 w-9 shrink-0 object-contain" sizes="36px" priority />
-          <span className={`font-display text-sm font-bold leading-tight ${immersive && !mobileOpen ? "hidden" : "hidden xl:block"} ${mobileOpen ? "!block" : ""}`}>
-            BEAST FEAST <span className="text-accent-ink">5.0</span>
-            <span className="block font-mono text-[9px] font-normal tracking-widest text-dim">ROBOTICS CLUB KKH</span>
-          </span>
+        {/* Brand: the full logo when the sidebar is open, the gear-and-panther mark when it is collapsed */}
+        <Link href="/" aria-label="BEAST FEAST 5.0 — Robotics Club KKH, home" className="flex min-h-14 items-center justify-center border-b border-line px-2 py-2 xl:px-4 xl:py-3">
+          <Image src={mark} alt="" className={`h-10 w-10 shrink-0 object-contain ${immersive && !mobileOpen ? "" : "xl:hidden"} ${mobileOpen ? "!hidden" : ""}`} sizes="40px" priority />
+          <Image src={logo} alt="BEAST FEAST 5.0 — Robotics Club KKH" className={`h-auto w-full max-w-[188px] drop-shadow-[0_6px_14px_rgba(20,26,22,0.35)] ${immersive && !mobileOpen ? "hidden" : "hidden xl:block"} ${mobileOpen ? "!block" : ""}`} sizes="188px" priority />
         </Link>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-2" aria-label="Main">
           {nav.map((n) => {

@@ -99,31 +99,52 @@ void loop() {
   },
   {
     id: "line-basic",
-    title: "Line Following (basic left/right)",
-    description: "Two-sensor bang-bang control: turn towards whichever side sees the line.",
+    title: "Line Following (basic 3-sensor)",
+    description: "Left / centre / right sensors. Turns towards the line, remembers which side it last saw it, and pivots back when a sharp corner throws it off.",
     competition: "line",
-    code: `// BASIC LINE FOLLOWER — digital sensors read HIGH over the black line.
+    code: `// BASIC LINE FOLLOWER — 3 digital sensors read HIGH over the black line.
+// LEFT and RIGHT sit either side of the line, CENTRE sits on it.
 ${PINS}
-#define LEFT_SENSOR  A1
-#define RIGHT_SENSOR A3
+#define LEFT_SENSOR   A1
+#define CENTRE_SENSOR A2
+#define RIGHT_SENSOR  A3
+
+int baseSpeed = 140;     // straight-line speed
+int turnFast = 170;      // outer wheel in a turn
+int turnSlow = -60;      // inner wheel in a turn (negative = backwards → tight pivot for sharp corners)
+int searchSpeed = 130;   // spin speed while looking for a lost line
+int lastSide = 0;        // -1 = line last seen on the left, +1 = right, 0 = centre
 
 ${DRIVE_FUNCS}
 
 void setup() {
 ${SETUP_PINS}
   pinMode(LEFT_SENSOR, INPUT);
+  pinMode(CENTRE_SENSOR, INPUT);
   pinMode(RIGHT_SENSOR, INPUT);
 }
 
 void loop() {
   int left = digitalRead(LEFT_SENSOR);
+  int centre = digitalRead(CENTRE_SENSOR);
   int right = digitalRead(RIGHT_SENSOR);
-  if (left == HIGH && right == LOW) {
-    setMotors(40, 170);       // line is on the left → turn left
-  } else if (right == HIGH && left == LOW) {
-    setMotors(170, 40);       // line is on the right → turn right
+
+  if (left == HIGH && right == HIGH) {
+    setMotors(baseSpeed, baseSpeed);      // crossing / T-junction → keep going straight
+  } else if (left == HIGH) {
+    lastSide = -1;
+    setMotors(turnSlow, turnFast);        // line is on the left → turn left
+  } else if (right == HIGH) {
+    lastSide = 1;
+    setMotors(turnFast, turnSlow);        // line is on the right → turn right
+  } else if (centre == HIGH) {
+    setMotors(baseSpeed, baseSpeed);      // centred → straight ahead
+  } else if (lastSide < 0) {
+    setMotors(-searchSpeed, searchSpeed); // lost after a left turn → spin left until a sensor finds it
+  } else if (lastSide > 0) {
+    setMotors(searchSpeed, -searchSpeed); // lost after a right turn → spin right
   } else {
-    setMotors(140, 140);      // centred (or lost) → go straight
+    setMotors(90, 90);                    // never saw a side yet → creep forward to find the line
   }
 }
 `,
@@ -131,16 +152,19 @@ void loop() {
   {
     id: "line-pid",
     title: "PID Line Following (5-sensor array)",
-    description: "Weighted error from a 5-channel array with PD control and lost-line recovery.",
+    description: "Weighted error from a 5-channel array with PD control, slows down in sharp turns, and pivots back to the side where the line was last seen.",
     competition: "line",
     code: `// PID LINE FOLLOWER — 5 digital sensors, S1 (left) ... S5 (right), HIGH = black line.
 ${PINS}
 
 const int sensorPins[5] = {A0, A1, A2, A3, A4};
-int baseSpeed = 150;
-float Kp = 45.0;
-float Kd = 30.0;
+int baseSpeed = 150;     // speed on straights
+int minSpeed = 70;       // speed in the sharpest turns
+float Kp = 40.0;
+float Kd = 40.0;
+int searchSpeed = 140;   // pivot speed while the line is lost
 int lastError = 0;
+int lastSide = 0;        // -1 = line last seen left of centre, +1 = right; only updated off-centre
 
 ${DRIVE_FUNCS}
 
@@ -161,17 +185,23 @@ void loop() {
     weighted += s * (i - 2);    // -2 (far left) ... +2 (far right)
   }
 
-  int error;
   if (sum == 0) {
-    // lost the line: keep turning towards the side where we last saw it
-    error = lastError > 0 ? 4 : -4;
-  } else {
-    error = (weighted * 2) / sum; // -4 ... +4
+    // Lost the line (usually just past a sharp corner): pivot on the spot towards the side
+    // where we last saw it, instead of driving on and wandering off.
+    if (lastSide < 0) setMotors(-searchSpeed, searchSpeed);
+    else if (lastSide > 0) setMotors(searchSpeed, -searchSpeed);
+    else setMotors(90, 90);    // it was centred: creep forward until a sensor finds it
+    return;
   }
 
+  int error = (weighted * 2) / sum;   // -4 (line far left) ... +4 (far right)
+  if (error != 0) lastSide = error > 0 ? 1 : -1;
+
+  // slow down as the turn gets sharper, so the robot can follow tight corners
+  int speed = baseSpeed - (baseSpeed - minSpeed) * abs(error) / 4;
   int correction = Kp * error + Kd * (error - lastError);
   lastError = error;
-  setMotors(baseSpeed + correction, baseSpeed - correction);
+  setMotors(speed + correction, speed - correction);
   delay(5);
 }
 `,
