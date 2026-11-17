@@ -117,7 +117,7 @@ Any Node host that runs Next.js 16 works (Vercel, Netlify, a VM with `npm run bu
 
 ### Vercel
 
-Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the project's environment variables. The web app needs nothing else: the secret key and database URL are only for the scripts on your machine, so never add them to Vercel. `src/proxy.ts` runs as Next.js Proxy (formerly Middleware). In Supabase, Authentication, URL Configuration, set the Site URL to the Vercel domain.
+The two public Supabase values are committed in `.env.production`, which Vercel reads at build time. You can override them with project environment variables. The web app needs nothing else: the secret key and database URL are only for the scripts on your machine, so never add them to Vercel. `src/proxy.ts` runs as Next.js Proxy (formerly Middleware). In Supabase, Authentication, URL Configuration, set the Site URL to the Vercel domain.
 
 ## Architecture
 
