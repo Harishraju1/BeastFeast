@@ -1,5 +1,7 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
+import mark from "@/assets/brand/beast-feast-mark.webp";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
@@ -64,7 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-40 bf-on-sage flex flex-col shadow-[1px_0_0_rgba(38,48,42,.25)] transition-all ${immersive ? "w-14" : "w-14 xl:w-56"} ${mobileOpen ? "!w-56 translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
         <Link href="/" className="flex h-14 items-center gap-2 border-b border-line px-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent font-display text-sm font-bold tracking-tight text-white">BF</span>
+          <Image src={mark} alt="BEAST FEAST" className="h-9 w-9 shrink-0 object-contain" sizes="36px" priority />
           <span className={`font-display text-sm font-bold leading-tight ${immersive && !mobileOpen ? "hidden" : "hidden xl:block"} ${mobileOpen ? "!block" : ""}`}>
             BEAST FEAST <span className="text-accent-ink">5.0</span>
             <span className="block font-mono text-[9px] font-normal tracking-widest text-dim">ROBOTICS CLUB KKH</span>

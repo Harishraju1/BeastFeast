@@ -1,4 +1,6 @@
 "use client";
+import Image from "next/image";
+import logo from "@/assets/brand/beast-feast-logo.webp";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useApp } from "@/lib/store/app";
@@ -31,10 +33,11 @@ function LoginInner() {
   }
 
   return (
-    <div className="bf-grid relative flex min-h-[calc(100vh-56px)] items-center justify-center p-4">
+    <div className="bf-grid relative flex min-h-[calc(100vh-56px)] flex-col items-center justify-center gap-2 p-4">
+      <Image src={logo} alt="BEAST FEAST 5.0 — Robotics Club KKH" priority className="bf-rise h-auto w-[260px] md:w-[300px]" sizes="300px" />
       <form onSubmit={submit} className="bf-panel bf-on-ivory bf-raised relative w-full max-w-md space-y-4 border-t-4 !border-t-accent p-7">
         <div>
-          <div className="bf-label text-accent-ink">BEAST FEAST 5.0 · ROBOTICS CLUB KKH</div>
+          <div className="bf-label">BEAST FEAST 5.0 · ROBOTICS CLUB KKH</div>
           <h1 className="font-display text-2xl font-bold">{mode === "in" ? "Enter the lab" : "Create your engineer account"}</h1>
           <p className="mt-1 text-xs text-muted">
             {BACKEND_MODE === "local"
