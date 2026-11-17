@@ -5,7 +5,8 @@ import { Suspense, useState } from "react";
 import { Bookmark, CheckCircle2, PlayCircle } from "lucide-react";
 import { LEARNING_PATHS, TOPICS, getTopicsForPath, type PathId } from "@/lib/learning";
 import { useApp } from "@/lib/store/app";
-import { Badge, PageHeader, Panel, Progress, Tabs } from "@/components/ui";
+import { Badge, LinkButton, PageHeader, Panel, Progress, Tabs } from "@/components/ui";
+import { History } from "lucide-react";
 import { embedUrl, youtubeId } from "@/lib/youtube";
 
 function Inner() {
@@ -24,7 +25,7 @@ function Inner() {
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-8">
-      <PageHeader kicker="ROBOTICS LEARNING ACADEMY" title="Beast Topics" actions={<Tabs value={tab} onChange={setTab} items={[{ value: "topics", label: "Learning paths" }, { value: "videos", label: `Video library (${content.videos.length})` }]} />}>
+      <PageHeader kicker="ROBOTICS LEARNING ACADEMY" title="Beast Topics" actions={<><LinkButton href="/learn/history" variant="outline" size="sm"><History size={14} /> Quiz history</LinkButton><Tabs value={tab} onChange={setTab} items={[{ value: "topics", label: "Learning paths" }, { value: "videos", label: `Video library (${content.videos.length})` }]} /></>}>
         84 topics across three competition paths — each with beginner and technical explanations, diagrams, examples, common mistakes and a mini quiz.
       </PageHeader>
 

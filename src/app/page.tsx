@@ -1,6 +1,4 @@
 "use client";
-import Image from "next/image";
-import logo from "@/assets/brand/beast-feast-logo.webp";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -63,7 +61,7 @@ export default function Home() {
       <section className="bf-grid relative overflow-hidden border-b border-line">
         <div className="mx-auto grid max-w-7xl items-center gap-6 px-5 py-10 lg:grid-cols-2 lg:py-14">
           <div className="relative z-10">
-            <Image src={logo} alt="BEAST FEAST 5.0 — Robotics Club KKH. Build · Code · Simulate · Dominate." priority className="bf-rise -ml-4 mb-2 h-auto w-[300px] drop-shadow-[0_18px_30px_rgba(20,26,22,0.35)] md:w-[400px]" sizes="(min-width: 768px) 400px, 300px" />
+            <div className="bf-label mb-4 flex items-center gap-2 text-muted"><span className="h-[3px] w-5 rounded-full bg-accent" />BEAST FEAST 5.0 · BUILT BY ROBOTICS CLUB KKH</div>
             <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl">
               YOUR ROBOTICS JOURNEY <span className="text-accent-ink">STARTS HERE.</span>
             </h1>

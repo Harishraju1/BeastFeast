@@ -120,9 +120,11 @@ export default function TopicPage() {
             Search YouTube for “{t.youtubeSearch}” <ExternalLink size={12} />
           </a>
         </section>
-        <Panel title="Mini quiz">
-          <QuizRunner quizId={`topic:${t.id}`} questions={[...t.quiz, ...extraQ]} title={t.title} passPercent={60} />
-        </Panel>
+        <div id="quiz" className="scroll-mt-20">
+          <Panel title="Mini quiz" actions={<Link href="/learn/history" className="text-xs font-medium text-accent-ink hover:underline">Quiz history →</Link>}>
+            <QuizRunner quizId={`topic:${t.id}`} questions={[...t.quiz, ...extraQ]} title={t.title} passPercent={60} />
+          </Panel>
+        </div>
         <div className="flex justify-between text-sm">
           {idx > 0 ? <Link className="text-brand" href={`/learn/${list[idx - 1].id}`}>← {list[idx - 1].title}</Link> : <span />}
           {idx < list.length - 1 && <Link className="text-brand" href={`/learn/${list[idx + 1].id}`}>{list[idx + 1].title} →</Link>}

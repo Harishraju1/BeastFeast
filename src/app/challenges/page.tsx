@@ -27,7 +27,7 @@ export default function ChallengesPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-8">
-      <PageHeader kicker="PROVE YOUR SKILLS" title="Challenges">
+      <PageHeader kicker="PROVE YOUR SKILLS" title="Challenges" actions={<Link href="/learn/history" className="inline-flex items-center gap-2 rounded-md border border-line2 px-3.5 py-2 text-sm text-heading hover:border-accent hover:bg-panel2">Quiz history</Link>}>
         Topic quizzes live inside each Beast Topic. Here are the competition quizzes, weekly quizzes, advanced engineering challenges and the Final Beast Engineer examination. Simulation challenges are completed in the Simulation Arena.
       </PageHeader>
       {!user && <div className="mb-4 rounded border border-warn/40 bg-warn/5 p-3 text-sm text-warn">Sign in to record results and earn XP.</div>}

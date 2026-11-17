@@ -7,6 +7,10 @@ import { getBackend } from "@/lib/data";
 import type { QuizAttempt } from "@/lib/data/types";
 import { Button, Progress } from "@/components/ui";
 import { Diagram } from "./Diagram";
+import Link from "next/link";
+import { History } from "lucide-react";
+import { AttemptReview } from "./AttemptReview";
+import { reviewAttempt } from "@/lib/learning/history";
 
 const TYPE_LABEL: Record<QuizQuestion["type"], string> = {
   mcq: "Multiple choice", "identify-component": "Identify the component", "identify-pin": "Identify the pin", "predict-circuit": "Predict circuit behaviour", "find-wrong-connection": "Find the wrong connection",
@@ -18,7 +22,7 @@ const TYPE_LABEL: Record<QuizQuestion["type"], string> = {
  * and XP is only ever awarded once per question.
  */
 export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { quizId: string; questions: QuizQuestion[]; title: string; passPercent: number; onDone?: (a: QuizAttempt) => void }) {
-  const { user, progress, refreshUser, toast } = useApp();
+  const { user, progress, refreshUser, toast, content } = useApp();
   const [i, setI] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [revealed, setRevealed] = useState(false);
@@ -47,11 +51,20 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
 
   if (result)
     return (
-      <div className="space-y-3 text-center">
-        <div className={`font-display text-3xl font-bold ${result.passed ? "text-ok" : "text-warn"}`}>{result.percent}%</div>
-        <div className="text-sm text-muted">{result.correct} / {result.total} correct · {result.passed ? "PASSED" : `Pass mark ${passPercent}%`} · +{result.xpAwarded} XP</div>
-        <div className="text-xs text-dim">XP is awarded once per correctly answered question — retakes help you learn but don&apos;t farm points.</div>
-        <Button onClick={() => { setResult(null); setAnswers({}); setI(0); setRevealed(false); }}>Try again</Button>
+      <div className="space-y-5">
+        <div className="space-y-2 text-center">
+          <div className={`font-display text-4xl font-bold ${result.passed ? "text-ok" : "text-warn"}`}>{result.percent}%</div>
+          <div className="text-sm text-muted">{result.correct} / {result.total} correct · {result.passed ? "PASSED" : `Pass mark ${passPercent}%`} · +{result.xpAwarded} XP</div>
+          <div className="text-xs text-dim">XP is awarded once per correctly answered question — retakes help you learn but don&apos;t farm points.</div>
+          <div className="flex flex-wrap justify-center gap-2 pt-1">
+            <Button onClick={() => { setResult(null); setAnswers({}); setI(0); setRevealed(false); }}>Try again</Button>
+            <Link href="/learn/history" className="inline-flex items-center gap-2 rounded-md border border-line2 px-3.5 py-2 text-sm text-heading hover:border-accent hover:bg-panel2"><History size={14} /> Quiz history</Link>
+          </div>
+        </div>
+        <div className="border-t border-line pt-4">
+          <div className="bf-label mb-3">Review this attempt</div>
+          <AttemptReview review={reviewAttempt(result, content.extraQuestions)} />
+        </div>
       </div>
     );
 

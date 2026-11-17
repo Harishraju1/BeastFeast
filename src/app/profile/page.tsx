@@ -88,7 +88,7 @@ function Inner() {
                 </div>
               );
             })}
-            <div className="mt-2 text-xs text-muted">{progress?.quizAttempts.length ?? 0} quiz attempts · {progress?.bookmarks.length ?? 0} bookmarks</div>
+            <div className="mt-2 text-xs text-muted"><Link href="/learn/history" className="text-accent-ink hover:underline">{progress?.quizAttempts.length ?? 0} quiz attempts — view history</Link> · {progress?.bookmarks.length ?? 0} bookmarks</div>
           </Panel>
           <Panel title="Project history">
             {projects.length === 0 ? <div className="text-sm text-muted">No projects yet.</div> : projects.map((p) => (

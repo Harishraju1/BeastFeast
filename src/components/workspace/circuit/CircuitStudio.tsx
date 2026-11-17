@@ -174,7 +174,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
         <div className="relative min-h-0 flex-1 overflow-hidden" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { const id = e.dataTransfer.getData("text/component-id"); if (id) add(id); }}>
           <svg
             ref={svgRef}
-            className="h-full w-full touch-none select-none bg-[var(--sage-800)]"
+            className="h-full w-full touch-none select-none bg-[var(--scene-bg)]"
             onWheel={(e) => {
               const r = svgRef.current!.getBoundingClientRect();
               const k = Math.max(0.25, Math.min(2.5, view.k * (e.deltaY < 0 ? 1.1 : 0.9)));

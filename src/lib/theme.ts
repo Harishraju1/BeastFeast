@@ -14,8 +14,8 @@ export const BRAND = {
 export const THEME = {
   // Forest Sage surfaces (dominant)
   sage: BRAND.forestSage,
-  sageDeep: "#36433A", // canvases, 3D viewports
-  sageDeeper: "#2E3932",
+  sageDeep: "#18201B", // canvases, 3D viewports (dark theme)
+  sageDeeper: "#1E2721",
   sageLight: "#5B6B60",
   // Warm Ivory foreground on sage
   ivory: BRAND.warmIvory,
@@ -31,20 +31,20 @@ export const THEME = {
   cardMuted: "#4F5C53",
   // Signal Red
   accent: BRAND.signalRed,
-  accentText: "#FF7B6E", // red text/icons on sage
+  accentText: "#FF4D42", // red text/icons on the dark theme
   accentInk: "#C40808", // red text on ivory
   // status (on sage)
   ok: "#8FD3A5",
   warn: "#F2C46B",
   info: "#A9D1E6",
   // 3D scene
-  sceneBg: "#36433A",
-  gridMinor: "#45534A",
-  gridMajor: "#5F6F64",
+  sceneBg: "#18201B",
+  gridMinor: "#253029",
+  gridMajor: "#3A483F",
   keyLight: "#FFF4E2",
   fillLight: "#DCE6DE",
   hemiSky: "#F7F3E8",
-  hemiGround: "#2E3932",
+  hemiGround: "#0E1310",
 } as const;
 
 /**
