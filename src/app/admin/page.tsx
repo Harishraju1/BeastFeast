@@ -11,9 +11,10 @@ import { TOPICS, WEEKLY_MISSIONS_DEFAULT } from "@/lib/learning";
 import type { QuizQuestion } from "@/lib/learning/types";
 import { youtubeId } from "@/lib/youtube";
 import { AdminManagement } from "@/components/admin/AdminManagement";
+import { XpRulesEditor } from "@/components/admin/XpRulesEditor";
 import { ROLE_LABEL, isStaff } from "@/lib/roles";
 
-type Tab = "admins" | "students" | "components" | "learning" | "videos" | "missions" | "announcements" | "competitions" | "featured" | "analytics";
+type Tab = "admins" | "xp" | "students" | "components" | "learning" | "videos" | "missions" | "announcements" | "competitions" | "featured" | "analytics";
 const rid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 
 function Students() {
@@ -335,9 +336,10 @@ function Inner() {
     <div className="mx-auto max-w-7xl px-5 py-8">
       <PageHeader kicker={user?.role === "super_admin" ? "SUPER ADMIN · ROBOTICS CLUB KKH" : "ADMIN · ROBOTICS CLUB KKH"} title="Admin Dashboard" />
       <div className="mb-5 overflow-x-auto">
-        <Tabs value={tab} onChange={setTab} items={(["admins", "students", "components", "learning", "videos", "missions", "announcements", "competitions", "featured", "analytics"] as Tab[]).map((t) => ({ value: t, label: t === "admins" ? "Admin Management" : t[0].toUpperCase() + t.slice(1) }))} />
+        <Tabs value={tab} onChange={setTab} items={(["admins", "xp", "students", "components", "learning", "videos", "missions", "announcements", "competitions", "featured", "analytics"] as Tab[]).map((t) => ({ value: t, label: t === "admins" ? "Admin Management" : t === "xp" ? "XP Rules" : t[0].toUpperCase() + t.slice(1) }))} />
       </div>
       {tab === "admins" && <AdminManagement />}
+      {tab === "xp" && <XpRulesEditor />}
       {tab === "students" && <Students />}
       {tab === "components" && <Components />}
       {tab === "learning" && <Learning />}

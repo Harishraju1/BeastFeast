@@ -2,7 +2,7 @@
 import { create } from "zustand";
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Progress, type XpEventType, getBackend } from "@/lib/data";
+import { type AdminContent, type LearningActivityKind, type Progress, type XpEventType, getBackend } from "@/lib/data";
 import { EMPTY_CONTENT } from "@/lib/data/local";
 import { setCatalogueOverrides } from "@/lib/catalogue";
 import { REFERENCE_MUTABLE_FIELDS, buildFromTemplate, getTemplate } from "@/lib/garage";
@@ -53,6 +53,8 @@ interface AppState {
 
   updateProgress(fn: (p: Progress) => Progress): Promise<void>;
   award(type: XpEventType, refId: string, amount?: number): Promise<number>;
+  /** Marks today as a learning day (topic studied, video watched) so the daily penalty doesn't apply. */
+  recordActivity(kind: LearningActivityKind, ref: string): Promise<void>;
   saveContent(c: Partial<AdminContent>): Promise<void>;
   toast(kind: Toast["kind"], text: string): void;
   dismissToast(id: number): void;
@@ -94,6 +96,17 @@ export const useApp = create<AppState>((set, get) => ({
     if (user) {
       const [projects, tracks, progress] = await Promise.all([be.listProjects(user.id), be.listTracks(user.id), be.getProgress(user.id)]);
       set({ user, projects, tracks, progress, content, ready: true, lastProjectId: last && projects.some((p) => p.id === last) ? last : projects[0]?.id ?? null });
+      // settle the daily learning penalty for past days (computed on the server in cloud mode)
+      try {
+        const pen = await be.applyInactivityPenalties();
+        if (pen.deducted > 0) {
+          const fresh = await be.currentUser();
+          if (fresh) set({ user: fresh });
+          get().toast("error", `−${pen.deducted} XP: ${pen.days} day${pen.days === 1 ? "" : "s"} without Beast Topics or quizzes. Study a topic or take a quiz each day to keep your XP.`);
+        }
+      } catch (e) {
+        console.warn("Inactivity check failed", e);
+      }
     } else set({ user: null, ready: true, content });
   },
   async signIn(email, password) {
@@ -129,7 +142,7 @@ export const useApp = create<AppState>((set, get) => ({
     } catch {
       /* ignore */
     }
-    if (opts.award !== false) await get().award("project-created", p.id);
+    void opts; // creating or opening a project earns no XP — XP comes from designing, coding and simulating
   },
 
   async loadTemplate(templateId, mode) {
@@ -272,6 +285,14 @@ export const useApp = create<AppState>((set, get) => ({
     } catch (e) {
       console.warn("XP award failed", e);
       return 0;
+    }
+  },
+  async recordActivity(kind, ref) {
+    if (!get().user) return;
+    try {
+      await (await getBackend()).recordActivity(kind, ref);
+    } catch (e) {
+      console.warn("Activity not recorded", e);
     }
   },
   async saveContent(c) {

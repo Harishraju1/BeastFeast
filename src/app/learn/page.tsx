@@ -11,7 +11,7 @@ import { embedUrl, youtubeId } from "@/lib/youtube";
 
 function Inner() {
   const sp = useSearchParams();
-  const { progress, content, updateProgress, user } = useApp();
+  const { progress, content, updateProgress, user, recordActivity } = useApp();
   const [tab, setTab] = useState<"topics" | "videos">(sp.get("tab") === "videos" ? "videos" : "topics");
   const [path, setPath] = useState<PathId>((sp.get("path") as PathId) ?? "line");
   const [vcat, setVcat] = useState("All");
@@ -100,7 +100,10 @@ function Inner() {
                   key={v.id}
                   onClick={() => {
                     setPlaying(v.id);
-                    if (user) void updateProgress((p) => ({ ...p, watchedVideos: [...new Set([...p.watchedVideos, v.id])] }));
+                    if (user) {
+                      void updateProgress((p) => ({ ...p, watchedVideos: [...new Set([...p.watchedVideos, v.id])] }));
+                      void recordActivity("video", v.id);
+                    }
                   }}
                   className="overflow-hidden rounded-lg border border-line text-left hover:border-accent"
                 >

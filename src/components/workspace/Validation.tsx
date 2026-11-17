@@ -10,7 +10,7 @@ import { Button } from "@/components/ui";
 
 /** Runs the real validation engine with a scanning animation that walks over every component. */
 export function useValidate(project: Project | undefined) {
-  const { user, updateProject, award, content } = useApp();
+  const { user, updateProject, award, content, toast } = useApp();
   const ws = useWorkspace();
   return async () => {
     if (!project) return;
@@ -25,7 +25,10 @@ export function useValidate(project: Project | undefined) {
     const report = validateProject(project, user?.name ?? "Engineer", { maxLength_mm: r.maxLength_mm, maxWidth_mm: r.maxWidth_mm, maxMass_g: r.maxMass_g });
     updateProject(project.id, (p) => ({ ...p, validation: { ...report, fingerprint: designFingerprint(project) } }), { history: false });
     ws.set({ scanning: false, scanPart: null, reportOpen: true });
-    if (report.passed) await award("validation-pass", project.id);
+    if (report.passed) {
+      if (project.origin) toast("info", "Design passes — Garage designs don't earn design XP. Build your own robot to earn it.");
+      else await award("validation-pass", project.id);
+    }
   };
 }
 

@@ -64,9 +64,9 @@ async function setup() {
   const wires = await admin.from("circuit_connections").select("id", { count: "exact", head: true }).eq("project_id", proj.id);
   check("project trigger fills the normalised tables", (asm.count ?? 0) === proj.parts.length && (wires.count ?? 0) === proj.wires.length, `${asm.count} assemblies, ${wires.count} connections`);
 
-  const x1 = await be.awardXp(A.id, "project-created", proj.id);
-  const x2 = await be.awardXp(A.id, "project-created", proj.id);
-  check("award_xp uses server amount and ignores duplicates", x1.awarded === 10 && x2.awarded === 0 && x2.total === 10, `${x1.awarded} then ${x2.awarded}, total ${x2.total}`);
+  const x1 = await be.awardXp(A.id, "validation-pass", proj.id);
+  const x2 = await be.awardXp(A.id, "validation-pass", proj.id);
+  check("award_xp uses server amount and ignores duplicates", x1.awarded === 60 && x2.awarded === 0 && x2.total === 60, `${x1.awarded} then ${x2.awarded}, total ${x2.total}`);
   let refused = false;
   try {
     await be.awardXp(A.id, "quiz-pass", "fake");
@@ -95,7 +95,7 @@ async function setup() {
   const sbA = (be as unknown as { sb: SupabaseClient }).sb;
   await sbA.from("profiles").update({ role: "admin", xp: 99999 }).eq("id", A.id);
   const after = await be.currentUser();
-  const expectedXp = 10 + q1.xpAwarded + 20;
+  const expectedXp = 60 + q1.xpAwarded + 20;
   check("student can rename but not make themselves admin or set XP", after?.name === "Smoke A2" && after.role === "student" && after.xp === expectedXp, `${after?.role}, ${after?.xp} XP (expected ${expectedXp})`);
 
   await be.saveTrack({ id: `trk-smoke-${Date.now()}`, ownerId: A.id, name: "Smoke loop", kind: "line", difficulty: "beginner" } as never);

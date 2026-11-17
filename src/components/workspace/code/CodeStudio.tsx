@@ -18,6 +18,7 @@ import { Button, Modal, Tabs } from "@/components/ui";
 import { IssueCard } from "../Validation";
 import { explainCode } from "@/lib/code/explain";
 import { useArenaHex } from "@/lib/store/hex";
+import { checkOriginality } from "@/lib/code/originality";
 
 loader.config({ paths: { vs: "/monaco/vs" } });
 
@@ -60,7 +61,7 @@ function formatCode(src: string): string {
 }
 
 export default function CodeStudio({ project }: { project: Project }) {
-  const { updateProject, award, user } = useApp();
+  const { updateProject, award, user, toast } = useApp();
   const ws = useWorkspace();
   const { hex, setHex } = useArenaHex();
   const [code, setCode] = useState(project.code);
@@ -117,7 +118,11 @@ export default function CodeStudio({ project }: { project: Project }) {
     const ok = r.ok && !all.some((i) => i.severity === "critical");
     updateProject(project.id, (p) => ({ ...p, code, codeCheck: { at: new Date().toISOString(), ok, issues: all, fingerprint: designFingerprint(p) } }), { history: false });
     setTab("check");
-    if (ok) await award("code-check-pass", project.id);
+    if (ok) {
+      const own = checkOriginality(code);
+      if (own.original) await award("code-check-pass", project.id);
+      else toast("info", `Code matches the circuit, but no XP: ${own.reason}`);
+    }
     const m = monacoRef.current,
       ed = editorRef.current;
     if (m && ed?.getModel()) {

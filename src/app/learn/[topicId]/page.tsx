@@ -14,7 +14,13 @@ import { embedUrl, youtubeId } from "@/lib/youtube";
 export default function TopicPage() {
   const { topicId } = useParams<{ topicId: string }>();
   const t = getTopic(topicId);
-  const { user, progress, updateProgress, award, content } = useApp();
+  const { user, progress, updateProgress, award, content, recordActivity } = useApp();
+  useEffect(() => {
+    if (!user || !t) return;
+    const timer = setTimeout(() => void recordActivity("topic", t.id), 60_000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t?.id, user?.id]);
   useEffect(() => {
     if (user && t && progress && progress.lastTopic !== t.id) void updateProgress((p) => ({ ...p, lastTopic: t.id }));
     // eslint-disable-next-line react-hooks/exhaustive-deps

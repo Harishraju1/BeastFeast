@@ -22,6 +22,7 @@ import { TrackScene } from "@/components/three/TrackScene";
 import { Badge, Button, Tabs } from "@/components/ui";
 import { isTypingTarget } from "@/lib/keyboard";
 import { THEME } from "@/lib/theme";
+import { checkOriginality } from "@/lib/code/originality";
 
 type Cam = "robot" | "free" | "top" | "side";
 type RunState = "idle" | "running" | "paused" | "finished" | "error";
@@ -88,7 +89,7 @@ function CameraRig({ mode, snap, center }: { mode: Cam; snap: React.RefObject<Sn
 }
 
 export default function Arena({ project }: { project: Project }) {
-  const { tracks, updateProject, award, user, updateProgress, progress, content } = useApp();
+  const { tracks, updateProject, award, user, updateProgress, progress, content, toast } = useApp();
   const hex = useArenaHex((s) => (s.hex?.projectId === project.id ? s.hex : null));
   const allTracks = useMemo(() => [...EXAMPLE_TRACKS, ...tracks].filter((t) => t.kind === project.competition), [tracks, project.competition]);
   const [trackId, setTrackId] = useState<string>(project.trackId && allTracks.some((t) => t.id === project.trackId) ? project.trackId : allTracks[0]?.id);
@@ -181,19 +182,23 @@ export default function Arena({ project }: { project: Project }) {
         ghost: bestLap ? s.samples.filter((_, i) => i % 2 === 0).map((x) => ({ t: x.t, x: x.x, y: x.y, h: x.h })) : undefined,
       };
       updateProject(project.id, (p) => ({ ...p, trackId: track.id, simulations: [...p.simulations.slice(-19), r] }), { history: false });
-      await award("simulation-first", project.id);
-      if (outcome === "completed") await award("lap-complete", `${project.id}:${track.id}`);
-      if (outcome === "win" && track.kind === "sumo") await award("sumo-win", `${track.id}:${level}`);
+      // XP only for results achieved by the student's OWN code (not templates, Garage firmware or keyboard driving)
+      const own = mode === "code" ? checkOriginality(project.code) : null;
+      const earns = !!own?.original;
+      if ((outcome === "completed" || outcome === "win") && !earns)
+        toast("info", mode === "code" ? `Great run — no XP: ${own!.reason}` : "Great run — XP is earned by completing tracks with your own code, not keyboard control.");
+      if (earns && outcome === "completed") await award("lap-complete", `${project.id}:${track.id}`);
+      if (earns && outcome === "win" && track.kind === "sumo") await award("sumo-win", `${track.id}:${level}`);
       if (progress && bestLap) {
         const prev = progress.records[track.id]?.bestLapS;
         if (prev === undefined || bestLap < prev - 0.01) {
           await updateProgress((pr) => ({ ...pr, records: { ...pr.records, [track.id]: { ...pr.records[track.id], bestLapS: bestLap } } }));
-          if (prev !== undefined) await award("record-improved", `${track.id}:${bestLap.toFixed(2)}`);
+          if (prev !== undefined && earns) await award("record-improved", `${track.id}:${bestLap.toFixed(2)}`);
         }
       }
       if (outcome === "win") await updateProgress((pr) => ({ ...pr, records: { ...pr.records, [track.id]: { ...pr.records[track.id], wins: (pr.records[track.id]?.wins ?? 0) + 1 } } }));
     },
-    [track, mode, project.id, updateProject, award, level, progress, updateProgress],
+    [track, mode, project.id, project.code, updateProject, award, level, progress, updateProgress, toast],
   );
 
   // main loop: fixed physics steps, decoupled from rendering

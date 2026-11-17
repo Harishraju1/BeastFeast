@@ -7,7 +7,7 @@ import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import type { AdminContent, Backend, Progress, QuizAttempt, RoleAuditEntry, StaffAccount, XpEvent, XpEventType } from "./types";
+import { type AdminContent, type Backend, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, defaultXpConfig } from "./types";
 import { EMPTY_CONTENT } from "./local";
 
 interface ProfileRow {
@@ -156,6 +156,27 @@ export class SupabaseBackend implements Backend {
     let q = this.sb.from("xp_events").select("*");
     if (userId) q = q.eq("user_id", userId);
     return (check(await q) as Record<string, unknown>[]).map((e): XpEvent => ({ id: String(e.id), userId: String(e.user_id), type: e.type as XpEventType, refId: String(e.ref_id), amount: Number(e.amount), at: String(e.at) }));
+  }
+  async getXpConfig(): Promise<XpConfig> {
+    const cfg = defaultXpConfig();
+    const rows = check(await this.sb.from("xp_rules").select("type, amount, max_per_user")) as { type: XpEventType; amount: number; max_per_user: number | null }[];
+    for (const r of rows) if (r.type in cfg.rules) cfg.rules[r.type] = { amount: r.amount, limit: r.max_per_user };
+    const s = check(await this.sb.from("xp_settings").select("value").eq("key", "penalty").maybeSingle()) as { value: Partial<XpConfig["penalty"]> } | null;
+    if (s?.value) cfg.penalty = { ...cfg.penalty, ...s.value };
+    return cfg;
+  }
+  async saveXpConfig(cfg: XpConfig) {
+    // RLS: only admins can write xp_rules / xp_settings; the server functions read these amounts
+    const rows = Object.entries(cfg.rules).map(([type, v]) => ({ type, amount: Math.round(v.amount), max_per_user: v.limit }));
+    check(await this.sb.from("xp_rules").upsert(rows));
+    check(await this.sb.from("xp_settings").upsert({ key: "penalty", value: cfg.penalty, updated_at: new Date().toISOString() }));
+  }
+  async recordActivity(kind: LearningActivityKind, ref: string) {
+    check(await this.sb.rpc("record_learning_activity", { p_kind: kind, p_ref: ref }));
+  }
+  async applyInactivityPenalties() {
+    const rows = check(await this.sb.rpc("apply_inactivity_penalties")) as { deducted: number; days: number }[];
+    return rows?.[0] ?? { deducted: 0, days: 0 };
   }
   async submitQuiz(_userId: string, quizId: string, answers: Record<string, number>): Promise<QuizAttempt> {
     const a = check(await this.sb.rpc("submit_quiz", { p_quiz: quizId, p_answers: answers })) as Record<string, unknown>;

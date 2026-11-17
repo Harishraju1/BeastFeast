@@ -100,10 +100,10 @@ function Inner() {
           </Panel>
           <Panel title="XP history">
             <div className="max-h-64 overflow-auto text-xs">
-              {[...events].reverse().map((e) => (
-                <div key={e.id} className="flex justify-between border-b border-line/60 py-1">
-                  <span>{XP_RULES[e.type].label} <span className="text-dim">({e.refId})</span></span>
-                  <span className="font-mono text-accent-ink">+{e.amount}</span>
+              {[...events].filter((e) => e.amount !== 0).reverse().map((e) => (
+                <div key={e.id} className="flex justify-between gap-3 border-b border-line/60 py-1">
+                  <span>{XP_RULES[e.type]?.label ?? e.type} <span className="text-dim">({e.refId})</span></span>
+                  <span className={`font-mono ${e.amount < 0 ? "text-bad" : "text-ok"}`}>{e.amount > 0 ? "+" : "−"}{Math.abs(e.amount)}</span>
                 </div>
               ))}
               {!events.length && <div className="text-muted">No XP yet. XP is earned for learning, passing quizzes, validating robots and completing simulations — not for visiting pages.</div>}

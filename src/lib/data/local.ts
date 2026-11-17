@@ -6,7 +6,7 @@
  */
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Backend, DEFAULT_RULES, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, XP_RULES, type XpEvent, type XpEventType } from "./types";
+import { type AdminContent, type Backend, DEFAULT_RULES, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, defaultXpConfig } from "./types";
 import { isStaff, isSuperAdmin } from "@/lib/roles";
 import { gradeQuiz } from "./grading";
 
@@ -19,7 +19,25 @@ const K = {
   xp: "bf5.xp",
   content: "bf5.content",
   roleAudit: "bf5.roleAudit",
+  activity: "bf5.activity",
 };
+
+interface ActivityRow {
+  userId: string;
+  day: string;
+  kind: LearningActivityKind;
+  ref: string;
+}
+
+/** Calendar day (YYYY-MM-DD) in the configured time zone. */
+function dayIn(tz: string, d: Date = new Date()) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
+}
+const addDays = (day: string, n: number) => new Date(Date.parse(day + "T00:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 
 interface Account {
   profile: Profile;
@@ -196,26 +214,89 @@ export class LocalBackend implements Backend {
   }
 
   async awardXp(userId: string, type: XpEventType, refId: string, amount?: number) {
+    if (type === "inactivity-penalty") throw new Error("Penalties are applied automatically.");
     const events = read<XpEvent[]>(K.xp, []);
-    const rule = XP_RULES[type];
+    const rule = (await this.getXpConfig()).rules[type];
     const value = type === "question-correct" ? Math.max(0, Math.min(15, amount ?? 0)) : rule.amount;
     const mine = events.filter((e) => e.userId === userId);
     const dup = mine.some((e) => e.type === type && e.refId === refId);
-    const overLimit = rule.limit !== undefined && mine.filter((e) => e.type === type).length >= rule.limit;
+    const overLimit = rule.limit !== null && mine.filter((e) => e.type === type).length >= rule.limit;
     let awarded = 0;
     if (!dup && !overLimit && value > 0) {
       events.push({ id: rid("xp"), userId, type, refId, amount: value, at: new Date().toISOString() });
       write(K.xp, events);
       awarded = value;
     }
-    const total = events.filter((e) => e.userId === userId).reduce((a, e) => a + e.amount, 0);
+    if (type === "lesson-complete") await this.recordActivity("lesson", refId);
+    return { awarded, total: this.recomputeXp(userId) };
+  }
+
+  /** Total XP from events, never below 0, written to the profile. */
+  private recomputeXp(userId: string) {
+    const total = Math.max(0, read<XpEvent[]>(K.xp, []).filter((e) => e.userId === userId).reduce((a, e) => a + e.amount, 0));
     const accounts = this.accounts();
     const acc = accounts.find((a) => a.profile.id === userId);
-    if (acc) {
+    if (acc && acc.profile.xp !== total) {
       acc.profile.xp = total;
       write(K.accounts, accounts);
     }
-    return { awarded, total };
+    return total;
+  }
+
+  async getXpConfig(): Promise<XpConfig> {
+    const base = defaultXpConfig();
+    const saved = (await this.getContent()).xpConfig;
+    return saved ? { rules: { ...base.rules, ...saved.rules }, penalty: { ...base.penalty, ...saved.penalty } } : base;
+  }
+
+  async saveXpConfig(cfg: XpConfig) {
+    await this.saveContent({ xpConfig: cfg }); // saveContent enforces admin access
+  }
+
+  async recordActivity(kind: LearningActivityKind, ref: string) {
+    const me = await this.currentUser();
+    if (!me) return;
+    const { penalty } = await this.getXpConfig();
+    const day = dayIn(penalty.timezone);
+    const rows = read<ActivityRow[]>(K.activity, []);
+    if (!rows.some((r) => r.userId === me.id && r.day === day && r.kind === kind && r.ref === ref)) write(K.activity, [...rows, { userId: me.id, day, kind, ref }]);
+  }
+
+  /** Same rules as the Supabase apply_inactivity_penalties() function. */
+  async applyInactivityPenalties() {
+    const me = await this.currentUser();
+    const cfg = await this.getXpConfig();
+    const pen = cfg.rules["inactivity-penalty"].amount;
+    if (!me || !cfg.penalty.enabled || pen <= 0 || isStaff(me.role)) return { deducted: 0, days: 0 };
+    const tz = cfg.penalty.timezone;
+    const today = dayIn(tz);
+    const created = dayIn(tz, new Date(me.createdAt));
+    const floor = addDays(today, -cfg.penalty.maxDaysBack);
+    let d = [addDays(created, 1), cfg.penalty.start || today, floor].sort().pop()!;
+    const activity = new Set(read<ActivityRow[]>(K.activity, []).filter((r) => r.userId === me.id).map((r) => r.day));
+    const progress = await this.getProgress(me.id);
+    for (const a of progress.quizAttempts) activity.add(dayIn(tz, new Date(a.at)));
+    let deducted = 0;
+    let days = 0;
+    while (d < today) {
+      const events = read<XpEvent[]>(K.xp, []);
+      const mine = events.filter((e) => e.userId === me.id);
+      const learned = mine.some((e) => (e.type === "lesson-complete" || e.type === "question-correct" || e.type === "quiz-pass") && dayIn(tz, new Date(e.at)) === d);
+      const settled = mine.some((e) => e.type === "inactivity-penalty" && e.refId === d);
+      if (!settled && !learned && !activity.has(d)) {
+        const total = Math.max(0, mine.reduce((a, e) => a + e.amount, 0));
+        const v = Math.min(pen, total);
+        events.push({ id: rid("xp"), userId: me.id, type: "inactivity-penalty", refId: d, amount: -v, at: new Date().toISOString() });
+        write(K.xp, events);
+        if (v > 0) {
+          deducted += v;
+          days++;
+        }
+      }
+      d = addDays(d, 1);
+    }
+    this.recomputeXp(me.id);
+    return { deducted, days };
   }
 
   async listXpEvents(userId?: string) {
@@ -232,6 +313,7 @@ export class LocalBackend implements Backend {
       xp += (await this.awardXp(userId, "question-correct", qid, q?.xp ?? 0)).awarded;
     }
     if (g.passed) xp += (await this.awardXp(userId, "quiz-pass", quizId)).awarded;
+    await this.recordActivity("quiz", quizId);
     const attempt: QuizAttempt = { id: rid("qa"), quizId, at: new Date().toISOString(), answers, correct: g.correct, total: g.total, percent: g.percent, passed: g.passed, xpAwarded: xp };
     progress.correctQuestions = [...new Set([...progress.correctQuestions, ...g.newlyCorrect])];
     progress.quizAttempts = [...progress.quizAttempts, attempt];
