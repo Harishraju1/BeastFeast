@@ -1,8 +1,14 @@
 "use client";
 import { useApp } from "@/lib/store/app";
 
-export function Toasts() {
+/**
+ * Floating notices for normal pages. On canvas pages (workspace, track editor) the shell shows the newest
+ * notice inside the header instead, so nothing ever covers the canvas; every notice is also kept in the
+ * notification panel (bell).
+ */
+export function Toasts({ hidden = false }: { hidden?: boolean }) {
   const { toasts, dismissToast } = useApp();
+  if (hidden) return null;
   return (
     <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-2" aria-live="polite">
       {toasts.map((t) => (

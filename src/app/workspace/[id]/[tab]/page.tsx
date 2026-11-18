@@ -2,8 +2,9 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { History, Redo2, Save, ScanLine, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { History, Maximize2, Minimize2, Redo2, Save, ScanLine, Undo2 } from "lucide-react";
+import { InlineNotice, NotificationBell } from "@/components/shell/Notifications";
 import { RequireAuth } from "@/components/shell/AppShell";
 import { Badge, Button, Empty, Modal, Spinner } from "@/components/ui";
 import { useApp } from "@/lib/store/app";
@@ -78,6 +79,36 @@ function WorkspaceInner() {
   const [versionsOpen, setVersionsOpen] = useState(false);
   const snapshotVersion = useApp((s) => s.snapshotVersion);
 
+  // Full screen: the browser's fullscreen mode where available, otherwise the workspace fills the window
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
+  const toggleFull = useCallback(() => {
+    if (!full) {
+      setFull(true);
+      const el = rootRef.current;
+      if (el?.requestFullscreen && !document.fullscreenElement) void el.requestFullscreen().catch(() => {});
+    } else {
+      setFull(false);
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    }
+  }, [full]);
+  useEffect(() => {
+    // leaving browser fullscreen with Esc / F11 also leaves our full-screen layout
+    const onChange = () => {
+      if (!document.fullscreenElement) setFull(false);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  useEffect(() => {
+    if (!full) return;
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.fullscreenElement && !isTypingTarget(e.target)) setFull(false);
+    };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [full]);
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
@@ -90,17 +121,20 @@ function WorkspaceInner() {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void saveNow(id);
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        toggleFull();
       }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [id, undo, redo, saveNow]);
+  }, [id, undo, redo, saveNow, toggleFull]);
 
   if (!project) return <Empty title="Project not found" action={<Link className="text-accent-ink" href="/projects">Back to projects</Link>}>It may have been deleted, or it belongs to another account.</Empty>;
   const h = history[id];
 
   return (
-    <div className="relative flex h-[calc(100vh-56px)] flex-col">
+    <div ref={rootRef} className={`flex flex-col bg-bg ${full ? "fixed inset-0 z-[55] h-[100dvh]" : "relative h-[calc(100vh-56px)]"}`}>
       <div className="flex flex-wrap items-center gap-3 border-b border-line bg-bg2 px-3 py-1.5">
         <div className="flex items-center gap-2">
           <Badge tone="accent">{COMPETITIONS[project.competition].short}</Badge>
@@ -116,10 +150,16 @@ function WorkspaceInner() {
         </nav>
         <Pipeline project={project} />
         <div className="ml-auto flex items-center gap-1">
+          {full && <InlineNotice className="mr-1" />}
+          {full && <NotificationBell />}
           <Button size="sm" variant="ghost" title="Undo (Ctrl+Z)" disabled={!h?.past.length} onClick={() => undo(id)}><Undo2 size={14} /></Button>
           <Button size="sm" variant="ghost" title="Redo (Ctrl+Y)" disabled={!h?.future.length} onClick={() => redo(id)}><Redo2 size={14} /></Button>
           <Button size="sm" variant="ghost" title="Version history" onClick={() => setVersionsOpen(true)}><History size={14} /></Button>
           <Button size="sm" variant="ghost" title="Save now (Ctrl+S)" onClick={() => void saveNow(id)} disabled={saveState === "saving"}><Save size={14} /></Button>
+          <Button size="sm" variant={full ? "secondary" : "ghost"} title={full ? "Exit full screen (Esc)" : "Full screen (Ctrl+Shift+F)"} aria-pressed={full} onClick={toggleFull}>
+            {full ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            <span className="hidden lg:inline">{full ? "Exit full screen" : "Full screen"}</span>
+          </Button>
           {(tab === "design" || tab === "circuit") && (
             <Button size="sm" variant="primary" disabled={scanning} onClick={() => void validate()}>
               <ScanLine size={14} /> VALIDATE MY ROBOT

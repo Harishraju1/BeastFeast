@@ -105,6 +105,8 @@ Local mode (no Supabase) applies the same rules in the browser, and the first ac
 - **Private details:** phone, NIAT ID and any earlier student ID live in `profile_private`, which only the student and administrators can read.
   - IDs entered before the format was enforced are kept as a *legacy* ID. All existing IDs already matched N00H01X0000 and became NIAT IDs (migration 0011).
   - Accounts that have neither ID see a one-time "Complete your account" prompt.
+- **Announcements & notifications:** `/announcements` lists club news and videos (posted from Admin). The bell opens a side panel with announcements, new videos and recent activity. On canvas pages (workspace, track editor) messages appear in the header or workspace toolbar, never over the canvas.
+- **Workspace:** Full screen button (Ctrl+Shift+F) in every workspace tool. The side menu can be hidden (header button, Ctrl+\\).
 - **Forgot password:** "Forgot password?" on the sign-in page emails a reset link (Supabase Auth). The link opens `/reset-password`, where the student sets a new password.
 - **Profile pictures:** stored in the Supabase Storage bucket `avatars`, in `avatars/<user id>/`, which only that user can write to. They are uploaded through `/api/avatar`, which decodes, resizes and re-encodes every image (JPEG/PNG/WebP, ≤ 5 MB) and is rate limited.
 - **Admin → User Management:** search by name, email, NIAT ID or phone; filter by role, status and rank; page through results; open a detail panel with contact details, rank and recent XP. Data comes from `admin_list_users()`, which only administrators can call.

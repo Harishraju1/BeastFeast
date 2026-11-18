@@ -46,33 +46,33 @@
   --night-700: #27322b; /* nested / hover surfaces */
   --signal-red-bright: #ff4d42; /* Signal Red for text & icons on dark (5.4:1) */
 
-  /* semantic roles — components use these (Forest Sage context) */
-  --bg: var(--forest-sage); /* page */
-  --bg2: var(--sage-750); /* recessed wells, tables heads, canvases */
-  --panel: var(--sage-550); /* cards & panels, a step lighter than the page */
-  --panel2: var(--sage-500); /* nested / hover surfaces */
-  --line: rgba(241, 238, 227, 0.14); /* ivory hairline on sage */
-  --line2: rgba(241, 238, 227, 0.28);
+  /* semantic roles — components use these (dark theme) */
+  --bg: var(--night-900); /* page */
+  --bg2: var(--night-850); /* recessed wells, table heads, canvases */
+  --panel: var(--night-800); /* cards & panels, a step lighter than the page */
+  --panel2: var(--night-700); /* nested / hover surfaces */
+  --line: rgba(241, 238, 227, 0.1); /* ivory hairline */
+  --line2: rgba(241, 238, 227, 0.22);
   --heading: var(--warm-ivory);
-  --text: var(--warm-ivory); /* 6.3:1 on Forest Sage */
-  --muted: #dbd9ce; /* 5.5:1 */
-  --dim: #c6cabf; /* 4.5:1, labels */
+  --text: var(--warm-ivory); /* ≈16:1 on the page */
+  --muted: #d3d2c7; /* ≈12:1 */
+  --dim: #a9b1a7; /* ≈7.5:1, labels */
   --accent: var(--signal-red-fill);
   --accent-hover: var(--signal-red-hover);
-  --accent-ink: var(--signal-red-text);
-  --brand: var(--warm-ivory); /* secondary emphasis on sage = ivory */
+  --accent-ink: var(--signal-red-bright);
+  --brand: var(--warm-ivory); /* secondary emphasis = ivory */
   --brand-hover: var(--ivory-300);
-  --on-brand: var(--forest-sage); /* text on an ivory (secondary) button */
+  --on-brand: var(--night-900); /* text on an ivory (secondary) button */
   --ok: #8fd3a5;
   --warn: #f2c46b;
-  --bad: var(--signal-red-text);
+  --bad: var(--signal-red-bright);
   --info: #a9d1e6;
-  --shadow-sm: 0 1px 2px rgba(20, 26, 22, 0.25);
-  --shadow-md: 0 1px 2px rgba(20, 26, 22, 0.2), 0 10px 24px -12px rgba(20, 26, 22, 0.55);
-  --shadow-lg: 0 2px 6px rgba(20, 26, 22, 0.25), 0 28px 56px -24px rgba(20, 26, 22, 0.7);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 24px -12px rgba(0, 0, 0, 0.65);
+  --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 28px 56px -24px rgba(0, 0, 0, 0.8);
 
   /* 3D viewports and drawings read these (see src/lib/theme.ts) */
-  --scene-bg: var(--sage-800);
+  --scene-bg: var(--night-850);
 }
 
 @theme inline {
@@ -111,9 +111,9 @@
 
 /* Deep-sage surfaces: sidebar and hero bands sit one step darker than the page. */
 .bf-on-sage {
-  --panel: rgba(241, 238, 227, 0.07);
-  --panel2: rgba(241, 238, 227, 0.12);
-  background-color: var(--sage-750);
+  --panel: rgba(241, 238, 227, 0.06);
+  --panel2: rgba(241, 238, 227, 0.1);
+  background-color: var(--night-950);
 }
 
 /* Warm Ivory surfaces (sign-in card, key information panels, schematic parts):
@@ -177,8 +177,8 @@
 /* engineering grid — fine sage lines on ivory */
 .bf-grid {
   background-image:
-    linear-gradient(rgba(241, 238, 227, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(241, 238, 227, 0.045) 1px, transparent 1px);
+    linear-gradient(rgba(241, 238, 227, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(241, 238, 227, 0.035) 1px, transparent 1px);
   background-size: 40px 40px;
   animation: bf-grid-move 40s linear infinite;
 }
@@ -332,7 +332,7 @@
 
 /* code & terminal blocks: deep forest ink with ivory type */
 .bf-code {
-  background: var(--sage-900);
+  background: var(--night-950);
   color: #ebe7da;
   border: 1px solid rgba(241, 238, 227, 0.1);
 }

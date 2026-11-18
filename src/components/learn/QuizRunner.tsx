@@ -141,7 +141,7 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
             aria-label={`Question ${n + 1}: ${st}`}
             aria-current={cur ? "step" : undefined}
             className={`h-8 w-8 rounded-md border font-mono text-xs transition ${cur ? "ring-2 ring-accent ring-offset-1 ring-offset-[var(--panel)]" : ""} ${
-              st === "answered" ? "border-ivory bg-ivory font-semibold text-[var(--forest-sage)]" : st === "skipped" ? "border-warn bg-warn/15 text-warn" : "border-line2 text-muted hover:border-ivory"
+              st === "answered" ? "border-ivory bg-ivory font-semibold text-[var(--night-900)]" : st === "skipped" ? "border-warn bg-warn/15 text-warn" : "border-line2 text-muted hover:border-ivory"
             }`}
           >
             {n + 1}

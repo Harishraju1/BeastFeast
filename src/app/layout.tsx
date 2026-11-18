@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "BEAST FEAST | Robotics Engineering Platform", description: DESCRIPTION },
 };
 
-export const viewport: Viewport = { themeColor: "#4B5A50", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#131A16", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

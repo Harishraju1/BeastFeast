@@ -207,16 +207,16 @@ export default function CodeStudio({ project }: { project: Project }) {
                   { token: "type", foreground: "A9D1E6" },
                 ],
                 colors: {
-                  "editor.background": "#36433A",
+                  "editor.background": "#18201B",
                   "editor.foreground": "#F1EEE3",
                   "editorLineNumber.foreground": "#8E9A90",
                   "editorLineNumber.activeForeground": "#F1EEE3",
-                  "editor.lineHighlightBackground": "#3E4B42",
+                  "editor.lineHighlightBackground": "#1E2721",
                   "editor.selectionBackground": "#F20B0B55",
                   "editorCursor.foreground": "#F20B0B",
-                  "editorGutter.background": "#36433A",
-                  "editorWidget.background": "#2E3932",
-                  "editorIndentGuide.background1": "#45534A",
+                  "editorGutter.background": "#18201B",
+                  "editorWidget.background": "#131A16",
+                  "editorIndentGuide.background1": "#27322B",
                 },
               });
               monaco.editor.setTheme("beast");

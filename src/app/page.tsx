@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { Avatar } from "@/components/profile/Avatar";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Award, Flame, PlayCircle, Trophy } from "lucide-react";
+import { ArrowRight, Award, Flame, Megaphone, PlayCircle, Trophy } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { getBackend } from "@/lib/data";
 import type { Profile } from "@/lib/types";
@@ -105,6 +105,19 @@ export default function Home() {
         )}
 
         {/* next steps: what to do now, from what the student has actually done */}
+        {content.announcements.length > 0 && (() => {
+          const a = [...content.announcements].sort((x, y) => y.at.localeCompare(x.at))[0];
+          return (
+            <Link href="/announcements" className="mb-6 flex items-start gap-3 rounded-lg border border-accent/60 bg-accent/10 px-4 py-3 hover:bg-accent/15">
+              <Megaphone size={20} className="mt-0.5 shrink-0 text-accent-ink" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{a.title}</span>
+                <span className="line-clamp-2 block text-xs text-muted">{a.body}</span>
+              </span>
+              <span className="hidden shrink-0 items-center gap-1 text-xs font-semibold text-accent-ink sm:flex">All announcements <ArrowRight size={13} /></span>
+            </Link>
+          );
+        })()}
         {user && <NextSteps projects={projects} progress={progress} events={events} />}
 
         {/* A. workspace stats */}
@@ -244,7 +257,7 @@ export default function Home() {
           </Panel>
 
           {/* G. competition updates */}
-          <Panel title="Competition Updates">
+          <Panel title="Announcements" actions={<LinkButton href="/announcements" size="sm">View all</LinkButton>}>
             {content.announcements.length === 0 ? (
               <div className="space-y-2 text-sm text-muted">
                 <div>No announcements yet.</div>

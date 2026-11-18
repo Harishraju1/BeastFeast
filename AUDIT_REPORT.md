@@ -188,6 +188,25 @@ See SECURITY_REPORT.md:
 - All 5 existing accounts' IDs already used this format, so they are now their NIAT IDs; the legacy copies are kept.
 - An old five-digit ID is now rejected by the database.
 
+### Follow-up 2 (same day, at the club's request)
+
+- **Dark background again:** the page is dark forest `#131A16`, with Forest Sage panels, Warm Ivory text and Signal Red accents. These are the dark tokens used before; the browser theme colour matches.
+- **Hide side menu:** the header button (and "Hide side menu" at the bottom of the menu, or Ctrl+\\) hides the menu on tablet and desktop, and the page uses the full width. The choice is remembered on the device. On phones the hamburger menu is unchanged.
+- **Full screen in the workspace:** a "Full screen" button (Ctrl+Shift+F) in Robot Designer, Circuit Studio, Code Studio and the Simulation Arena.
+  - It uses the browser's fullscreen mode where allowed and otherwise fills the window.
+  - Esc or "Exit full screen" leaves it.
+  - Validation reports and dialogs still appear in full screen.
+- **Notifications never cover the canvas:**
+  - On workspace and track-editor pages, messages appear as a small notice in the header (or in the workspace toolbar during full screen) instead of floating over the drawing area.
+  - Every message is also kept in the new notification panel.
+- **Notification panel (bell):** a side panel showing announcements, new videos and recent activity (XP, saves, validation), with an unread count. Opening it marks everything as read.
+- **Announcements:**
+  - a new `/announcements` page: club news filterable by type, plus all videos with a built-in player
+  - an "Announcements" item in the side menu (red dot when something is new)
+  - a banner for the newest announcement and an "Announcements" panel on the home page
+  - a footer link
+  - Admins post them from Admin → Announcements / Videos as before.
+
 ## Not changed, and why
 
 - **Phone verification:** numbers are format-checked, not verified by SMS. The UI says so.

@@ -6,7 +6,7 @@ import sidebarLogo from "@/assets/brand/beast-feast-sidebar.webp";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
-  Bot, BookOpen, Boxes, Cpu, LineChart, Warehouse, CircuitBoard, Code2, Crown, Gauge, HelpCircle, LayoutDashboard, LogOut, Map, Menu, Search, Settings, Shield, Swords, Trophy, User, Bell, Cloud, CloudOff, Loader2, Check,
+  Bot, BookOpen, Boxes, Cpu, LineChart, Warehouse, CircuitBoard, Code2, Crown, Gauge, HelpCircle, LayoutDashboard, LogOut, Map, Megaphone, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Shield, Swords, Trophy, User, Cloud, CloudOff, Loader2, Check,
 } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { BACKEND_MODE } from "@/lib/data";
@@ -16,18 +16,40 @@ import { CommandSearch } from "./CommandSearch";
 import { RankUpCelebration } from "@/components/ranks/RankUpCelebration";
 import { Avatar } from "@/components/profile/Avatar";
 import { CompleteDetailsPrompt } from "@/components/profile/CompleteDetailsPrompt";
+import { InlineNotice, NotificationBell, useUnread } from "./Notifications";
+
+const NAV_HIDDEN_KEY = "bf.navHidden";
 
 export function workspaceHref(lastProjectId: string | null, tab: "design" | "circuit" | "code" | "arena") {
   return lastProjectId ? `/workspace/${lastProjectId}/${tab}` : `/projects?next=${tab}`;
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { ready, init, user, lastProjectId, saveState, content, signOut } = useApp();
+  const { ready, init, user, lastProjectId, saveState, signOut } = useApp();
+  const unread = useUnread();
   const path = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
+  // "Hide side menu" (tablet/desktop) — remembered on this device
+  const [navHidden, setNavHidden] = useState(false);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restore the saved preference after hydration
+      setNavHidden(localStorage.getItem(NAV_HIDDEN_KEY) === "1");
+    } catch {
+      /* storage blocked */
+    }
+  }, []);
+  const toggleNav = () =>
+    setNavHidden((v) => {
+      try {
+        localStorage.setItem(NAV_HIDDEN_KEY, v ? "0" : "1");
+      } catch {
+        /* storage blocked */
+      }
+      return !v;
+    });
   useEffect(() => {
     void init();
   }, [init]);
@@ -36,6 +58,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setSearchOpen(true);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "\\") {
+        e.preventDefault();
+        toggleNav();
       }
     };
     window.addEventListener("keydown", h);
@@ -60,7 +86,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   // grouped navigation: what students do, in the order they usually do it
   type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; match?: string; highlight?: boolean; hint: string };
   const sections: { title: string | null; items: NavItem[] }[] = [
-    { title: null, items: [{ href: "/", label: "Command Center", icon: LayoutDashboard, hint: "Your dashboard and next steps" }] },
+    {
+      title: null,
+      items: [
+        { href: "/", label: "Command Center", icon: LayoutDashboard, hint: "Your dashboard and next steps" },
+        { href: "/announcements", label: "Announcements", icon: Megaphone, hint: "Club news, competitions and new videos" },
+      ],
+    },
     {
       title: "Learn",
       items: [
@@ -108,7 +140,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* tap outside the open mobile drawer to close it */}
       {mobileOpen && <div className="fixed inset-0 z-30 bg-[rgba(20,26,22,.55)] md:hidden" onClick={() => setMobileOpen(false)} aria-hidden />}
       {/* sidebar */}
-      <aside id="bf-main-nav" className={`fixed inset-y-0 left-0 z-40 bf-on-sage flex flex-col shadow-[1px_0_0_rgba(38,48,42,.25)] transition-all ${immersive ? "w-14" : "w-14 xl:w-56"} ${mobileOpen ? "!w-56 translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
+      <aside id="bf-main-nav" className={`fixed inset-y-0 left-0 z-40 bf-on-sage flex flex-col shadow-[1px_0_0_rgba(38,48,42,.25)] transition-all ${immersive ? "w-14" : "w-14 xl:w-56"} ${mobileOpen ? "!w-56 translate-x-0" : navHidden ? "-translate-x-full" : "-translate-x-full md:translate-x-0"}`}>
         {/* Brand: the full logo when the sidebar is open, the gear-and-panther mark when it is collapsed */}
         <Link href="/" aria-label="BEAST FEAST — Robotics Club KKH, home" className="flex min-h-14 items-center justify-center border-b border-line px-2 py-2 xl:py-3.5">
           <Image src={mark} alt="" unoptimized className={`h-10 w-10 shrink-0 object-contain ${immersive && !mobileOpen ? "" : "xl:hidden"} ${mobileOpen ? "!hidden" : ""}`} sizes="40px" priority />
@@ -128,6 +160,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   return (
                     <Link key={n.label} href={n.href} aria-current={active ? "page" : undefined} title={`${n.label} — ${n.hint}`} className={`group relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors duration-150 ${active ? "bg-panel2 font-medium text-text before:absolute before:inset-y-1.5 before:-left-2 before:w-[3px] before:rounded-r before:bg-accent" : "highlight" in n && n.highlight ? "border border-accent/70 text-text hover:bg-panel" : "text-muted hover:bg-panel hover:text-text"}`}>
                 <Icon size={18} className={`shrink-0 ${active || ("highlight" in n && n.highlight) ? "text-accent-ink" : ""}`} />
+                {n.href === "/announcements" && unread.announcements + unread.videos > 0 && <span className="absolute left-6 top-1.5 h-2 w-2 rounded-full bg-accent" aria-label="New announcements" />}
                 <span className={`truncate ${immersive && !mobileOpen ? "hidden" : "hidden xl:inline"} ${mobileOpen ? "!inline" : ""}`}>{n.label}</span>
               </Link>
                   );
@@ -137,21 +170,29 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="border-t border-line p-2">
+          <button onClick={toggleNav} className="hidden w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm text-muted hover:bg-panel hover:text-text md:flex" title="Hide side menu (Ctrl+\)">
+            <PanelLeftClose size={18} className="shrink-0" />
+            <span className={`${immersive && !mobileOpen ? "hidden" : "hidden xl:inline"}`}>Hide side menu</span>
+          </button>
           <div className={`px-2 py-1 font-mono text-[9px] tracking-widest ${BACKEND_MODE === "local" ? "text-warn" : "text-ok"} ${immersive ? "hidden" : "hidden xl:block"}`}>{BACKEND_MODE === "local" ? "LOCAL MODE · THIS DEVICE" : "CLOUD SYNC · SUPABASE"}</div>
         </div>
       </aside>
 
-      <div className={`flex min-w-0 flex-1 flex-col md:pl-14 ${immersive ? "" : "xl:pl-56"}`}>
+      <div className={`flex min-w-0 flex-1 flex-col transition-[padding] ${navHidden ? "" : `md:pl-14 ${immersive ? "" : "xl:pl-56"}`}`}>
         {/* top bar */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/90 px-3 backdrop-blur-md md:px-5">
           <button className="text-muted md:hidden" onClick={() => setMobileOpen((v) => !v)} aria-label={mobileOpen ? "Close menu" : "Open menu"} aria-expanded={mobileOpen} aria-controls="bf-main-nav">
             <Menu size={20} />
+          </button>
+          <button className="hidden rounded-md p-1.5 text-muted hover:bg-panel hover:text-text md:inline-flex" onClick={toggleNav} aria-label={navHidden ? "Show side menu" : "Hide side menu"} aria-pressed={navHidden} title={`${navHidden ? "Show" : "Hide"} side menu (Ctrl+\\)`}>
+            {navHidden ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
           </button>
           <button onClick={() => setSearchOpen(true)} className="flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-lg border border-line bg-bg2 px-3 py-1.5 text-left text-sm text-dim shadow-[var(--shadow-sm)] transition-colors hover:border-line2">
             <Search size={15} />
             <span className="truncate">Search components, topics, projects…</span>
             <kbd className="ml-auto hidden rounded border border-line px-1.5 font-mono text-[10px] sm:inline">Ctrl K</kbd>
           </button>
+          {immersive && <InlineNotice className="hidden sm:flex" />}
           <div className="ml-auto flex items-center gap-1">
             {path.startsWith("/workspace/") && (
               <span className="mr-2 hidden items-center gap-1.5 text-xs text-muted sm:flex" title="Autosave status">
@@ -159,24 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {saveText}
               </span>
             )}
-            <div className="relative">
-              <button className="rounded-md p-2 text-muted hover:bg-panel hover:text-text" aria-label="Notifications" onClick={() => setNotifOpen((v) => !v)}>
-                <Bell size={18} />
-                {content.announcements.length > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />}
-              </button>
-              {notifOpen && (
-                <div className="bf-panel bf-raised absolute right-0 top-11 w-[min(20rem,calc(100vw-1.5rem))] p-3 text-sm">
-                  <div className="bf-label mb-2">Announcements</div>
-                  {content.announcements.length === 0 && <div className="text-muted">No announcements yet.</div>}
-                  {content.announcements.slice(-5).reverse().map((a) => (
-                    <div key={a.id} className="border-t border-line py-2 first:border-0">
-                      <div className="font-medium">{a.title}</div>
-                      <div className="text-xs text-muted">{a.body}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <NotificationBell />
             {isStaff(user?.role) && (
               <Link href="/admin" className={`rounded-md p-2 hover:bg-panel ${path.startsWith("/admin") ? "text-accent-ink" : "text-muted hover:text-text"}`} aria-label="Admin dashboard" title="Admin dashboard">
                 <Shield size={18} />
@@ -222,7 +246,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1">{children}</main>
         {!immersive && <SiteFooter />}
       </div>
-      <Toasts />
+      <Toasts hidden={immersive} />
       <RankUpCelebration />
       <CompleteDetailsPrompt />
       <CommandSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -254,6 +278,7 @@ const CONTACT_EMAIL = "roboticsclubniat@gmail.com";
 function SiteFooter() {
   const links = [
     { href: "/", label: "Home" },
+    { href: "/announcements", label: "Announcements" },
     { href: "/learn", label: "Learning Academy" },
     { href: "/challenges", label: "Challenges" },
     { href: "/library", label: "Component Library" },

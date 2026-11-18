@@ -16,6 +16,12 @@ export interface Toast {
   text: string;
 }
 
+/** Everything that was shown as a notice, kept for the notification panel (this session, newest first). */
+export interface Notice extends Toast {
+  at: string;
+  read: boolean;
+}
+
 interface AppState {
   ready: boolean;
   user: Profile | null;
@@ -26,6 +32,7 @@ interface AppState {
   saveState: SaveState;
   saveError: string | null;
   toasts: Toast[];
+  notices: Notice[];
   lastProjectId: string | null;
   // undo stacks per project
   history: Record<string, { past: Project[]; future: Project[] }>;
@@ -59,6 +66,8 @@ interface AppState {
   saveContent(c: Partial<AdminContent>): Promise<void>;
   toast(kind: Toast["kind"], text: string): void;
   dismissToast(id: number): void;
+  markNoticesRead(): void;
+  clearNotices(): void;
 }
 
 const timers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -75,6 +84,7 @@ export const useApp = create<AppState>((set, get) => ({
   saveState: "idle",
   saveError: null,
   toasts: [],
+  notices: [],
   lastProjectId: null,
   history: {},
 
@@ -305,10 +315,16 @@ export const useApp = create<AppState>((set, get) => ({
   },
   toast(kind, text) {
     const id = toastId++;
-    set({ toasts: [...get().toasts, { id, kind, text }] });
+    set({ toasts: [...get().toasts, { id, kind, text }], notices: [{ id, kind, text, at: new Date().toISOString(), read: false }, ...get().notices].slice(0, 50) });
     setTimeout(() => get().dismissToast(id), kind === "error" ? 7000 : 3500);
   },
   dismissToast(id) {
     set({ toasts: get().toasts.filter((t) => t.id !== id) });
+  },
+  markNoticesRead() {
+    if (get().notices.some((n) => !n.read)) set({ notices: get().notices.map((n) => ({ ...n, read: true })) });
+  },
+  clearNotices() {
+    set({ notices: [] });
   },
 }));
