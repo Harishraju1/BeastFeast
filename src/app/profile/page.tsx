@@ -11,11 +11,14 @@ import { RankCard } from "@/components/ranks/RankCard";
 import { XpHistory } from "@/components/xp/XpHistory";
 import { ACHIEVEMENTS, earnedAchievements, streakDays } from "@/lib/gamification";
 import { LEARNING_PATHS } from "@/lib/learning";
+import { AvatarEditor } from "@/components/profile/AvatarEditor";
+import { AccountDetails } from "@/components/profile/AccountDetails";
 
 function Inner() {
   const { user, projects, progress, toast } = useApp();
   const [events, setEvents] = useState<XpEvent[]>([]);
-  const [form, setForm] = useState({ name: user!.name, campus: user!.campus, studentId: user!.studentId, avatar: user!.avatar });
+  const [form, setForm] = useState({ name: user!.name, campus: user!.campus });
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     void getBackend().then(async (b) => setEvents(await b.listXpEvents(user!.id)));
   }, [user]);
@@ -23,40 +26,36 @@ function Inner() {
   const done = new Set(progress?.completedTopics ?? []);
 
   const save = async () => {
+    if (saving) return;
+    if (form.name.trim().length < 2) return toast("error", "Enter your full name.");
+    setSaving(true);
     try {
       const b = await getBackend();
-      const p = await b.updateProfile({ id: user!.id, ...form });
+      const p = await b.updateProfile({ id: user!.id, name: form.name.trim(), campus: form.campus.trim() });
       useApp.setState({ user: p });
-      toast("success", "Profile saved");
+      toast("success", "Profile updated successfully");
     } catch (e) {
       toast("error", (e as Error).message);
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8">
-      <PageHeader kicker="ENGINEER DOSSIER" title={user!.name}>{user!.campus || "Campus not set"} · Student ID {user!.studentId || "—"} · {user!.role === "super_admin" ? "Super Admin" : user!.role === "admin" ? "Administrator" : "Student"}</PageHeader>
+      <PageHeader kicker="ENGINEER DOSSIER" title={user!.name}>{user!.campus || "Campus not set"} · {user!.role === "super_admin" ? "Super Admin" : user!.role === "admin" ? "Administrator" : "Student"}</PageHeader>
       <div className="mb-6"><RankCard userId={user!.id} xp={user!.xp} rankLevel={user!.rankLevel} dailyXp={user!.dailyXp} /></div>
       <div className="grid gap-6 lg:grid-cols-3">
         <Panel title="Profile" className="lg:col-span-1">
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-panel2 font-display text-2xl text-brand">{form.avatar ? <img src={form.avatar} alt="" className="h-full w-full object-cover" /> : form.name[0]}</span>
-              <label className="cursor-pointer text-xs text-brand">Change picture
-                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  if (f.size > 300_000) return toast("error", "Please choose an image under 300 KB.");
-                  const r = new FileReader();
-                  r.onload = () => setForm({ ...form, avatar: String(r.result) });
-                  r.readAsDataURL(f);
-                }} />
-              </label>
-            </div>
-            <Field label="Name"><input className="bf-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Campus"><input className="bf-input" value={form.campus} onChange={(e) => setForm({ ...form, campus: e.target.value })} /></Field>
-            <Field label="Student ID"><input className="bf-input" value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} /></Field>
-            <Button variant="primary" onClick={() => void save()}>Save profile</Button>
+            <AvatarEditor />
+            <Field label="Name"><input className="bf-input" value={form.name} maxLength={80} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+            <Field label="Campus"><input className="bf-input" value={form.campus} maxLength={60} onChange={(e) => setForm({ ...form, campus: e.target.value })} /></Field>
+            <Button variant="primary" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button>
+          </div>
+          <div className="mt-5 border-t border-line pt-4">
+            <div className="bf-label mb-2">Account details</div>
+            <AccountDetails />
           </div>
         </Panel>
         <div className="space-y-6 lg:col-span-2">

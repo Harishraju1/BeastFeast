@@ -1,76 +1,229 @@
 "use client";
 import Image from "next/image";
+import Link from "next/link";
 import logo from "@/assets/brand/beast-feast-logo.webp";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { Camera, CheckCircle2, X } from "lucide-react";
 import { useApp } from "@/lib/store/app";
-import { BACKEND_MODE } from "@/lib/data";
-import { Button, Field } from "@/components/ui";
+import { BACKEND_MODE, getBackend } from "@/lib/data";
+import { Button } from "@/components/ui";
+import { COUNTRY_CODE, NIAT_ID_EXAMPLE, avatarFileError, mobileError, niatIdError, normalizeNiatId, passwordError, toE164India } from "@/lib/validation";
+
+type Fields = { name: string; email: string; phone: string; niatId: string; password: string; confirm: string };
+const EMPTY: Fields = { name: "", email: "", phone: "", niatId: "", password: "", confirm: "" };
+
+function validate(f: Fields, mode: "in" | "up"): Partial<Record<keyof Fields, string>> {
+  const e: Partial<Record<keyof Fields, string>> = {};
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) e.email = "Enter a valid email address.";
+  if (mode === "in") {
+    if (!f.password) e.password = "Enter your password.";
+    return e;
+  }
+  if (f.name.trim().length < 2) e.name = "Enter your full name.";
+  const m = mobileError(f.phone);
+  if (m) e.phone = m;
+  const n = niatIdError(f.niatId);
+  if (n) e.niatId = n;
+  const p = passwordError(f.password);
+  if (p) e.password = p;
+  if (!p && f.password !== f.confirm) e.confirm = "The passwords do not match.";
+  return e;
+}
+
+function FieldRow({ id, label, error, hint, children }: { id: string; label: string; error?: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <label htmlFor={id} className="bf-label block">{label}</label>
+      {children}
+      {error ? <p id={`${id}-err`} role="alert" className="text-xs font-medium text-accent-ink">{error}</p> : hint ? <p className="text-[11px] text-dim">{hint}</p> : null}
+    </div>
+  );
+}
 
 function LoginInner() {
-  const [mode, setMode] = useState<"in" | "up">("in");
-  const [form, setForm] = useState({ name: "", email: "", password: "", campus: "", studentId: "" });
+  const params = useSearchParams();
+  const [mode, setMode] = useState<"in" | "up">(params.get("mode") === "signup" ? "up" : "in");
+  const [f, setF] = useState<Fields>(EMPTY);
+  const [touched, setTouched] = useState<Partial<Record<keyof Fields, boolean>>>({});
+  const [submitted, setSubmitted] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const { signIn, signUp } = useApp();
+  const [niatTaken, setNiatTaken] = useState<boolean | null>(null);
+  const [pic, setPic] = useState<File | null>(null);
+  const [picUrl, setPicUrl] = useState<string | null>(null);
+  const [picErr, setPicErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { signIn, signUp, refreshUser } = useApp();
   const router = useRouter();
-  const next = useSearchParams().get("next") ?? "/";
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
+  const next = params.get("next") ?? "/";
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+
+  const errors = validate(f, mode);
+  if (mode === "up" && niatTaken && !errors.niatId) errors.niatId = "This NIAT ID is already registered.";
+  const show = (k: keyof Fields) => (submitted || touched[k] ? errors[k] : undefined);
+  const set = (k: keyof Fields) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = e.target.value;
+    if (k === "niatId") v = v.toUpperCase().replace(/\s/g, "").slice(0, 11);
+    if (k === "phone") v = v.replace(/[^\d\s-]/g, "").slice(0, 14);
+    setF({ ...f, [k]: v });
+    if (k === "niatId") setNiatTaken(null);
+  };
+  const blur = (k: keyof Fields) => () => setTouched((t) => ({ ...t, [k]: true }));
+
+  // check the NIAT ID is free once it is well-formed
+  useEffect(() => {
+    if (mode !== "up" || niatIdError(f.niatId)) return;
+    const id = normalizeNiatId(f.niatId);
+    const t = setTimeout(() => {
+      void getBackend()
+        .then((b) => b.niatIdAvailable(id))
+        .then((ok) => setNiatTaken(!ok))
+        .catch(() => setNiatTaken(null));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [f.niatId, mode]);
+
+  useEffect(() => () => void (picUrl && URL.revokeObjectURL(picUrl)), [picUrl]);
+
+  async function choosePic(file: File | undefined) {
+    setPicErr(null);
+    if (!file) return;
+    const e = await avatarFileError(file);
+    if (e) {
+      setPicErr(e);
+      return;
+    }
+    setPic(file);
+    setPicUrl(URL.createObjectURL(file));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return; // no double submits
+    setSubmitted(true);
     setErr(null);
+    setInfo(null);
+    if (Object.keys(errors).length) return;
     setBusy(true);
     try {
-      if (mode === "in") await signIn(form.email, form.password);
-      else await signUp(form);
-      router.replace(next);
+      if (mode === "in") {
+        await signIn(f.email.trim(), f.password);
+        router.replace(safeNext);
+        return;
+      }
+      await signUp({ name: f.name.trim(), email: f.email.trim(), password: f.password, phone: toE164India(f.phone), niatId: normalizeNiatId(f.niatId) });
+      if (pic) {
+        try {
+          await (await getBackend()).setAvatar(pic);
+          await refreshUser();
+        } catch (x) {
+          setInfo(`Account created. Your picture wasn't saved (${(x as Error).message}) — add it from your profile.`);
+          setTimeout(() => router.replace(safeNext), 2500);
+          return;
+        }
+      }
+      router.replace(safeNext);
     } catch (x) {
-      setErr((x as Error).message);
+      const msg = (x as Error).message;
+      if (/check your email/i.test(msg)) {
+        setInfo("Account created. Check your email to confirm it, then sign in. You can add a profile picture from your profile.");
+        setMode("in");
+      } else setErr(msg);
     } finally {
       setBusy(false);
     }
   }
 
+  const input = (k: keyof Fields) => `bf-input ${show(k) ? "!border-accent" : ""}`;
+
   return (
     <div className="bf-grid relative flex min-h-[calc(100vh-56px)] flex-col items-center justify-center gap-2 p-4">
-      <Image src={logo} alt="BEAST FEAST 5.0 — Robotics Club KKH" priority className="bf-rise h-auto w-[260px] md:w-[300px]" sizes="300px" />
-      <form onSubmit={submit} className="bf-panel bf-on-ivory bf-raised relative w-full max-w-md space-y-4 border-t-4 !border-t-accent p-7">
+      <Link href="/" aria-label="BEAST FEAST home">
+        <Image src={logo} alt="BEAST FEAST — Robotics Club KKH" priority className="bf-rise h-auto w-[220px] sm:w-[260px] md:w-[300px]" sizes="300px" />
+      </Link>
+      <form onSubmit={submit} noValidate className="bf-panel bf-on-ivory bf-raised relative w-full max-w-md space-y-4 border-t-4 !border-t-accent p-5 sm:p-7">
         <div>
-          <div className="bf-label">BEAST FEAST 5.0 · ROBOTICS CLUB KKH</div>
+          <div className="bf-label">BEAST FEAST · ROBOTICS CLUB KKH</div>
           <h1 className="font-display text-2xl font-bold">{mode === "in" ? "Enter the lab" : "Create your engineer account"}</h1>
           <p className="mt-1 text-xs text-muted">
             {BACKEND_MODE === "local"
               ? "Local mode: accounts and projects are stored in this browser only. The first account created on this device becomes its Super Admin."
-              : "Cloud mode: your projects sync across devices."}
+              : mode === "up"
+                ? "Your phone number and NIAT ID are visible only to you and the club administrators."
+                : "Cloud mode: your projects sync across devices."}
           </p>
         </div>
+
         {mode === "up" && (
           <>
-            <Field label="Name">
-              <input className="bf-input" value={form.name} onChange={set("name")} required autoComplete="name" />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Campus">
-                <input className="bf-input" value={form.campus} onChange={set("campus")} />
-              </Field>
-              <Field label="Student ID">
-                <input className="bf-input" value={form.studentId} onChange={set("studentId")} />
-              </Field>
+            <FieldRow id="su-name" label="Full name" error={show("name")}>
+              <input id="su-name" className={input("name")} value={f.name} onChange={set("name")} onBlur={blur("name")} autoComplete="name" maxLength={80} aria-invalid={!!show("name")} />
+            </FieldRow>
+          </>
+        )}
+        <FieldRow id="su-email" label="Email address" error={show("email")}>
+          <input id="su-email" className={input("email")} type="email" inputMode="email" value={f.email} onChange={set("email")} onBlur={blur("email")} autoComplete="email" aria-invalid={!!show("email")} />
+        </FieldRow>
+        {mode === "up" && (
+          <>
+            <FieldRow id="su-phone" label="Mobile number" error={show("phone")} hint="10-digit Indian mobile number.">
+              <div className="flex gap-2">
+                <span className="bf-input flex !w-16 shrink-0 items-center justify-center font-mono" aria-label="Country code">{COUNTRY_CODE}</span>
+                <input id="su-phone" className={`${input("phone")} min-w-0 flex-1 font-mono`} type="tel" inputMode="numeric" placeholder="9876543210" value={f.phone} onChange={set("phone")} onBlur={blur("phone")} autoComplete="tel-national" aria-invalid={!!show("phone")} />
+              </div>
+            </FieldRow>
+            <FieldRow id="su-niat" label="NIAT student ID" error={show("niatId") ?? (niatTaken ? errors.niatId : undefined)} hint={`Format NXXH01XXXXX, e.g. ${NIAT_ID_EXAMPLE}.`}>
+              <div className="relative">
+                <input id="su-niat" className={`${input("niatId")} font-mono uppercase tracking-wider`} placeholder={NIAT_ID_EXAMPLE} value={f.niatId} onChange={set("niatId")} onBlur={blur("niatId")} autoComplete="off" spellCheck={false} aria-invalid={!!show("niatId")} />
+                {niatTaken === false && !errors.niatId && <CheckCircle2 size={16} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#2f7a46]" aria-label="NIAT ID available" />}
+              </div>
+            </FieldRow>
+          </>
+        )}
+        <FieldRow id="su-pw" label="Password" error={show("password")} hint={mode === "up" ? "At least 8 characters with letters and a number." : undefined}>
+          <input id="su-pw" className={input("password")} type="password" value={f.password} onChange={set("password")} onBlur={blur("password")} autoComplete={mode === "in" ? "current-password" : "new-password"} aria-invalid={!!show("password")} />
+        </FieldRow>
+        {mode === "up" && (
+          <>
+            <FieldRow id="su-pw2" label="Confirm password" error={show("confirm")}>
+              <input id="su-pw2" className={input("confirm")} type="password" value={f.confirm} onChange={set("confirm")} onBlur={blur("confirm")} autoComplete="new-password" aria-invalid={!!show("confirm")} />
+            </FieldRow>
+            <div className="space-y-1">
+              <span className="bf-label block">Profile picture (optional)</span>
+              <div className="flex items-center gap-3">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line2 bg-panel2">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- local preview (blob URL) */}
+                  {picUrl ? <img src={picUrl} alt="Selected profile picture" className="h-full w-full object-cover" /> : <Camera size={20} className="text-dim" />}
+                </span>
+                <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" id="su-pic" onChange={(e) => void choosePic(e.target.files?.[0])} />
+                <label htmlFor="su-pic" className="cursor-pointer rounded-md border border-line2 px-3 py-1.5 text-sm hover:border-accent">{pic ? "Change" : "Choose picture"}</label>
+                {pic && (
+                  <button type="button" className="inline-flex items-center gap-1 text-xs text-muted hover:text-accent-ink" onClick={() => { setPic(null); setPicUrl(null); if (fileRef.current) fileRef.current.value = ""; }}>
+                    <X size={12} /> Remove
+                  </button>
+                )}
+              </div>
+              {picErr ? <p role="alert" className="text-xs font-medium text-accent-ink">{picErr}</p> : <p className="text-[11px] text-dim">JPEG, PNG or WebP, up to 5 MB.</p>}
             </div>
           </>
         )}
-        <Field label="Email">
-          <input className="bf-input" type="email" value={form.email} onChange={set("email")} required autoComplete="email" />
-        </Field>
-        <Field label="Password" hint={mode === "up" ? "At least 6 characters." : undefined}>
-          <input className="bf-input" type="password" value={form.password} onChange={set("password")} required autoComplete={mode === "in" ? "current-password" : "new-password"} />
-        </Field>
-        {err && <div className="rounded border border-bad/40 bg-bad/10 px-3 py-2 text-sm text-bad">{err}</div>}
+        {err && <div role="alert" className="rounded border border-accent/50 bg-accent/10 px-3 py-2 text-sm text-accent-ink">{err}</div>}
+        {info && <div role="status" className="rounded border border-[#2f7a46]/40 bg-[#2f7a46]/10 px-3 py-2 text-sm text-[#215c34]">{info}</div>}
         <Button variant="primary" size="lg" className="w-full" disabled={busy}>
-          {busy ? "…" : mode === "in" ? "SIGN IN" : "CREATE ACCOUNT"}
+          {busy ? (mode === "in" ? "Signing in…" : "Creating account…") : mode === "in" ? "SIGN IN" : "CREATE ACCOUNT"}
         </Button>
-        <button type="button" className="w-full text-center text-sm text-brand hover:underline" onClick={() => setMode(mode === "in" ? "up" : "in")}>
+        <button
+          type="button"
+          className="w-full text-center text-sm text-brand hover:underline"
+          onClick={() => {
+            setMode(mode === "in" ? "up" : "in");
+            setErr(null);
+            setSubmitted(false);
+            setTouched({});
+          }}
+        >
           {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
         </button>
       </form>
@@ -85,3 +238,4 @@ export default function LoginPage() {
     </Suspense>
   );
 }
+

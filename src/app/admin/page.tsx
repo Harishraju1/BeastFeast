@@ -12,46 +12,11 @@ import type { QuizQuestion } from "@/lib/learning/types";
 import { youtubeId } from "@/lib/youtube";
 import { AdminManagement } from "@/components/admin/AdminManagement";
 import { XpRulesEditor } from "@/components/admin/XpRulesEditor";
+import { UserManagement } from "@/components/admin/UserManagement";
 import { ROLE_LABEL, isStaff } from "@/lib/roles";
 
-type Tab = "admins" | "xp" | "students" | "components" | "learning" | "videos" | "missions" | "announcements" | "competitions" | "featured" | "analytics";
+type Tab = "users" | "admins" | "xp" | "components" | "learning" | "videos" | "missions" | "announcements" | "competitions" | "featured" | "analytics";
 const rid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 9)}`;
-
-function Students() {
-  const [list, setList] = useState<Profile[]>([]);
-  const [progress, setProgress] = useState<Record<string, Progress>>({});
-  const load = async () => {
-    const b = await getBackend();
-    const ps = await b.listProfiles();
-    setList(ps);
-    const pr: Record<string, Progress> = {};
-    for (const p of ps) pr[p.id] = await b.getProgress(p.id).catch(() => null as never);
-    setProgress(pr);
-  };
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: load/reset local UI state when its source changes
-  useEffect(() => void load(), []);
-  return (
-    <Panel title={`Students (${list.length})`} bodyClass="p-0">
-      <table className="w-full text-sm">
-        <thead className="bg-bg2"><tr className="bf-label text-left"><th className="px-3 py-2">Name</th><th className="px-3 py-2">Campus / ID</th><th className="px-3 py-2">XP</th><th className="px-3 py-2">Topics</th><th className="px-3 py-2">Quizzes</th><th className="px-3 py-2">Role</th></tr></thead>
-        <tbody>
-          {list.map((u) => (
-            <tr key={u.id} className="border-t border-line">
-              <td className="px-3 py-2">{u.name}</td>
-              <td className="px-3 py-2 text-muted">{u.campus || "—"} · {u.studentId || "—"}</td>
-              <td className="px-3 py-2 font-mono text-accent-ink">{u.xp}</td>
-              <td className="px-3 py-2">{progress[u.id]?.completedTopics.length ?? "—"}</td>
-              <td className="px-3 py-2">{progress[u.id]?.quizAttempts.length ?? "—"}</td>
-              <td className="px-3 py-2">
-                <Badge tone={u.role === "super_admin" ? "accent" : u.role === "admin" ? "brand" : "dim"}>{ROLE_LABEL[u.role]}</Badge>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
-  );
-}
 
 function Components() {
   const { content, saveContent, toast } = useApp();
@@ -329,18 +294,18 @@ const mostCommon = (xs: string[]) => {
 
 function Inner() {
   const user = useApp((s) => s.user);
-  const [tab, setTab] = useState<Tab>("admins");
+  const [tab, setTab] = useState<Tab>("users");
   // The server layout already checked the role in cloud mode; this guards local mode and stale client state.
   if (!isStaff(user?.role)) return <div className="p-10 text-center text-bad">Administrator access required.</div>;
   return (
     <div className="mx-auto max-w-7xl px-5 py-8">
       <PageHeader kicker={user?.role === "super_admin" ? "SUPER ADMIN · ROBOTICS CLUB KKH" : "ADMIN · ROBOTICS CLUB KKH"} title="Admin Dashboard" />
       <div className="mb-5 overflow-x-auto">
-        <Tabs value={tab} onChange={setTab} items={(["admins", "xp", "students", "components", "learning", "videos", "missions", "announcements", "competitions", "featured", "analytics"] as Tab[]).map((t) => ({ value: t, label: t === "admins" ? "Admin Management" : t === "xp" ? "XP Rules" : t[0].toUpperCase() + t.slice(1) }))} />
+        <Tabs value={tab} onChange={setTab} items={(["users", "admins", "xp", "components", "learning", "videos", "missions", "announcements", "competitions", "featured", "analytics"] as Tab[]).map((t) => ({ value: t, label: t === "users" ? "User Management" : t === "admins" ? "Admin Management" : t === "xp" ? "XP Rules" : t[0].toUpperCase() + t.slice(1) }))} />
       </div>
       {tab === "admins" && <AdminManagement />}
       {tab === "xp" && <XpRulesEditor />}
-      {tab === "students" && <Students />}
+      {tab === "users" && <UserManagement />}
       {tab === "components" && <Components />}
       {tab === "learning" && <Learning />}
       {tab === "videos" && <Videos />}

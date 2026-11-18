@@ -1,4 +1,4 @@
-# BEAST FEAST 5.0 — Site audit (2026-11-18)
+# BEAST FEAST — Site audit (2026-11-18)
 
 This audit covers the gamification upgrade (XP ledger, daily reset, ranks, leaderboard), the quiz and performance features, navigation and usability, responsive layout and the line-following simulation.
 
@@ -98,6 +98,79 @@ Remaining limits:
 | `vitest` | 841 / 841 pass (22 files, including 135 line-matrix tests) |
 | `npm run garage:report` | 45 / 45 required scenarios; all 9 Garage robots READY TO SIMULATE |
 
+## Second pass — full website upgrade (2026-11-18, later the same day)
+
+### Brand
+- Every visible `BEAST FEAST 5.0` is now **BEAST FEAST**: titles, metadata, sidebar, sign-in page, footer, Garage, home page and docs.
+- Technical names are kept so nothing breaks: the repository `BeastFeast`, the Vercel project `beast-feast`, the `bf5.*` browser-storage keys and the empty `beast-feast-5.0/` git pointer.
+
+### Palette
+- The page background is back to Forest Sage `#4B5A50`, as chosen on 2026-11-18.
+- The sage token values come from before the dark switch, with their original contrast notes: ivory on sage 6.3:1, muted text 5.5:1, labels 4.5:1.
+- The browser theme colour is sage.
+
+### Logo
+- Clickable, linking home, in the sidebar, the footer and the sign-in page.
+- Favicon and home-screen icon are generated from the official logo.
+- The link-preview image is now an 82 KB JPEG instead of a 556 KB PNG.
+
+### Footer
+- Logo, ROBOTICS CLUB KKH, the tagline and a short description.
+- Explore links: Home, Learning Academy, Challenges, Component Library, Project Garage, Leaderboard.
+- A `mailto:` link to roboticsclubniat@gmail.com.
+- © with the current year.
+- No phone number, privacy policy or terms page, because none were provided.
+
+### Metadata
+- Title template `%s | BEAST FEAST`; each page has its own title and description.
+- Lessons, Garage robots and workspace tabs get dynamic titles.
+- Open Graph and Twitter cards are set.
+- Canonical URLs only on public pages, on the verified domain.
+- Admin and workspace pages are marked noindex.
+
+### Responsive layout
+- 15 routes × 10 widths (320–1440 px), checked automatically.
+- The only overflow was 3 px in the signed-in header at 320 px. Fixed by hiding the duplicate Help and Settings icons below 640 px.
+- Mobile drawer: the backdrop closes it, Escape closes it, the page behind it can't scroll while it's open, and `aria-expanded` is set.
+- Admin links stay hidden from students.
+
+### Images
+- Unused template SVGs removed from `public/`.
+- Profile pictures are lazy-loaded, sized and re-encoded to 256 px WebP.
+
+### Sign-up
+- Fields: full name, email, +91 mobile, NIAT ID, password and confirmation, and an optional picture with preview.
+- The NIAT ID is validated, upper-cased and unique, with a live availability check.
+- Per-field errors, a loading state, and protection against double submits.
+- The database re-validates everything.
+
+### Profile
+- Picture upload, replace and remove.
+- Private account details: email, mobile, and the NIAT ID (locked once set), plus any legacy ID.
+- A one-time "Complete your account" prompt for accounts that have no ID.
+
+### Admin
+- New **User Management** tab showing avatar, email, phone, NIAT ID or legacy ID, rank, lifetime and daily XP, role, joined date and status.
+- Search by name, email, NIAT ID and phone digits; filter by role, status and rank; 20 users per page.
+- A detail panel shows recent XP transactions and rank history.
+- MAKE AS ADMIN, the audit log and Super Admin protection are unchanged (roles smoke 23/23).
+
+### Security
+See SECURITY_REPORT.md:
+- private-details table
+- database rate limits
+- CSP and security headers
+- avatar validation
+- secret scan of the tree, history and build: clean
+- dependency audit
+
+### Tests after this pass
+- 861 unit tests pass, including the new `tests/auth/validation.test.ts`.
+- `profile:smoke` 24/24, `xp:smoke` 34/34, `roles:smoke` 23/23, `cloud:smoke` 19/19.
+- tsc and ESLint are clean, and the production build succeeds.
+- No CSP violations on the WebGL views, the Garage, the arena or Monaco.
+
 ## Not changed, and why
 
-- **Palette:** the spec lists the Forest Sage / Ivory / Red palette. The site keeps the *dark* Forest variant (page `#131A16`) because the dark background was asked for explicitly earlier. The colours are the same family; only the page background is darker.
+- **Password reset:** the app has no "forgot password" flow yet. Students who forget their password currently need an administrator. Adding one requires the reset redirect URL to be allowed in Supabase Auth.
+- **Phone verification:** numbers are format-checked, not verified by SMS. The UI says so.

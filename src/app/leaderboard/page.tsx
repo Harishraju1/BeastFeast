@@ -8,6 +8,7 @@ import type { XpEvent } from "@/lib/data/types";
 import type { Profile, Project } from "@/lib/types";
 import { rankFor } from "@/lib/gamification";
 import { RankBadge } from "@/components/ranks/RankBadge";
+import { Avatar } from "@/components/profile/Avatar";
 import { LEADERBOARD_MIN_XP } from "@/lib/data/types";
 import { EXAMPLE_TRACKS } from "@/lib/track/examples";
 import { useApp } from "@/lib/store/app";
@@ -84,7 +85,7 @@ export default function LeaderboardPage() {
                   <td className="px-5 py-3 font-mono">{place[i] <= 3 ? <span className="inline-flex items-center gap-1.5"><Trophy size={16} className={place[i] === 1 ? "text-accent-ink" : place[i] === 2 ? "text-muted" : "text-[#d9a066]"} />{place[i]}</span> : place[i]}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
-                      <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-panel2 text-xs text-brand">{r.u.avatar ? <img src={r.u.avatar} alt="" className="h-full w-full object-cover" /> : r.u.name[0]}</span>
+                      <Avatar name={r.u.name} src={r.u.avatar} size={28} />
                       <span>{r.u.name}</span>
                       <RankBadge level={rankFor(r.u.xp, r.u.rankLevel).level} size={24} />
                       <Badge>{rankFor(r.u.xp, r.u.rankLevel).name}</Badge>

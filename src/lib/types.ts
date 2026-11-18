@@ -1,5 +1,5 @@
 /**
- * BEAST FEAST 5.0 — core domain contracts.
+ * BEAST FEAST — core domain contracts.
  *
  * Every module (catalogue, robot designer, circuit studio, code studio,
  * simulation, learning, persistence) builds on these types. Keep them stable.

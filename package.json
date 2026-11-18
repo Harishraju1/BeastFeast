@@ -18,7 +18,9 @@
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
     "roles:smoke": "tsx scripts/roles-smoke.ts",
     "xp:smoke": "tsx scripts/xp-smoke.ts",
-    "brand:assets": "node scripts/brand-assets.mjs"
+    "brand:assets": "node scripts/brand-assets.mjs",
+    "profile:smoke": "tsx scripts/profile-smoke.ts",
+    "secret:scan": "tsx scripts/secret-scan.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -32,6 +34,7 @@
     "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "sharp": "0.35.5",
     "three": "^0.187.0",
     "zod": "^4.6.7",
     "zustand": "^5.1.0"

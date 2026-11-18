@@ -14,6 +14,8 @@ import { isStaff } from "@/lib/roles";
 import { Toasts } from "./Toasts";
 import { CommandSearch } from "./CommandSearch";
 import { RankUpCelebration } from "@/components/ranks/RankUpCelebration";
+import { Avatar } from "@/components/profile/Avatar";
+import { CompleteDetailsPrompt } from "@/components/profile/CompleteDetailsPrompt";
 
 export function workspaceHref(lastProjectId: string | null, tab: "design" | "circuit" | "code" | "arena") {
   return lastProjectId ? `/workspace/${lastProjectId}/${tab}` : `/projects?next=${tab}`;
@@ -41,6 +43,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: load/reset local UI state when its source changes
   useEffect(() => setMobileOpen(false), [path]);
+  // mobile drawer: Escape closes it and the page behind it does not scroll while it is open
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMobileOpen(false);
+    window.addEventListener("keydown", esc);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", esc);
+    };
+  }, [mobileOpen]);
 
   const immersive = path.startsWith("/workspace/") || /^\/tracks\/[^/]+/.test(path);
   // grouped navigation: what students do, in the order they usually do it
@@ -91,12 +105,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      {/* tap outside the open mobile drawer to close it */}
+      {mobileOpen && <div className="fixed inset-0 z-30 bg-[rgba(20,26,22,.55)] md:hidden" onClick={() => setMobileOpen(false)} aria-hidden />}
       {/* sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 bf-on-sage flex flex-col shadow-[1px_0_0_rgba(38,48,42,.25)] transition-all ${immersive ? "w-14" : "w-14 xl:w-56"} ${mobileOpen ? "!w-56 translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
+      <aside id="bf-main-nav" className={`fixed inset-y-0 left-0 z-40 bf-on-sage flex flex-col shadow-[1px_0_0_rgba(38,48,42,.25)] transition-all ${immersive ? "w-14" : "w-14 xl:w-56"} ${mobileOpen ? "!w-56 translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
         {/* Brand: the full logo when the sidebar is open, the gear-and-panther mark when it is collapsed */}
-        <Link href="/" aria-label="BEAST FEAST 5.0 — Robotics Club KKH, home" className="flex min-h-14 items-center justify-center border-b border-line px-2 py-2 xl:py-3.5">
+        <Link href="/" aria-label="BEAST FEAST — Robotics Club KKH, home" className="flex min-h-14 items-center justify-center border-b border-line px-2 py-2 xl:py-3.5">
           <Image src={mark} alt="" unoptimized className={`h-10 w-10 shrink-0 object-contain ${immersive && !mobileOpen ? "" : "xl:hidden"} ${mobileOpen ? "!hidden" : ""}`} sizes="40px" priority />
-          <Image src={sidebarLogo} alt="BEAST FEAST 5.0 — Robotics Club KKH" unoptimized className={`h-auto w-[140px] ${immersive && !mobileOpen ? "hidden" : "hidden xl:block"} ${mobileOpen ? "!block" : ""}`} priority />
+          <Image src={sidebarLogo} alt="BEAST FEAST — Robotics Club KKH" unoptimized className={`h-auto w-[140px] ${immersive && !mobileOpen ? "hidden" : "hidden xl:block"} ${mobileOpen ? "!block" : ""}`} priority />
         </Link>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-2" aria-label="Main">
           {sections.map((sec, si) => (
@@ -128,7 +144,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className={`flex min-w-0 flex-1 flex-col md:pl-14 ${immersive ? "" : "xl:pl-56"}`}>
         {/* top bar */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/90 px-3 backdrop-blur-md md:px-5">
-          <button className="text-muted md:hidden" onClick={() => setMobileOpen((v) => !v)} aria-label="Menu">
+          <button className="text-muted md:hidden" onClick={() => setMobileOpen((v) => !v)} aria-label={mobileOpen ? "Close menu" : "Open menu"} aria-expanded={mobileOpen} aria-controls="bf-main-nav">
             <Menu size={20} />
           </button>
           <button onClick={() => setSearchOpen(true)} className="flex min-w-0 max-w-md flex-1 items-center gap-2 rounded-lg border border-line bg-bg2 px-3 py-1.5 text-left text-sm text-dim shadow-[var(--shadow-sm)] transition-colors hover:border-line2">
@@ -149,7 +165,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {content.announcements.length > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />}
               </button>
               {notifOpen && (
-                <div className="bf-panel bf-raised absolute right-0 top-11 w-80 p-3 text-sm">
+                <div className="bf-panel bf-raised absolute right-0 top-11 w-[min(20rem,calc(100vw-1.5rem))] p-3 text-sm">
                   <div className="bf-label mb-2">Announcements</div>
                   {content.announcements.length === 0 && <div className="text-muted">No announcements yet.</div>}
                   {content.announcements.slice(-5).reverse().map((a) => (
@@ -166,18 +182,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Shield size={18} />
               </Link>
             )}
-            <Link href="/learn" className="rounded-md p-2 text-muted hover:bg-panel hover:text-text" aria-label="Help" title="Help & Beast Topics">
+            <Link href="/learn" className="hidden rounded-md p-2 text-muted hover:bg-panel hover:text-text sm:inline-flex" aria-label="Help" title="Help & Beast Topics">
               <HelpCircle size={18} />
             </Link>
-            <Link href="/profile" className="rounded-md p-2 text-muted hover:bg-panel hover:text-text" aria-label="Settings" title="Profile & settings">
+            <Link href="/profile" className="hidden rounded-md p-2 text-muted hover:bg-panel hover:text-text sm:inline-flex" aria-label="Settings" title="Profile & settings">
               <Settings size={18} />
             </Link>
             {user ? (
               <div className="ml-1 flex items-center gap-2 border-l border-line pl-3">
                 <Link href="/profile" className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-brand font-display text-sm font-semibold text-on-brand">
-                    {user.avatar ? <img src={user.avatar} alt="" className="h-full w-full object-cover" /> : user.name.slice(0, 1).toUpperCase()}
-                  </span>
+                  <Avatar name={user.name} src={user.avatar} size={32} />
                   <span className="hidden text-right lg:block">
                     <span className="block text-xs font-medium leading-tight">{user.name}</span>
                     <span className="block font-mono text-[10px] text-accent-ink">
@@ -206,21 +220,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="min-w-0 flex-1">{children}</main>
-        {!immersive && (
-          <footer className="border-t border-line px-5 py-5 text-xs text-dim">
-            <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-              <span className="flex items-center gap-2.5">
-                <Image src={sidebarLogo} alt="BEAST FEAST" unoptimized className="h-12 w-auto object-contain" />
-                <span><b className="text-muted">BEAST FEAST 5.0</b> · Robotics Club KKH</span>
-              </span>
-              <span className="font-mono tracking-widest">BUILD · CODE · SIMULATE · DOMINATE</span>
-              <span className="flex gap-4"><Link href="/learn" className="hover:text-text">Beast Topics</Link><Link href="/garage" className="hover:text-text">Project Garage</Link><Link href="/leaderboard" className="hover:text-text">Leaderboard</Link></span>
-            </div>
-          </footer>
-        )}
+        {!immersive && <SiteFooter />}
       </div>
       <Toasts />
       <RankUpCelebration />
+      <CompleteDetailsPrompt />
       <CommandSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
@@ -243,4 +247,45 @@ export function RequireAuth({ children }: { children: ReactNode }) {
       </div>
     );
   return <>{children}</>;
+}
+
+const CONTACT_EMAIL = "roboticsclubniat@gmail.com";
+
+function SiteFooter() {
+  const links = [
+    { href: "/", label: "Home" },
+    { href: "/learn", label: "Learning Academy" },
+    { href: "/challenges", label: "Challenges" },
+    { href: "/library", label: "Component Library" },
+    { href: "/garage", label: "Project Garage" },
+    { href: "/leaderboard", label: "Leaderboard" },
+  ];
+  return (
+    <footer className="bf-on-sage border-t border-line px-5 pb-6 pt-8 text-sm">
+      <div className="mx-auto grid max-w-7xl gap-8 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr]">
+        <div>
+          <Link href="/" aria-label="BEAST FEAST home" className="inline-block">
+            <Image src={sidebarLogo} alt="BEAST FEAST" unoptimized className="h-16 w-auto object-contain" />
+          </Link>
+          <div className="mt-3 font-display text-base font-semibold text-heading">ROBOTICS CLUB KKH</div>
+          <div className="mt-0.5 font-mono text-[11px] tracking-[0.18em] text-accent-ink">BUILD. CODE. SIMULATE. DOMINATE.</div>
+          <p className="mt-3 max-w-sm text-muted">A robotics engineering platform for learning, designing, coding and simulating robots.</p>
+        </div>
+        <nav aria-label="Footer">
+          <div className="bf-label mb-2">Explore</div>
+          <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-1">
+            {links.map((l) => <li key={l.href}><Link href={l.href} className="text-muted hover:text-text hover:underline">{l.label}</Link></li>)}
+          </ul>
+        </nav>
+        <div>
+          <div className="bf-label mb-2">Contact</div>
+          <a href={`mailto:${CONTACT_EMAIL}`} className="break-all text-muted hover:text-text hover:underline">{CONTACT_EMAIL}</a>
+          <p className="mt-2 text-xs text-dim">Questions about the platform, your account or club events — email the club.</p>
+        </div>
+      </div>
+      <div className="mx-auto mt-8 max-w-7xl border-t border-line pt-4 text-xs text-dim">
+        © {new Date().getFullYear()} BEAST FEAST | ROBOTICS CLUB KKH. All rights reserved.
+      </div>
+    </footer>
+  );
 }

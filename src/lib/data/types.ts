@@ -205,10 +205,70 @@ export interface RoleAuditEntry {
   note: string | null;
 }
 
+/** Contact and ID details only the student and administrators can read (cloud: table profile_private). */
+export interface PrivateDetails {
+  /** sign-in email (own account only) */
+  email: string | null;
+  /** +919876543210 */
+  phone: string | null;
+  /** NXXH01XXXXX — set at sign-up, cannot be changed by the student afterwards */
+  niatId: string | null;
+  /** student ID from before the NIAT format was enforced (kept, never reformatted) */
+  legacyStudentId: string | null;
+}
+
+export interface SignUpInput {
+  name: string;
+  email: string;
+  password: string;
+  /** +919876543210 */
+  phone: string;
+  /** NXXH01XXXXX */
+  niatId: string;
+}
+
+export type AccountStatus = "active" | "unconfirmed" | "suspended";
+export interface AdminUserRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  niatId: string | null;
+  legacyStudentId: string | null;
+  avatar: string | null;
+  role: Profile["role"];
+  xp: number;
+  dailyXp: number;
+  rankLevel: number;
+  createdAt: string;
+  lastSignInAt: string | null;
+  status: AccountStatus;
+}
+export interface AdminUserQuery {
+  search?: string;
+  role?: Profile["role"] | "";
+  status?: AccountStatus | "";
+  minRank?: number | null;
+  maxRank?: number | null;
+  limit: number;
+  offset: number;
+}
+
 export interface Backend {
   readonly mode: "local" | "supabase";
   currentUser(): Promise<Profile | null>;
-  signUp(input: { name: string; email: string; password: string; campus: string; studentId: string }): Promise<Profile>;
+  signUp(input: SignUpInput): Promise<Profile>;
+  /** The signed-in student's own phone / NIAT ID. */
+  getMyDetails(): Promise<PrivateDetails>;
+  /** Adds missing details. A NIAT ID can be set once; the phone can be updated. Validated on the server. */
+  completeMyDetails(input: { niatId?: string; phone?: string }): Promise<PrivateDetails>;
+  /** True if the NIAT ID is well-formed and not registered yet (rate limited). */
+  niatIdAvailable(niatId: string): Promise<boolean>;
+  /** Uploads a profile picture (validated, resized and re-encoded) and returns the updated profile. */
+  setAvatar(file: Blob): Promise<Profile>;
+  removeAvatar(): Promise<Profile>;
+  /** Admins: registered accounts with contact details (cloud: admin_list_users). */
+  adminListUsers(q: AdminUserQuery): Promise<{ rows: AdminUserRow[]; total: number }>;
   signIn(email: string, password: string): Promise<Profile>;
   signOut(): Promise<void>;
   updateProfile(p: Partial<Profile> & { id: string }): Promise<Profile>;

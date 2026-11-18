@@ -1,6 +1,6 @@
-# DEVELOPMENT STATUS — BEAST FEAST 5.0
+# DEVELOPMENT STATUS — BEAST FEAST
 
-Last updated: 2026-11-18 (XP ledger, daily reset, 16 ranks, leaderboard filter, exam-style quizzes, performance analysis, XP histories, grouped navigation; see AUDIT_REPORT.md)
+Last updated: 2026-11-18 (BEAST FEAST rebrand, Forest Sage theme, sign-up with +91 mobile / NIAT ID / profile picture, private details, admin User Management, rate limits, security headers; earlier the same day: XP ledger, daily reset, 16 ranks, leaderboard filter, exam-style quizzes, performance analysis, XP histories, grouped navigation; see AUDIT_REPORT.md)
 
 ## Completed modules
 
@@ -84,7 +84,7 @@ Simulator fixes found while building the Garage:
 
 ## Testing results
 
-`npm test` → **841 tests in 22 files, all passing** (2026-11-18, including the 135-test line-following matrix; see AUDIT_REPORT.md). `tsc` and ESLint are clean, and `next build` succeeds.
+`npm test` → **861 tests in 23 files, all passing** (2026-11-18, including the 135-test line-following matrix; see AUDIT_REPORT.md). `tsc` and ESLint are clean, and `next build` succeeds.
 
 | Required scenario | Automated test | Browser check |
 | --- | --- | --- |

@@ -2,7 +2,7 @@
  * Regenerates every logo image used by the site from the one official logo file.
  *   node scripts/brand-assets.mjs [path/to/logo]      (default data/source/brand/beast-feast-logo.webp)
  * Outputs: src/assets/brand/{beast-feast-logo,beast-feast-sidebar,beast-feast-mark}.webp (full logo, sidebar
- * lock-up without the banner, emblem), src/app/{icon,apple-icon,opengraph-image}.png (favicon, home-screen
+ * lock-up without the banner, emblem), src/app/{icon,apple-icon}.png + opengraph-image.jpg (favicon, home-screen
  * icon, link preview). Crop boxes are in the source's own pixels (the official file is 1536 × 1024).
  */
 import sharp from "sharp";
@@ -41,5 +41,5 @@ await sharp({ create: { width: 180, height: 180, channels: 4, background: BG } }
 // link preview 1200 × 630
 await sharp({ create: { width: 1200, height: 630, channels: 4, background: BG } })
   .composite([{ input: await sharp(SRC).extract(FULL).resize(1060, 580, { fit: "contain", background: CLEAR }).png().toBuffer(), top: 25, left: 70 }])
-  .png().toFile("src/app/opengraph-image.png");
+  .jpeg({ quality: 86, mozjpeg: true }).toFile("src/app/opengraph-image.jpg");
 console.log("brand assets written from", SRC, `${meta.width}×${meta.height}`);

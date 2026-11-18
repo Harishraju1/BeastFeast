@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import { Avatar } from "@/components/profile/Avatar";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Award, Flame, PlayCircle, Trophy } from "lucide-react";
@@ -62,7 +63,7 @@ export default function Home() {
       <section className="bf-grid relative overflow-hidden border-b border-line">
         <div className="mx-auto grid max-w-7xl items-center gap-6 px-5 py-10 lg:grid-cols-2 lg:py-14">
           <div className="relative z-10">
-            <div className="bf-label mb-4 flex items-center gap-2 text-muted"><span className="h-[3px] w-5 rounded-full bg-accent" />BEAST FEAST 5.0 · BUILT BY ROBOTICS CLUB KKH</div>
+            <div className="bf-label mb-4 flex items-center gap-2 text-muted"><span className="h-[3px] w-5 rounded-full bg-accent" />BEAST FEAST · BUILT BY ROBOTICS CLUB KKH</div>
             <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl">
               YOUR ROBOTICS JOURNEY <span className="text-accent-ink">STARTS HERE.</span>
             </h1>
@@ -159,6 +160,7 @@ export default function Home() {
                 {leaders.map((l, i) => (
                   <li key={l.id} className="flex items-center gap-3 text-sm">
                     <span className={`w-5 font-mono ${i === 0 ? "text-accent-ink" : "text-dim"}`}>{i + 1}</span>
+                    <Avatar name={l.name} src={l.avatar} size={24} />
                     <span className="flex-1 truncate">{l.name}</span>
                     <span className="font-mono text-accent-ink">{l.xp}</span>
                   </li>

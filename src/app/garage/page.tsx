@@ -111,7 +111,7 @@ export default function GaragePage() {
       <section className="bf-grid bf-on-sage relative overflow-hidden border-b border-line">
         
         <div className="relative mx-auto max-w-7xl px-5 py-10">
-          <div className="bf-label mb-3 flex items-center gap-2 text-muted"><span className="h-[3px] w-5 rounded-full bg-accent" />BEAST FEAST 5.0 · ROBOTICS CLUB KKH</div>
+          <div className="bf-label mb-3 flex items-center gap-2 text-muted"><span className="h-[3px] w-5 rounded-full bg-accent" />BEAST FEAST · ROBOTICS CLUB KKH</div>
           <h1 className="font-display text-4xl font-bold tracking-tight md:text-5xl">
             BEAST PROJECT <span className="text-accent-ink">GARAGE</span>
           </h1>

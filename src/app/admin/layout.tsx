@@ -6,6 +6,7 @@ import { SUPABASE_CONFIGURED, getServerSession } from "@/lib/supabase/server";
 import { isStaff } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Admin Dashboard", robots: { index: false, follow: false } };
 
 /**
  * Server-side gate for the admin dashboard (cloud mode).

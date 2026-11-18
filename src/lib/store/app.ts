@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
 import { type AdminContent, type LearningActivityKind, type Progress, type XpEventType, getBackend } from "@/lib/data";
+import type { SignUpInput } from "@/lib/data/types";
 import { EMPTY_CONTENT } from "@/lib/data/local";
 import { setCatalogueOverrides } from "@/lib/catalogue";
 import { REFERENCE_MUTABLE_FIELDS, buildFromTemplate, getTemplate } from "@/lib/garage";
@@ -31,7 +32,7 @@ interface AppState {
 
   init(): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
-  signUp(input: { name: string; email: string; password: string; campus: string; studentId: string }): Promise<void>;
+  signUp(input: SignUpInput): Promise<void>;
   signOut(): Promise<void>;
   refreshUser(): Promise<void>;
 

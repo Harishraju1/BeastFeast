@@ -7,8 +7,9 @@ import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Backend, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig } from "./types";
+import { type AdminContent, type Backend, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig, type SignUpInput, type PrivateDetails, type AdminUserQuery, type AdminUserRow } from "./types";
 import { EMPTY_CONTENT } from "./local";
+import { squareImage } from "@/lib/avatar-client";
 
 interface ProfileRow {
   id: string;
@@ -25,9 +26,25 @@ interface ProfileRow {
 const toProfile = (r: ProfileRow): Profile => ({ id: r.id, name: r.name, campus: r.campus, studentId: r.student_id, avatar: r.avatar, role: r.role, xp: r.xp, dailyXp: r.daily_xp ?? 0, rankLevel: r.rank_level ?? 1, createdAt: r.created_at });
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
-  if (res.error) throw new Error(res.error.message);
+  if (res.error) throw new Error(friendlyError(res.error.message));
   return res.data;
 }
+
+/** Messages raised by our database functions are written for users; known low-level ones are reworded. */
+function friendlyError(msg: string): string {
+  if (/failed to fetch|networkerror|network request failed/i.test(msg)) return "Network connection failed. Check your internet connection and try again.";
+  if (/jwt expired|invalid jwt|refresh token/i.test(msg)) return "Your session has expired. Please sign in again.";
+  if (/permission denied|row-level security/i.test(msg)) return "Permission denied.";
+  if (/duplicate key value/i.test(msg)) return "That record already exists.";
+  return msg;
+}
+
+const toDetails = (r: { phone: string | null; niat_id: string | null; legacy_student_id: string | null } | null, email: string | null = null): PrivateDetails => ({
+  email,
+  phone: r?.phone ?? null,
+  niatId: r?.niat_id ?? null,
+  legacyStudentId: r?.legacy_student_id ?? null,
+});
 
 export class SupabaseBackend implements Backend {
   readonly mode = "supabase" as const;
@@ -50,9 +67,14 @@ export class SupabaseBackend implements Backend {
     const row = check(await this.sb.from("profiles").select("*").eq("id", id).maybeSingle());
     return row ? toProfile(row as ProfileRow) : null;
   }
-  async signUp(input: { name: string; email: string; password: string; campus: string; studentId: string }) {
-    const res = await this.sb.auth.signUp({ email: input.email, password: input.password, options: { data: { name: input.name, campus: input.campus, student_id: input.studentId } } });
-    if (res.error) throw new Error(res.error.message);
+  async signUp(input: SignUpInput) {
+    const res = await this.sb.auth.signUp({ email: input.email.trim(), password: input.password, options: { data: { name: input.name.trim(), phone: input.phone, niat_id: input.niatId } } });
+    if (res.error) {
+      // the database trigger rejects invalid or duplicate NIAT IDs / phones; Auth reports that generically
+      if (/database error/i.test(res.error.message)) throw new Error("We couldn't create the account. Check your NIAT ID and mobile number — the NIAT ID may already be registered.");
+      if (/already registered|already been registered/i.test(res.error.message)) throw new Error("An account with this email already exists. Sign in instead.");
+      throw new Error(friendlyError(res.error.message));
+    }
     if (!res.data.session) throw new Error("Check your email to confirm your account, then sign in.");
     const p = await this.currentUser();
     if (!p) throw new Error("Profile was not created — check the database trigger.");
@@ -69,8 +91,65 @@ export class SupabaseBackend implements Backend {
     await this.sb.auth.signOut();
   }
   async updateProfile(p: Partial<Profile> & { id: string }) {
-    const row = check(await this.sb.from("profiles").update({ name: p.name, campus: p.campus, student_id: p.studentId, avatar: p.avatar }).eq("id", p.id).select("*").single());
+    // name and campus only — the avatar goes through /api/avatar, IDs through complete_my_details()
+    const row = check(await this.sb.from("profiles").update({ name: p.name, campus: p.campus }).eq("id", p.id).select("*").single());
     return toProfile(row as ProfileRow);
+  }
+  async getMyDetails() {
+    const { data } = await this.sb.auth.getUser();
+    if (!data.user) return toDetails(null);
+    return toDetails(check(await this.sb.from("profile_private").select("phone, niat_id, legacy_student_id").eq("user_id", data.user.id).maybeSingle()), data.user.email ?? null);
+  }
+  async completeMyDetails(input: { niatId?: string; phone?: string }) {
+    check(await this.sb.rpc("complete_my_details", { p_niat: input.niatId ?? null, p_phone: input.phone ?? null }));
+    return this.getMyDetails();
+  }
+  async niatIdAvailable(niatId: string) {
+    return Boolean(check(await this.sb.rpc("niat_id_available", { p_niat: niatId })));
+  }
+  private async avatarRequest(init: RequestInit) {
+    let res: Response;
+    try {
+      res = await fetch("/api/avatar", { ...init, credentials: "same-origin" });
+    } catch {
+      throw new Error("Network connection failed. Check your internet connection and try again.");
+    }
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) throw new Error(body.error ?? "Upload failed. Please try again.");
+    const p = await this.currentUser();
+    if (!p) throw new Error("Your session has expired. Please sign in again.");
+    return p;
+  }
+  async setAvatar(file: Blob) {
+    let upload: Blob;
+    try {
+      upload = await squareImage(file, 512);
+    } catch {
+      throw new Error("Could not read that image. Choose a JPEG, PNG or WebP picture.");
+    }
+    const fd = new FormData();
+    fd.append("file", upload, "avatar.webp");
+    return this.avatarRequest({ method: "POST", body: fd });
+  }
+  async removeAvatar() {
+    return this.avatarRequest({ method: "DELETE" });
+  }
+  async adminListUsers(q: AdminUserQuery) {
+    const rows = check(
+      await this.sb.rpc("admin_list_users", {
+        p_search: q.search?.trim() || null, p_role: q.role || null, p_status: q.status || null,
+        p_min_rank: q.minRank ?? null, p_max_rank: q.maxRank ?? null, p_limit: q.limit, p_offset: q.offset,
+      }),
+    ) as Record<string, unknown>[];
+    return {
+      total: rows.length ? Number(rows[0].total) : 0,
+      rows: rows.map((r): AdminUserRow => ({
+        id: String(r.id), name: String(r.name), email: String(r.email ?? ""), phone: (r.phone as string) ?? null, niatId: (r.niat_id as string) ?? null,
+        legacyStudentId: (r.legacy_student_id as string) ?? null, avatar: (r.avatar as string) ?? null, role: r.role as Profile["role"],
+        xp: Number(r.xp), dailyXp: Number(r.daily_xp ?? 0), rankLevel: Number(r.rank_level ?? 1), createdAt: String(r.created_at),
+        lastSignInAt: (r.last_sign_in_at as string) ?? null, status: r.status as AdminUserRow["status"],
+      })),
+    };
   }
   async listProfiles() {
     return (check(await this.sb.from("profiles").select("*")) as ProfileRow[]).map(toProfile);

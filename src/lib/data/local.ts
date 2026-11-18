@@ -6,7 +6,9 @@
  */
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Backend, DEFAULT_RULES, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig, sourceOf } from "./types";
+import { type AdminContent, type Backend, DEFAULT_RULES, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig, sourceOf, type SignUpInput, type PrivateDetails, type AdminUserQuery, type AdminUserRow } from "./types";
+import { blobToDataUrl, squareImage } from "@/lib/avatar-client";
+import { AVATAR_MAX_BYTES, NIAT_ID_RE, avatarFileError, mobileError, niatIdError, normalizeNiatId, toE164India } from "@/lib/validation";
 import { levelForXp } from "@/lib/ranks";
 import { isStaff, isSuperAdmin } from "@/lib/roles";
 import { gradeQuiz } from "./grading";
@@ -53,6 +55,15 @@ interface Account {
   email: string;
   salt: string;
   hash: string;
+  /** private details (never shown to other students) */
+  phone?: string | null;
+  niatId?: string | null;
+  legacyStudentId?: string | null;
+}
+
+/** Resize to a 256 × 256 WebP data URL (local mode stores pictures in browser storage). */
+async function resizeAvatar(file: Blob): Promise<string> {
+  return blobToDataUrl(await squareImage(file, 256));
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -100,19 +111,25 @@ export class LocalBackend implements Backend {
     return this.accounts().find((a) => a.profile.id === id)?.profile ?? null;
   }
 
-  async signUp(input: { name: string; email: string; password: string; campus: string; studentId: string }) {
+  async signUp(input: SignUpInput) {
     const accounts = this.accounts();
     const email = input.email.trim().toLowerCase();
     if (!email || !input.password || input.password.length < 6) throw new Error("Enter an email and a password of at least 6 characters.");
     if (!input.name.trim()) throw new Error("Enter your name.");
+    const niatErr = niatIdError(input.niatId);
+    if (niatErr) throw new Error(niatErr);
+    const phoneErr = mobileError(input.phone);
+    if (phoneErr) throw new Error(phoneErr);
+    const niatId = normalizeNiatId(input.niatId);
     if (accounts.some((a) => a.email === email)) throw new Error("An account with this email already exists on this device.");
+    if (accounts.some((a) => a.niatId === niatId)) throw new Error("This NIAT ID is already registered.");
     const salt = crypto.randomUUID();
     const profile: Profile = {
-      id: rid("u"), name: input.name.trim(), campus: input.campus.trim(), studentId: input.studentId.trim(), avatar: null,
+      id: rid("u"), name: input.name.trim(), campus: "", studentId: "", avatar: null,
       role: accounts.length === 0 ? "super_admin" : "student", // the first account on a device is its Super Admin
       xp: 0, createdAt: new Date().toISOString(),
     };
-    accounts.push({ profile, email, salt, hash: await sha256(salt + input.password) });
+    accounts.push({ profile, email, salt, hash: await sha256(salt + input.password), phone: toE164India(input.phone), niatId, legacyStudentId: null });
     write(K.accounts, accounts);
     write(K.session, profile.id);
     return profile;
@@ -133,9 +150,11 @@ export class LocalBackend implements Backend {
     const accounts = this.accounts();
     const a = accounts.find((x) => x.profile.id === p.id);
     if (!a) throw new Error("Profile not found");
-    const { role: _role, xp: _xp, ...safe } = p; // role and XP cannot be self-edited
+    const { role: _role, xp: _xp, studentId: _sid, avatar: _av, ...safe } = p; // role, XP, IDs and the picture are not edited here
     void _role;
     void _xp;
+    void _sid;
+    void _av;
     a.profile = { ...a.profile, ...safe };
     write(K.accounts, accounts);
     return a.profile;
@@ -143,6 +162,85 @@ export class LocalBackend implements Backend {
 
   async listProfiles() {
     return this.accounts().map((a) => a.profile);
+  }
+
+  private me(): Account {
+    const id = read<string | null>(K.session, null);
+    const a = this.accounts().find((x) => x.profile.id === id);
+    if (!a) throw new Error("Your session has expired. Please sign in again.");
+    return a;
+  }
+  private details(a: Account): PrivateDetails {
+    // accounts made before NIAT IDs were required keep their old ID as a legacy ID
+    const legacy = a.legacyStudentId ?? (a.profile.studentId || null);
+    return { email: a.email, phone: a.phone ?? null, niatId: a.niatId ?? (legacy && NIAT_ID_RE.test(normalizeNiatId(legacy)) ? normalizeNiatId(legacy) : null), legacyStudentId: legacy };
+  }
+  async getMyDetails() {
+    try {
+      return this.details(this.me());
+    } catch {
+      return { email: null, phone: null, niatId: null, legacyStudentId: null };
+    }
+  }
+  async completeMyDetails(input: { niatId?: string; phone?: string }) {
+    const accounts = this.accounts();
+    const a = accounts.find((x) => x.profile.id === this.me().profile.id)!;
+    const cur = this.details(a);
+    if (input.niatId) {
+      const v = normalizeNiatId(input.niatId);
+      if (cur.niatId && cur.niatId !== v) throw new Error("Your NIAT ID is already set. Ask an administrator if it is wrong.");
+      const e = niatIdError(v);
+      if (e) throw new Error(e);
+      if (accounts.some((x) => x !== a && this.details(x).niatId === v)) throw new Error("This NIAT ID is already registered.");
+      a.niatId = v;
+    }
+    if (input.phone) {
+      const e = mobileError(input.phone);
+      if (e) throw new Error(e);
+      a.phone = toE164India(input.phone);
+    }
+    write(K.accounts, accounts);
+    return this.details(a);
+  }
+  async niatIdAvailable(niatId: string) {
+    const v = normalizeNiatId(niatId);
+    return NIAT_ID_RE.test(v) && !this.accounts().some((a) => this.details(a).niatId === v);
+  }
+  async setAvatar(file: Blob) {
+    if (file.size > AVATAR_MAX_BYTES) throw new Error("The picture must be 5 MB or smaller.");
+    const err = await avatarFileError(file as File);
+    if (err) throw new Error(err);
+    const accounts = this.accounts();
+    const a = accounts.find((x) => x.profile.id === this.me().profile.id)!;
+    a.profile = { ...a.profile, avatar: await resizeAvatar(file) };
+    write(K.accounts, accounts);
+    return a.profile;
+  }
+  async removeAvatar() {
+    const accounts = this.accounts();
+    const a = accounts.find((x) => x.profile.id === this.me().profile.id)!;
+    a.profile = { ...a.profile, avatar: null };
+    write(K.accounts, accounts);
+    return a.profile;
+  }
+  async adminListUsers(q: AdminUserQuery) {
+    const me = this.me();
+    if (me.profile.role !== "admin" && me.profile.role !== "super_admin") throw new Error("Administrator access required");
+    const s = (q.search ?? "").trim().toLowerCase();
+    const digits = s.replace(/\D/g, "");
+    const all = this.accounts()
+      .map((a): AdminUserRow => {
+        const d = this.details(a);
+        return {
+          id: a.profile.id, name: a.profile.name, email: a.email, phone: d.phone, niatId: d.niatId, legacyStudentId: d.legacyStudentId, avatar: a.profile.avatar,
+          role: a.profile.role, xp: a.profile.xp, dailyXp: a.profile.dailyXp ?? 0, rankLevel: Math.max(a.profile.rankLevel ?? 1, levelForXp(a.profile.xp)),
+          createdAt: a.profile.createdAt, lastSignInAt: null, status: "active",
+        };
+      })
+      .filter((r) => !s || r.name.toLowerCase().includes(s) || r.email.includes(s) || (r.niatId ?? "").toLowerCase().includes(s) || (r.legacyStudentId ?? "").toLowerCase().includes(s) || (!!digits && (r.phone ?? "").includes(digits)))
+      .filter((r) => (!q.role || r.role === q.role) && (!q.status || r.status === q.status) && (q.minRank == null || r.rankLevel >= q.minRank) && (q.maxRank == null || r.rankLevel <= q.maxRank))
+      .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+    return { total: all.length, rows: all.slice(q.offset, q.offset + q.limit) };
   }
 
   // Same rules as the Supabase admin_set_role() function (local mode is single-device and not tamper-proof).
