@@ -187,18 +187,18 @@ export default function Arena({ project }: { project: Project }) {
       const earns = !!own?.original;
       if ((outcome === "completed" || outcome === "win") && !earns)
         toast("info", mode === "code" ? `Great run — no XP: ${own!.reason}` : "Great run — XP is earned by completing tracks with your own code, not keyboard control.");
-      if (earns && outcome === "completed") await award("lap-complete", `${project.id}:${track.id}`);
-      if (earns && outcome === "win" && track.kind === "sumo") await award("sumo-win", `${track.id}:${level}`);
+      if (earns && outcome === "completed") await award("lap-complete", `${project.id}:${track.id}`, undefined, `Completed ${track.name} with ${project.name}`);
+      if (earns && outcome === "win" && track.kind === "sumo") await award("sumo-win", `${track.id}:${level}`, undefined, `Won sumo on ${track.name} vs ${level} opponent`);
       if (progress && bestLap) {
         const prev = progress.records[track.id]?.bestLapS;
         if (prev === undefined || bestLap < prev - 0.01) {
           await updateProgress((pr) => ({ ...pr, records: { ...pr.records, [track.id]: { ...pr.records[track.id], bestLapS: bestLap } } }));
-          if (prev !== undefined && earns) await award("record-improved", `${track.id}:${bestLap.toFixed(2)}`);
+          if (prev !== undefined && earns) await award("record-improved", `${track.id}:${bestLap.toFixed(2)}`, undefined, `New best lap ${bestLap.toFixed(2)} s on ${track.name}`);
         }
       }
       if (outcome === "win") await updateProgress((pr) => ({ ...pr, records: { ...pr.records, [track.id]: { ...pr.records[track.id], wins: (pr.records[track.id]?.wins ?? 0) + 1 } } }));
     },
-    [track, mode, project.id, project.code, updateProject, award, level, progress, updateProgress, toast],
+    [track, mode, project.id, project.code, project.name, updateProject, award, level, progress, updateProgress, toast],
   );
 
   // main loop: fixed physics steps, decoupled from rendering

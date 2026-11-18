@@ -87,7 +87,7 @@ function Components() {
     setId(rec.id);
   };
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
       <Panel title="Catalogue" actions={<Button size="sm" onClick={() => void addNew()}>+ Add</Button>}>
         <input className="bf-input mb-2" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="max-h-[60vh] overflow-auto">

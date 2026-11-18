@@ -48,7 +48,49 @@ export interface XpEvent {
   refId: string;
   amount: number;
   at: string;
+  /** ledger category: build · quiz · challenge · learning · penalty · competition */
+  source?: XpSource;
+  description?: string | null;
+  /** quiz attempt this XP came from */
+  attemptId?: string | null;
 }
+
+export type XpSource = "build" | "quiz" | "challenge" | "learning" | "penalty" | "competition";
+
+export const XP_SOURCE_LABEL: Record<XpSource, string> = {
+  build: "Building & simulation",
+  quiz: "Topic quiz",
+  challenge: "Challenge",
+  learning: "Lesson",
+  penalty: "Daily learning penalty",
+  competition: "Competition",
+};
+
+/** Source for ledger rows written before the source column existed (mirrors the 0007 backfill). */
+export function sourceOf(e: Pick<XpEvent, "type" | "refId" | "source">): XpSource {
+  if (e.source) return e.source;
+  if (e.type === "quiz-pass") return e.refId.startsWith("topic:") ? "quiz" : "challenge";
+  if (e.type === "question-correct") return "quiz";
+  if (e.type === "lesson-complete") return "learning";
+  if (e.type === "inactivity-penalty") return "penalty";
+  if (e.type === "competition-win") return "competition";
+  return "build";
+}
+
+export interface RankEvent {
+  id: string;
+  oldLevel: number | null;
+  newLevel: number;
+  /** lifetime XP when promoted */
+  xpAt: number;
+  at: string;
+  /** the rank-up celebration has been shown */
+  seen: boolean;
+  note: string | null;
+}
+
+/** Leaderboard eligibility: strictly more than 50 lifetime XP. */
+export const LEADERBOARD_MIN_XP = 50;
 
 /**
  * Default XP rules. In cloud mode the amounts live in the Supabase `xp_rules` table (admins edit them in
@@ -193,7 +235,12 @@ export interface Backend {
   saveProgress(p: Progress): Promise<void>;
 
   /** Server-validated XP award: idempotent per (user, type, refId). Returns XP actually awarded. */
-  awardXp(userId: string, type: XpEventType, refId: string, amount?: number): Promise<{ awarded: number; total: number }>;
+  awardXp(userId: string, type: XpEventType, refId: string, amount?: number, description?: string): Promise<{ awarded: number; total: number }>;
+  /** Students with more than LEADERBOARD_MIN_XP lifetime XP, highest first (filtered by the database in cloud mode). */
+  listLeaderboard(): Promise<Profile[]>;
+  listRankHistory(userId: string): Promise<RankEvent[]>;
+  /** Marks rank-up celebrations as shown so they never replay. */
+  markRankSeen(ids: string[]): Promise<void>;
   listXpEvents(userId?: string): Promise<XpEvent[]>;
   /** XP amounts and the inactivity-penalty settings (everyone can read; admins can save). */
   getXpConfig(): Promise<XpConfig>;

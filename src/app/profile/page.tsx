@@ -6,8 +6,10 @@ import { RequireAuth } from "@/components/shell/AppShell";
 import { Badge, Button, Field, PageHeader, Panel, Progress, Stat } from "@/components/ui";
 import { useApp } from "@/lib/store/app";
 import { getBackend } from "@/lib/data";
-import { XP_RULES, type XpEvent } from "@/lib/data/types";
-import { ACHIEVEMENTS, earnedAchievements, rankFor, streakDays } from "@/lib/gamification";
+import type { XpEvent } from "@/lib/data/types";
+import { RankCard } from "@/components/ranks/RankCard";
+import { XpHistory } from "@/components/xp/XpHistory";
+import { ACHIEVEMENTS, earnedAchievements, streakDays } from "@/lib/gamification";
 import { LEARNING_PATHS } from "@/lib/learning";
 
 function Inner() {
@@ -18,7 +20,6 @@ function Inner() {
     void getBackend().then(async (b) => setEvents(await b.listXpEvents(user!.id)));
   }, [user]);
   const earned = useMemo(() => earnedAchievements(events, projects, progress), [events, projects, progress]);
-  const rank = rankFor(user!.xp);
   const done = new Set(progress?.completedTopics ?? []);
 
   const save = async () => {
@@ -34,7 +35,8 @@ function Inner() {
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8">
-      <PageHeader kicker="ENGINEER DOSSIER" title={user!.name}>{user!.campus || "Campus not set"} · Student ID {user!.studentId || "—"} · {user!.role === "admin" ? "Administrator" : "Student"}</PageHeader>
+      <PageHeader kicker="ENGINEER DOSSIER" title={user!.name}>{user!.campus || "Campus not set"} · Student ID {user!.studentId || "—"} · {user!.role === "super_admin" ? "Super Admin" : user!.role === "admin" ? "Administrator" : "Student"}</PageHeader>
+      <div className="mb-6"><RankCard userId={user!.id} xp={user!.xp} rankLevel={user!.rankLevel} dailyXp={user!.dailyXp} /></div>
       <div className="grid gap-6 lg:grid-cols-3">
         <Panel title="Profile" className="lg:col-span-1">
           <div className="space-y-3">
@@ -58,14 +60,14 @@ function Inner() {
           </div>
         </Panel>
         <div className="space-y-6 lg:col-span-2">
-          <Panel title="Rank & XP">
+          <Panel title="At a glance">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Stat label="XP" value={user!.xp} tone="accent" />
-              <Stat label="Rank" value={rank.name} tone="brand" sub={rank.next ? `${rank.toNext} XP to ${rank.next}` : "Top rank"} />
+              <Stat label="Lifetime XP" value={user!.xp.toLocaleString()} tone="accent" />
+              <Stat label="Today" value={(user!.dailyXp ?? 0).toLocaleString()} sub="since 11:15 PM" />
               <Stat label="Projects" value={projects.length} />
               <Stat label="Streak" value={`${streakDays(events)} d`} />
             </div>
-            <div className="mt-3"><Progress value={rank.pct} /></div>
+            <div className="mt-3 flex flex-wrap gap-3 text-xs"><Link href="/learn/performance" className="text-accent-ink hover:underline">My performance analysis →</Link><Link href="/learn/history" className="text-accent-ink hover:underline">Quiz history →</Link></div>
           </Panel>
           <Panel title={`Achievements (${earned.size}/${ACHIEVEMENTS.length})`}>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -98,19 +100,9 @@ function Inner() {
               </Link>
             ))}
           </Panel>
-          <Panel title="XP history">
-            <div className="max-h-64 overflow-auto text-xs">
-              {[...events].filter((e) => e.amount !== 0).reverse().map((e) => (
-                <div key={e.id} className="flex justify-between gap-3 border-b border-line/60 py-1">
-                  <span>{XP_RULES[e.type]?.label ?? e.type} <span className="text-dim">({e.refId})</span></span>
-                  <span className={`font-mono ${e.amount < 0 ? "text-bad" : "text-ok"}`}>{e.amount > 0 ? "+" : "−"}{Math.abs(e.amount)}</span>
-                </div>
-              ))}
-              {!events.length && <div className="text-muted">No XP yet. XP is earned for learning, passing quizzes, validating robots and completing simulations — not for visiting pages.</div>}
-            </div>
-          </Panel>
         </div>
       </div>
+      <div className="mt-6" id="xp-history"><XpHistory events={events} lifetimeXp={user!.xp} dailyXp={user!.dailyXp ?? 0} title="XP history" /></div>
     </div>
   );
 }

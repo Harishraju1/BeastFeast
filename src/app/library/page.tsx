@@ -27,7 +27,7 @@ function Completeness() {
     ["Entries with unverified specifications", rep.unverifiedSpecs, "dim"],
   ];
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
       <Panel title="Catalogue completeness validation" actions={<Badge tone={rep.complete ? "ok" : "bad"}>{rep.complete ? "COMPLETE" : "INCOMPLETE"}</Badge>}>
         <p className="mb-3 text-xs text-muted">
           Compares the master list ({uploaded ? `uploaded: ${uploaded.name}` : `bundled copy, sha256 ${MASTER_LIST_SHA256.slice(0, 12)}…`}) against the application database, entry by entry (section, number and exact name).

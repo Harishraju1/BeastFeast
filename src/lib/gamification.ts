@@ -1,19 +1,12 @@
 import type { Project } from "@/lib/types";
 import type { Progress, XpEvent } from "@/lib/data/types";
 
-export const RANKS = [
-  { min: 0, name: "Rookie" },
-  { min: 200, name: "Builder" },
-  { min: 600, name: "Engineer" },
-  { min: 1200, name: "Specialist" },
-  { min: 2500, name: "Master Engineer" },
-  { min: 5000, name: "Robot Beast" },
-];
-export function rankFor(xp: number) {
-  let i = 0;
-  while (i + 1 < RANKS.length && xp >= RANKS[i + 1].min) i++;
-  const next = RANKS[i + 1];
-  return { name: RANKS[i].name, index: i, next: next?.name ?? null, toNext: next ? next.min - xp : 0, pct: next ? ((xp - RANKS[i].min) / (next.min - RANKS[i].min)) * 100 : 100 };
+import { rankProgress } from "./ranks";
+
+/** Rank summary for display — thresholds live in src/lib/ranks.ts (the single rank configuration). */
+export function rankFor(xp: number, storedLevel?: number | null) {
+  const r = rankProgress(xp, storedLevel);
+  return { name: r.name, level: r.level, index: r.level - 1, next: r.next?.name ?? null, toNext: r.toNext, pct: r.pct };
 }
 
 export const ACHIEVEMENTS = [

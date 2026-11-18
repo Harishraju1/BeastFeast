@@ -1,12 +1,12 @@
 # DEVELOPMENT STATUS — BEAST FEAST 5.0
 
-Last updated: 2026-11-17 (brand colour system, roles and admin management added)
+Last updated: 2026-11-18 (XP ledger, daily reset, 16 ranks, leaderboard filter, exam-style quizzes, performance analysis, XP histories, grouped navigation; see AUDIT_REPORT.md)
 
 ## Completed modules
 
 | Module | State | Notes |
 | --- | --- | --- |
-| Design system & app shell | ✅ | Dark futuristic theme (#080A0F, orange/cyan accents), Space Grotesk / Inter / JetBrains Mono, animated grid, sidebar, top bar with search (Ctrl K), notifications, help, settings, autosave indicator |
+| Design system & app shell | ✅ | Dark forest theme (page #131A16, Forest Sage panels, Warm Ivory text, Signal Red accents), Space Grotesk / Inter / JetBrains Mono. Sidebar grouped into Learn / Build / Compete with hints on every link; top bar with search (Ctrl K), notifications, help and settings; footer with the logo; logo on the loading screen |
 | Command Center | ✅ | Interactive 3D hero robot; workspace stats; continue building; weekly missions; achievements & streaks; featured tutorials; leaderboard preview; competition updates |
 | Authentication & profiles | ✅ local / ✅ Supabase connected | Local mode uses salted SHA-256 hashes in browser storage. Cloud mode uses Supabase Auth; the profile row is created by a database trigger |
 | Component catalogue | ✅ | 552/552 master-list entries, 0 missing, 0 duplicate IDs. Classes A/B/C. Honest GREEN/BLUE/YELLOW/GREY status. 75 datasheet-referenced pinouts, 220 function-standard pinouts. In-app completeness validator (can compare a newly uploaded list) |
@@ -24,13 +24,14 @@ Last updated: 2026-11-17 (brand colour system, roles and admin management added)
 | Debugging assistant | ✅ | Runtime errors, compile failures, runtime warnings, motors not responding (only when code commands motion), wrong motor direction, off-track, ring-out, battery low, collisions. Separates verified facts from possible causes; can pause the simulation |
 | Track Designer | ✅ | Race/line/sumo tools, endpoint snapping, drag/rotate/resize/duplicate/delete, undo/redo, zoom/pan, free-draw lines, surface friction, difficulty, laps, arena settings, 3D preview, save/load/import/export, 9 example tracks |
 | Beast Topics | ✅ | 84 topics (30 line, 28 race, 26 sumo), all required sections, generated diagrams, mark complete, bookmark, continue reading, YouTube search links and admin-curated embeds |
-| Quiz & challenge engine | ✅ | 350 questions across all 10 types; topic quizzes, 3 competition quizzes, 2 weekly quizzes, 3 engineering challenges, final exam; immediate feedback; XP once per question |
-| Gamification | ✅ | XP rules table, ranks, 9 achievements derived from recorded events, streaks, 9 leaderboards |
+| Quiz & challenge engine | ✅ | 350 questions across all 10 types; topic quizzes, 3 competition quizzes, 2 weekly quizzes, 3 engineering challenges, final exam. Exam-style runner: Previous / Skip / Next, palette of answered/skipped/unanswered questions, review before submit, results with explanations and XP. A double-submit guard plus server dedup means XP is awarded once |
+| Gamification | ✅ | One XP ledger (`xp_events`: source, description, attempt). Lifetime XP never resets. Daily XP resets at 11:15 PM IST via pg_cron (Vercel cron backup), idempotent per day. 16 ranks (Beginner → BEAST) set on the server, never lowered by penalties, with rank history and a one-time rank-up animation. The leaderboard shows only students above 50 XP (filtered in the database; ties share a place). Profile XP history with search/source/quiz/date filters and totals; challenge XP history; 9 achievements; streaks |
+| Performance analysis | ✅ | `/learn/performance`: accuracy per topic and per category (9 categories covering all 84 topics). Bands: Needs Improvement < 50, Developing 50–69, Good 70–84, Excellent 85+, shown only after 5+ answers. Strongest/weakest areas, trend chart, recommended lessons |
 | Brand colour system | ✅ | Forest Sage dominant / Warm Ivory foreground / Signal Red accents, defined once as CSS tokens (`globals.css`) and `src/lib/theme.ts` for 3D, SVG and Monaco. Applied to every page, including the 3D viewports, schematic canvas, track designer, diagrams and code editor. An automated colour audit found no old-palette colours on any route. |
 | Roles & admin security | ✅ | student / admin / super_admin. The `/admin` route is gated on the server (`proxy.ts` plus a Server Component layout that reads the role from the database). The database enforces everything else: RLS, `admin_set_role` / `admin_find_user` / `admin_list_staff` functions, a protect-profile trigger and an append-only `role_audit_log`. MAKE AS ADMIN by email (Super Admin only), revoke, and audit log UI. The Super Admin is bootstrapped server-side (`npm run admin:bootstrap`). |
 | Admin dashboard | ✅ | Students and roles, component editing (images, 3D URL, datasheet, verification, pin JSON), lesson overrides and extra questions, videos, weekly missions, announcements, competition rules, featured projects, analytics |
 | BEAST PROJECT GARAGE | ✅ | 9 reference robots (3 per competition) built from catalogue parts through the normal project pipeline; Garage page with Line Following Lab / Robo Race Garage / Sumo Battle Workshop; VIEW / LOAD / SIMULATE NOW / CUSTOMISE; project view with OVERVIEW, 3D ASSEMBLY, CIRCUIT, CODE, SIMULATION, COMPONENTS tabs; 12-step loader that really builds, compiles, validates and starts the simulation; read-only originals + student copies; 14-check readiness test (all 9: READY TO SIMULATE); live tuning panel (sliders send the firmware's own Serial commands) and firmware telemetry panel; keyboard → Bluetooth serial → firmware for the manual racers |
-| Supabase schema | ✅ applied (2026-11-17) | Tables for all 25 entities, normalised project tables kept in sync by trigger, RLS on every table, `award_xp` / `complete_lesson` / `submit_quiz` security-definer functions, leaderboard view, seed script |
+| Supabase schema | ✅ applied (0001–0009, 2026-11-18) | Tables for all 25 entities, normalised project tables kept in sync by trigger, RLS on every table, `award_xp` / `complete_lesson` / `submit_quiz` security-definer functions, leaderboard view, seed script |
 
 ## In progress / pending
 

@@ -7,6 +7,8 @@ import { BACKEND_MODE, getBackend } from "@/lib/data";
 import type { XpEvent } from "@/lib/data/types";
 import type { Profile, Project } from "@/lib/types";
 import { rankFor } from "@/lib/gamification";
+import { RankBadge } from "@/components/ranks/RankBadge";
+import { LEADERBOARD_MIN_XP } from "@/lib/data/types";
 import { EXAMPLE_TRACKS } from "@/lib/track/examples";
 import { useApp } from "@/lib/store/app";
 
@@ -23,7 +25,7 @@ export default function LeaderboardPage() {
   const [board, setBoard] = useState("overall");
   useEffect(() => {
     void getBackend().then(async (b) => {
-      setProfiles(await b.listProfiles());
+      setProfiles(await b.listLeaderboard());
       setEvents(await b.listXpEvents());
       setProjects(await b.listAllProjects());
     });
@@ -53,13 +55,16 @@ export default function LeaderboardPage() {
       const prj = projects.filter((p) => p.ownerId === u.id);
       return { u, v: b.value(u, ev, prj), projects: prj.length, ach: new Set(ev.map((e) => e.type)).size };
     })
-    .sort((a, b2) => b2.v - a.v || b2.u.xp - a.u.xp);
+    .sort((a, b2) => b2.v - a.v || b2.u.xp - a.u.xp || a.u.createdAt.localeCompare(b2.u.createdAt));
+  // equal scores share a place (1, 2, 2, 4 …)
+  const place = rows.map((r, i) => (i > 0 && r.v === rows[i - 1].v && r.u.xp === rows[i - 1].u.xp ? -1 : i + 1));
+  for (let i = 1; i < place.length; i++) if (place[i] === -1) place[i] = place[i - 1];
 
   return (
     <RequireAuth>
       <div className="mx-auto max-w-6xl px-5 py-8">
         <PageHeader kicker="GLOBAL RANKINGS" title="Leaderboard">
-          {BACKEND_MODE === "local" ? "Local mode: rankings include the accounts on this device. Connect Supabase for a campus-wide, server-validated leaderboard." : "Scores come from server-validated XP events."}
+          {BACKEND_MODE === "local" ? "Local mode: rankings include the accounts on this device." : "Scores come from server-validated XP events."} Only students with more than {LEADERBOARD_MIN_XP} lifetime XP appear.
         </PageHeader>
         <div className="mb-5 flex flex-wrap gap-2">
           {BOARDS.map((x) => (
@@ -76,12 +81,13 @@ export default function LeaderboardPage() {
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.u.id} className={`border-t border-line ${r.u.id === me?.id ? "bg-accent/5" : ""}`}>
-                  <td className="px-5 py-3 font-mono">{i < 3 ? <Trophy size={16} className={i === 0 ? "text-accent-ink" : i === 1 ? "text-muted" : "text-[#d9a066]"} /> : i + 1}</td>
+                  <td className="px-5 py-3 font-mono">{place[i] <= 3 ? <span className="inline-flex items-center gap-1.5"><Trophy size={16} className={place[i] === 1 ? "text-accent-ink" : place[i] === 2 ? "text-muted" : "text-[#d9a066]"} />{place[i]}</span> : place[i]}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
                       <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-panel2 text-xs text-brand">{r.u.avatar ? <img src={r.u.avatar} alt="" className="h-full w-full object-cover" /> : r.u.name[0]}</span>
                       <span>{r.u.name}</span>
-                      <Badge>{rankFor(r.u.xp).name}</Badge>
+                      <RankBadge level={rankFor(r.u.xp, r.u.rankLevel).level} size={24} />
+                      <Badge>{rankFor(r.u.xp, r.u.rankLevel).name}</Badge>
                     </div>
                   </td>
                   <td className="hidden px-5 py-3 text-muted sm:table-cell">{r.u.campus || "—"}</td>
@@ -90,7 +96,7 @@ export default function LeaderboardPage() {
                   <td className="hidden px-5 py-3 text-right md:table-cell">{BACKEND_MODE === "local" || r.u.id === me?.id ? r.projects : "—"}</td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={6} className="p-6 text-center text-muted">No students yet.</td></tr>}
+              {!rows.length && <tr><td colSpan={6} className="p-6 text-center text-muted">No one above {LEADERBOARD_MIN_XP} XP yet — design robots, write your own code and take quizzes to get on the board.</td></tr>}
             </tbody>
           </table>
         </div>

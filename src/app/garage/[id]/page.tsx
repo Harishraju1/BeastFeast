@@ -70,7 +70,7 @@ export default function GarageProjectPage() {
       </div>
 
       {tab === "overview" && (
-        <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.2fr_1fr]">
           <div className="space-y-5">
             <Panel title="What it is"><p className="text-sm text-muted">{t.metadata.description}</p></Panel>
             <Panel title="Working principle"><p className="text-sm leading-relaxed text-muted">{t.metadata.workingPrinciple}</p></Panel>
@@ -98,7 +98,7 @@ export default function GarageProjectPage() {
       )}
 
       {tab === "assembly" && (
-        <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px]">
           <div className="relative h-[520px] overflow-hidden rounded-xl border border-line">
             <Preview3D project={project} exploded={exploded} />
             <Button size="sm" className="absolute left-3 top-3" variant={exploded ? "primary" : "outline"} onClick={() => setExploded(exploded ? 0 : 1)}>{exploded ? "RESTORE" : "EXPLODED VIEW"}</Button>
@@ -147,7 +147,7 @@ export default function GarageProjectPage() {
       )}
 
       {tab === "code" && (
-        <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
           <pre className="max-h-[640px] overflow-auto bf-code rounded-xl p-4 font-mono text-[12px] leading-relaxed">
             {t.firmware.source.split("\n").map((l, i) => (
               <div key={i}><span className="mr-4 inline-block w-8 select-none text-right text-dim">{i + 1}</span><span className={l.trim().startsWith("//") ? "bf-code-dim" : l.trim().startsWith("#define") ? "text-accent-ink" : ""}>{l}</span></div>

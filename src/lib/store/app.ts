@@ -52,7 +52,7 @@ interface AppState {
   deleteTrack(id: string): Promise<void>;
 
   updateProgress(fn: (p: Progress) => Progress): Promise<void>;
-  award(type: XpEventType, refId: string, amount?: number): Promise<number>;
+  award(type: XpEventType, refId: string, amount?: number, description?: string): Promise<number>;
   /** Marks today as a learning day (topic studied, video watched) so the daily penalty doesn't apply. */
   recordActivity(kind: LearningActivityKind, ref: string): Promise<void>;
   saveContent(c: Partial<AdminContent>): Promise<void>;
@@ -255,7 +255,7 @@ export const useApp = create<AppState>((set, get) => ({
     const isNew = !get().tracks.some((x) => x.id === t.id);
     await be.saveTrack(t);
     set({ tracks: [...get().tracks.filter((x) => x.id !== t.id), t] });
-    if (isNew) await get().award("track-created", t.id);
+    if (isNew) await get().award("track-created", t.id, undefined, `Designed track: ${t.name}`);
   },
   async deleteTrack(id) {
     const be = await getBackend();
@@ -271,15 +271,16 @@ export const useApp = create<AppState>((set, get) => ({
     const be = await getBackend();
     await be.saveProgress(next);
   },
-  async award(type, refId, amount) {
+  async award(type, refId, amount, description) {
     const user = get().user;
     if (!user) return 0;
     try {
       const be = await getBackend();
-      const r = await be.awardXp(user.id, type, refId, amount);
+      const r = await be.awardXp(user.id, type, refId, amount, description);
       if (r.awarded > 0) {
         set({ user: { ...user, xp: r.total } });
         get().toast("xp", `+${r.awarded} XP`);
+        void get().refreshUser(); // picks up daily XP and any rank-up from the server
       }
       return r.awarded;
     } catch (e) {

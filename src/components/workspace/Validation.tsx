@@ -27,7 +27,7 @@ export function useValidate(project: Project | undefined) {
     ws.set({ scanning: false, scanPart: null, reportOpen: true });
     if (report.passed) {
       if (project.origin) toast("info", "Design passes — Garage designs don't earn design XP. Build your own robot to earn it.");
-      else await award("validation-pass", project.id);
+      else await award("validation-pass", project.id, undefined, `Robot design passed validation: ${project.name}`);
     }
   };
 }

@@ -30,6 +30,8 @@ With no Supabase variables set, the app runs in **local mode**: accounts, projec
 | `npm run garage:report` | Runs the readiness test and every BEAST PROJECT GARAGE behaviour scenario and writes `GARAGE_TEST_REPORT.md` |
 | `npm run roles:smoke [baseUrl]` | Creates temporary student/admin/super-admin accounts and runs 23 checks on role security, email promotion, the audit log and the server-side `/admin` gate against a running app (default `http://localhost:3210`), then deletes them |
 | `npm run admin:bootstrap -- <email>` | Makes a registered account the **Super Admin** (server-side, uses the secret key; audited) |
+| `npm run brand:assets [logo]` | Rebuilds every logo image (full logo, sidebar/footer lock-up, emblem, favicon, home-screen icon, link preview) from the official logo in `data/source/brand/beast-feast-logo.webp` |
+| `npm run xp:smoke` | Runs 34 checks against the configured Supabase project with temporary accounts: XP amounts, ledger sources, server-side ranks and rank history, the shown-once rank-up flag, daily penalties, the 11:15 PM daily reset (idempotent, lifetime XP untouched), the leaderboard's > 50 XP boundary (50 out, 51 in) and the admin rank recalculation. Restores every setting it changes |
 | `npm run cloud:smoke` | Creates two temporary accounts in the configured Supabase project, runs 19 security and XP checks, then deletes them |
 | `npm run db:push` | Applies `supabase/migrations/*.sql` to the database in `SUPABASE_DB_URL` (Supabase CLI) |
 | `npm run seed:supabase` | Loads catalogue and learning content (including hidden quiz answer keys) into Supabase |
@@ -94,7 +96,7 @@ Local mode (no Supabase) applies the same rules in the browser, and the first ac
 
 ## Cloud mode (Supabase)
 
-1. Create a Supabase project, copy `.env.example` to `.env.local` and fill in all five values (step 2). Then run `npm run db:push`. It applies `supabase/migrations/0001–0005`, which create the tables, row-level security, the `award_xp`, `complete_lesson` and `submit_quiz` functions, and the table grants.
+1. Create a Supabase project, copy `.env.example` to `.env.local` and fill in all five values (step 2). Then run `npm run db:push`. It applies `supabase/migrations/0001–0009`: the tables, row-level security, the XP ledger and the `award_xp`, `complete_lesson`, `submit_quiz`, `apply_inactivity_penalties` and `reset_daily_xp` functions, ranks and rank history, the pg_cron daily reset job and the table grants.
 2. The values in `.env.local`:
    - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (public anon key only).
    - For seeding only, on your machine: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. For `db:push`: `SUPABASE_DB_URL` (Supabase → Connect → Session pooler URI, with your database password). Never prefix the service key with `NEXT_PUBLIC_`, and never commit it.
@@ -107,6 +109,16 @@ In cloud mode:
 - Quizzes are graded on the server against `quiz_answer_keys`, which students cannot read.
 - Every table has RLS. Students can only access their own projects and progress, and only admins can edit content.
 
+## XP, ranks and the daily reset
+
+- **One ledger.** Every XP change is a row in `xp_events` with a type, a source (Building & Simulation, Topic Quiz, Challenge, Learning, Penalty, Competition), a description and, for quizzes, the attempt it belongs to. Rows are only written by security-definer functions in the database, deduplicated per (user, type, reference). Students cannot insert, edit or delete them.
+- **Lifetime XP** = the ledger sum, never below 0. It never resets.
+- **Daily XP** = the ledger sum since the most recent **11:15 PM India Standard Time** (Asia/Kolkata, UTC+5:30, no daylight saving), which is **17:45 UTC**. `xp_period_start()` computes the boundary.
+- **Daily reset.** A pg_cron job, `beast-daily-xp-reset` with schedule `45 17 * * *` (UTC), calls `reset_daily_xp('pg_cron')`. A Vercel cron (`vercel.json` → `/api/cron/daily-xp-reset`, same schedule) is a backup. Each XP day is recorded once in `xp_reset_runs` (primary key = period start), so a repeated or late run does nothing to lifetime XP and never double-resets. No browser timers are involved. Admins can see the job and its recent runs with `select xp_scheduler_status();`. If `CRON_SECRET` is set in Vercel, the cron route requires it.
+- **Ranks.** 16 ranks from Beginner (0 XP) to BEAST (33,000 XP), defined once in `src/lib/ranks.ts` and mirrored in the `ranks` table. The database sets `profiles.rank_level` whenever XP changes and never lowers it: a rank, once earned, survives penalties and the daily reset. Each promotion is written to `rank_history`. The rank-up animation shows unseen promotions once and marks them seen in the database. Only an admin can recalculate a rank downwards (`admin_recalculate_rank`, recorded in rank history).
+- **Leaderboard.** Only students with **more than 50** lifetime XP appear. The filter runs in the database (`xp > 50`, also the `leaderboard_eligible` view). Equal scores share a place, and ties are ordered by sign-up date.
+- **Where students see it.** Profile: rank card, rank ladder and history, and a searchable, filterable XP history. Challenges: the challenge XP history from the same ledger. Beast Topics → My Performance: accuracy by topic and category, strongest and weakest areas, trend and recommended lessons.
+
 ## Deployment
 
 Any Node host that runs Next.js 16 works (Vercel, Netlify, a VM with `npm run build && npm start`):
@@ -117,7 +129,7 @@ Any Node host that runs Next.js 16 works (Vercel, Netlify, a VM with `npm run bu
 
 ### Vercel
 
-The two public Supabase values are committed in `.env.production`, which Vercel reads at build time. You can override them with project environment variables. The web app needs nothing else: the secret key and database URL are only for the scripts on your machine, so never add them to Vercel. `src/proxy.ts` runs as Next.js Proxy (formerly Middleware). In Supabase, Authentication, URL Configuration, set the Site URL to the Vercel domain.
+The two public Supabase values are committed in `.env.production`, which Vercel reads at build time. You can override them with project environment variables. The web app needs nothing else: the secret key and database URL are only for the scripts on your machine, so never add them to Vercel. `vercel.json` registers the backup daily-reset cron (optional `CRON_SECRET` env var). `src/proxy.ts` runs as Next.js Proxy (formerly Middleware). In Supabase, Authentication, URL Configuration, set the Site URL to the Vercel domain.
 
 ## Architecture
 
@@ -136,7 +148,9 @@ src/
   lib/garage/                Project Garage: template format, 9 reference robots, readiness test, scenarios
   lib/theme.ts               brand colours for 3D / SVG / Monaco (CSS tokens live in app/globals.css)
   lib/roles.ts, lib/supabase role helpers; server-side Supabase client for the /admin gate (proxy.ts is in src/)
-  lib/learning/              84 Beast Topics, 350 questions, quizzes, weekly missions
+  lib/learning/              84 Beast Topics, 350 questions, quizzes, weekly missions, topic categories, performance analysis
+  lib/ranks.ts               the 16-rank configuration (mirrored in the database `ranks` table)
+  components/ranks, xp/      rank badge/card/rank-up animation; XP and challenge XP history
   lib/data/                  Backend interface: LocalBackend (browser) and SupabaseBackend
   app/                       pages: Command Center, projects, workspace/[id]/(design|circuit|code|arena),
                              tracks, library, learn, challenges, leaderboard, profile, admin

@@ -324,7 +324,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
     );
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[250px_1fr_380px]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[250px_1fr_380px]">
       <aside className="bf-panel h-fit space-y-4 p-3 lg:sticky lg:top-20">
         {filters}
         <div className="max-h-[50vh] overflow-auto">{tree}</div>

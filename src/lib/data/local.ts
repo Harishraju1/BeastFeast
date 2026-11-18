@@ -6,7 +6,8 @@
  */
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Backend, DEFAULT_RULES, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, defaultXpConfig } from "./types";
+import { type AdminContent, type Backend, DEFAULT_RULES, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig, sourceOf } from "./types";
+import { levelForXp } from "@/lib/ranks";
 import { isStaff, isSuperAdmin } from "@/lib/roles";
 import { gradeQuiz } from "./grading";
 
@@ -20,7 +21,15 @@ const K = {
   content: "bf5.content",
   roleAudit: "bf5.roleAudit",
   activity: "bf5.activity",
+  ranks: "bf5.rankHistory",
 };
+
+/** Start of the current XP day: the most recent 11:15 PM in Asia/Kolkata (UTC+5:30, no DST) = 17:45 UTC. */
+export function xpPeriodStart(now: Date = new Date()): Date {
+  const b = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 17, 45));
+  if (b.getTime() > now.getTime()) b.setUTCDate(b.getUTCDate() - 1);
+  return b;
+}
 
 interface ActivityRow {
   userId: string;
@@ -213,7 +222,7 @@ export class LocalBackend implements Backend {
     write(K.progress(p.userId), p);
   }
 
-  async awardXp(userId: string, type: XpEventType, refId: string, amount?: number) {
+  async awardXp(userId: string, type: XpEventType, refId: string, amount?: number, description?: string) {
     if (type === "inactivity-penalty") throw new Error("Penalties are applied automatically.");
     const events = read<XpEvent[]>(K.xp, []);
     const rule = (await this.getXpConfig()).rules[type];
@@ -223,7 +232,7 @@ export class LocalBackend implements Backend {
     const overLimit = rule.limit !== null && mine.filter((e) => e.type === type).length >= rule.limit;
     let awarded = 0;
     if (!dup && !overLimit && value > 0) {
-      events.push({ id: rid("xp"), userId, type, refId, amount: value, at: new Date().toISOString() });
+      events.push({ id: rid("xp"), userId, type, refId, amount: value, at: new Date().toISOString(), source: sourceOf({ type, refId }), description: description ?? null });
       write(K.xp, events);
       awarded = value;
     }
@@ -231,16 +240,44 @@ export class LocalBackend implements Backend {
     return { awarded, total: this.recomputeXp(userId) };
   }
 
-  /** Total XP from events, never below 0, written to the profile. */
+  /** Lifetime XP (≥ 0), daily XP since 11:15 PM IST and the permanent rank — same rules as the database. */
   private recomputeXp(userId: string) {
-    const total = Math.max(0, read<XpEvent[]>(K.xp, []).filter((e) => e.userId === userId).reduce((a, e) => a + e.amount, 0));
+    const mine = read<XpEvent[]>(K.xp, []).filter((e) => e.userId === userId);
+    const total = Math.max(0, mine.reduce((a, e) => a + e.amount, 0));
+    const since = xpPeriodStart().getTime();
+    const daily = Math.max(0, mine.filter((e) => Date.parse(e.at) >= since).reduce((a, e) => a + e.amount, 0));
     const accounts = this.accounts();
     const acc = accounts.find((a) => a.profile.id === userId);
-    if (acc && acc.profile.xp !== total) {
-      acc.profile.xp = total;
+    if (acc) {
+      const old = acc.profile.rankLevel ?? 1;
+      const lvl = levelForXp(total);
+      if (lvl > old) {
+        const hist = read<(RankEvent & { userId: string })[]>(K.ranks, []);
+        write(K.ranks, [...hist, { id: rid("rk"), userId, oldLevel: old, newLevel: lvl, xpAt: total, at: new Date().toISOString(), seen: false, note: null }]);
+      }
+      acc.profile = { ...acc.profile, xp: total, dailyXp: daily, rankLevel: Math.max(old, lvl) };
       write(K.accounts, accounts);
     }
     return total;
+  }
+
+  async listLeaderboard() {
+    for (const a of this.accounts()) this.recomputeXp(a.profile.id);
+    return this.accounts()
+      .map((a) => a.profile)
+      .filter((p) => p.xp > LEADERBOARD_MIN_XP)
+      .sort((a, b) => b.xp - a.xp || a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async listRankHistory(userId: string): Promise<RankEvent[]> {
+    return read<(RankEvent & { userId: string })[]>(K.ranks, [])
+      .filter((r) => r.userId === userId)
+      .sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  async markRankSeen(ids: string[]) {
+    const set = new Set(ids);
+    write(K.ranks, read<(RankEvent & { userId: string })[]>(K.ranks, []).map((r) => (set.has(r.id) ? { ...r, seen: true } : r)));
   }
 
   async getXpConfig(): Promise<XpConfig> {
@@ -286,7 +323,7 @@ export class LocalBackend implements Backend {
       if (!settled && !learned && !activity.has(d)) {
         const total = Math.max(0, mine.reduce((a, e) => a + e.amount, 0));
         const v = Math.min(pen, total);
-        events.push({ id: rid("xp"), userId: me.id, type: "inactivity-penalty", refId: d, amount: -v, at: new Date().toISOString() });
+        events.push({ id: rid("xp"), userId: me.id, type: "inactivity-penalty", refId: d, amount: -v, at: new Date().toISOString(), source: "penalty", description: `No Beast Topics, videos or quizzes on ${d}` });
         write(K.xp, events);
         if (v > 0) {
           deducted += v;
@@ -308,13 +345,20 @@ export class LocalBackend implements Backend {
     const content = await this.getContent();
     const g = gradeQuiz(quizId, answers, new Set(progress.correctQuestions), content.extraQuestions);
     let xp = 0;
+    const attemptId = rid("qa");
+    const { quizTitle } = await import("@/lib/learning/history");
+    const title = quizTitle(quizId);
+    const before = new Set(read<XpEvent[]>(K.xp, []).map((e) => e.id));
     for (const qid of g.newlyCorrect) {
       const q = (await import("@/lib/learning")).getQuestion(qid) ?? content.extraQuestions.find((e) => e.question.id === qid)?.question;
-      xp += (await this.awardXp(userId, "question-correct", qid, q?.xp ?? 0)).awarded;
+      xp += (await this.awardXp(userId, "question-correct", qid, q?.xp ?? 0, `Correct answer — ${title}`)).awarded;
     }
-    if (g.passed) xp += (await this.awardXp(userId, "quiz-pass", quizId)).awarded;
+    if (g.passed) xp += (await this.awardXp(userId, "quiz-pass", quizId, undefined, `Passed: ${title}`)).awarded;
+    // tag this submission's ledger rows with the attempt and its source (topic quiz or challenge)
+    const source = quizId.startsWith("topic:") ? "quiz" : "challenge";
+    write(K.xp, read<XpEvent[]>(K.xp, []).map((e) => (before.has(e.id) ? e : { ...e, attemptId, source })));
     await this.recordActivity("quiz", quizId);
-    const attempt: QuizAttempt = { id: rid("qa"), quizId, at: new Date().toISOString(), answers, correct: g.correct, total: g.total, percent: g.percent, passed: g.passed, xpAwarded: xp };
+    const attempt: QuizAttempt = { id: attemptId, quizId, at: new Date().toISOString(), answers, correct: g.correct, total: g.total, percent: g.percent, passed: g.passed, xpAwarded: xp };
     progress.correctQuestions = [...new Set([...progress.correctQuestions, ...g.newlyCorrect])];
     progress.quizAttempts = [...progress.quizAttempts, attempt];
     await this.saveProgress(progress);

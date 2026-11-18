@@ -79,7 +79,7 @@ export function AdminManagement() {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <Panel title={<span className="flex items-center gap-2"><UserPlus size={15} className="text-accent-ink" /> MAKE AS ADMIN</span>}>
         {!superAdmin ? (
           <p className="text-sm text-muted">Only the Super Admin can grant or revoke administrator access. You can see who has access and the change history.</p>

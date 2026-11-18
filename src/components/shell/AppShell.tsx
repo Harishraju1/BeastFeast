@@ -6,13 +6,14 @@ import sidebarLogo from "@/assets/brand/beast-feast-sidebar.webp";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import {
-  Bot, BookOpen, Boxes, Warehouse, CircuitBoard, Code2, Crown, Gauge, HelpCircle, LayoutDashboard, LogOut, Map, Menu, Search, Settings, Shield, Swords, Trophy, User, Bell, Cloud, CloudOff, Loader2, Check,
+  Bot, BookOpen, Boxes, Cpu, LineChart, Warehouse, CircuitBoard, Code2, Crown, Gauge, HelpCircle, LayoutDashboard, LogOut, Map, Menu, Search, Settings, Shield, Swords, Trophy, User, Bell, Cloud, CloudOff, Loader2, Check,
 } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { BACKEND_MODE } from "@/lib/data";
 import { isStaff } from "@/lib/roles";
 import { Toasts } from "./Toasts";
 import { CommandSearch } from "./CommandSearch";
+import { RankUpCelebration } from "@/components/ranks/RankUpCelebration";
 
 export function workspaceHref(lastProjectId: string | null, tab: "design" | "circuit" | "code" | "arena") {
   return lastProjectId ? `/workspace/${lastProjectId}/${tab}` : `/projects?next=${tab}`;
@@ -42,22 +43,48 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => setMobileOpen(false), [path]);
 
   const immersive = path.startsWith("/workspace/") || /^\/tracks\/[^/]+/.test(path);
-  const nav = [
-    { href: "/", label: "Command Center", icon: LayoutDashboard },
-    { href: "/garage", label: "BEAST Project Garage", icon: Warehouse, highlight: true },
-    { href: "/projects", label: "My Projects", icon: Boxes },
-    { href: workspaceHref(lastProjectId, "design"), label: "Robot Designer", icon: Bot, match: "/design" },
-    { href: workspaceHref(lastProjectId, "circuit"), label: "Circuit Studio", icon: CircuitBoard, match: "/circuit" },
-    { href: workspaceHref(lastProjectId, "code"), label: "Code Studio", icon: Code2, match: "/code" },
-    { href: workspaceHref(lastProjectId, "arena"), label: "Simulation Arena", icon: Gauge, match: "/arena" },
-    { href: "/tracks", label: "Track Designer", icon: Map },
-    { href: "/library", label: "Component Library", icon: Boxes },
-    { href: "/learn", label: "Beast Topics", icon: BookOpen },
-    { href: "/challenges", label: "Challenges", icon: Swords },
-    { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
-    { href: "/profile", label: "My Profile", icon: User },
+  // grouped navigation: what students do, in the order they usually do it
+  type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; match?: string; highlight?: boolean; hint: string };
+  const sections: { title: string | null; items: NavItem[] }[] = [
+    { title: null, items: [{ href: "/", label: "Command Center", icon: LayoutDashboard, hint: "Your dashboard and next steps" }] },
+    {
+      title: "Learn",
+      items: [
+        { href: "/learn", label: "Beast Topics", icon: BookOpen, hint: "84 lessons with mini quizzes" },
+        { href: "/challenges", label: "Challenges", icon: Swords, hint: "Competition quizzes and the final exam" },
+        { href: "/learn/performance", label: "My Performance", icon: LineChart, hint: "Strong and weak topics from your quiz results" },
+      ],
+    },
+    {
+      title: "Build",
+      items: [
+        { href: "/garage", label: "BEAST Project Garage", icon: Warehouse, highlight: true, hint: "Ready-made robots to load and simulate" },
+        { href: "/projects", label: "My Projects", icon: Boxes, hint: "Start or open your own robot" },
+        { href: workspaceHref(lastProjectId, "design"), label: "Robot Designer", icon: Bot, match: "/design", hint: "Chassis, motors, wheels, sensors" },
+        { href: workspaceHref(lastProjectId, "circuit"), label: "Circuit Studio", icon: CircuitBoard, match: "/circuit", hint: "Wire your components" },
+        { href: workspaceHref(lastProjectId, "code"), label: "Code Studio", icon: Code2, match: "/code", hint: "Write the Arduino program" },
+        { href: workspaceHref(lastProjectId, "arena"), label: "Simulation Arena", icon: Gauge, match: "/arena", hint: "Run your robot on a track" },
+        { href: "/tracks", label: "Track Designer", icon: Map, hint: "Design your own tracks" },
+        { href: "/library", label: "Component Library", icon: Cpu, hint: "All 552 parts with pinouts" },
+      ],
+    },
+    {
+      title: "Compete",
+      items: [
+        { href: "/leaderboard", label: "Leaderboard", icon: Trophy, hint: "Rankings above 50 XP" },
+        { href: "/profile", label: "My Profile", icon: User, hint: "Rank, XP history and achievements" },
+      ],
+    },
   ];
-  const isActive = (n: (typeof nav)[number]) => ("match" in n && n.match ? path.startsWith("/workspace/") && path.endsWith(n.match) : n.href === "/" ? path === "/" : path.startsWith(n.href.split("?")[0]));
+  const nav = sections.flatMap((x) => x.items);
+  const isActive = (n: NavItem) => {
+    if (n.match) return path.startsWith("/workspace/") && path.endsWith(n.match);
+    if (n.href === "/") return path === "/";
+    const base = n.href.split("?")[0];
+    // the most specific nav entry wins (e.g. /learn/performance over /learn)
+    if (!path.startsWith(base)) return false;
+    return !nav.some((o) => o !== n && !o.match && o.href.length > base.length && path.startsWith(o.href.split("?")[0]));
+  };
 
   const saveIcon = saveState === "saving" ? <Loader2 size={14} className="animate-spin" /> : saveState === "error" ? <CloudOff size={14} className="text-bad" /> : saveState === "saved" ? <Check size={14} className="text-ok" /> : <Cloud size={14} />;
   const saveText = { idle: "All changes saved", dirty: "Unsaved changes…", saving: "Saving…", saved: "Saved", error: "Save failed" }[saveState];
@@ -72,16 +99,26 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Image src={sidebarLogo} alt="BEAST FEAST 5.0 — Robotics Club KKH" unoptimized className={`h-auto w-[140px] ${immersive && !mobileOpen ? "hidden" : "hidden xl:block"} ${mobileOpen ? "!block" : ""}`} priority />
         </Link>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-2" aria-label="Main">
-          {nav.map((n) => {
-            const Icon = n.icon;
-            const active = isActive(n);
-            return (
-              <Link key={n.label} href={n.href} title={n.label} className={`group relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors duration-150 ${active ? "bg-panel2 font-medium text-text before:absolute before:inset-y-1.5 before:-left-2 before:w-[3px] before:rounded-r before:bg-accent" : "highlight" in n && n.highlight ? "border border-accent/70 text-text hover:bg-panel" : "text-muted hover:bg-panel hover:text-text"}`}>
+          {sections.map((sec, si) => (
+            <div key={si} className={si ? "pt-3" : ""}>
+              {sec.title && (
+                <div className={`px-2.5 pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-dim ${immersive && !mobileOpen ? "hidden" : "hidden xl:block"} ${mobileOpen ? "!block" : ""}`}>{sec.title}</div>
+              )}
+              {sec.title && <div className={`mx-2 mb-1 border-t border-line ${immersive && !mobileOpen ? "" : "xl:hidden"} ${mobileOpen ? "hidden" : ""}`} aria-hidden />}
+              <div className="space-y-0.5">
+                {sec.items.map((n) => {
+                  const Icon = n.icon;
+                  const active = isActive(n);
+                  return (
+                    <Link key={n.label} href={n.href} aria-current={active ? "page" : undefined} title={`${n.label} — ${n.hint}`} className={`group relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors duration-150 ${active ? "bg-panel2 font-medium text-text before:absolute before:inset-y-1.5 before:-left-2 before:w-[3px] before:rounded-r before:bg-accent" : "highlight" in n && n.highlight ? "border border-accent/70 text-text hover:bg-panel" : "text-muted hover:bg-panel hover:text-text"}`}>
                 <Icon size={18} className={`shrink-0 ${active || ("highlight" in n && n.highlight) ? "text-accent-ink" : ""}`} />
                 <span className={`truncate ${immersive && !mobileOpen ? "hidden" : "hidden xl:inline"} ${mobileOpen ? "!inline" : ""}`}>{n.label}</span>
               </Link>
-            );
-          })}
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="border-t border-line p-2">
           <div className={`px-2 py-1 font-mono text-[9px] tracking-widest ${BACKEND_MODE === "local" ? "text-warn" : "text-ok"} ${immersive ? "hidden" : "hidden xl:block"}`}>{BACKEND_MODE === "local" ? "LOCAL MODE · THIS DEVICE" : "CLOUD SYNC · SUPABASE"}</div>
@@ -169,8 +206,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="min-w-0 flex-1">{children}</main>
+        {!immersive && (
+          <footer className="border-t border-line px-5 py-5 text-xs text-dim">
+            <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+              <span className="flex items-center gap-2.5">
+                <Image src={sidebarLogo} alt="BEAST FEAST" unoptimized className="h-12 w-auto object-contain" />
+                <span><b className="text-muted">BEAST FEAST 5.0</b> · Robotics Club KKH</span>
+              </span>
+              <span className="font-mono tracking-widest">BUILD · CODE · SIMULATE · DOMINATE</span>
+              <span className="flex gap-4"><Link href="/learn" className="hover:text-text">Beast Topics</Link><Link href="/garage" className="hover:text-text">Project Garage</Link><Link href="/leaderboard" className="hover:text-text">Leaderboard</Link></span>
+            </div>
+          </footer>
+        )}
       </div>
       <Toasts />
+      <RankUpCelebration />
       <CommandSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
@@ -187,6 +237,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <div className="flex items-center gap-3 font-mono text-xs tracking-widest text-muted">
+          <Image src={mark} alt="" unoptimized className="h-10 w-10 animate-pulse object-contain" />
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" /> BOOTING BEAST SYSTEMS…
         </div>
       </div>

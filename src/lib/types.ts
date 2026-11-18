@@ -454,6 +454,11 @@ export interface Profile {
   studentId: string;
   avatar: string | null;
   role: Role;
+  /** lifetime XP — never reset */
   xp: number;
+  /** XP earned since the last 11:15 PM IST reset */
+  dailyXp?: number;
+  /** permanent rank (highest reached), see src/lib/ranks.ts */
+  rankLevel?: number;
   createdAt: string;
 }

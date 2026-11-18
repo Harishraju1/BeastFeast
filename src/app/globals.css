@@ -349,3 +349,28 @@
   border-color: var(--signal-red);
   box-shadow: 0 0 0 3px rgba(242, 11, 11, 0.15);
 }
+
+/* rank-up celebration */
+@keyframes bf-rankup-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bf-rankup-pop {
+  0% { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+  60% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes bf-rankup-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(242, 11, 11, 0)); }
+  50% { filter: drop-shadow(0 0 18px rgba(242, 11, 11, 0.55)); }
+}
+@keyframes bf-rays-spin { to { transform: rotate(360deg); } }
+.bf-rankup { animation: bf-rankup-in 0.35s ease-out both; }
+.bf-rankup-badge { animation: bf-rankup-pop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.15s both, bf-rankup-glow 2.4s ease-in-out 0.9s infinite; }
+.bf-rankup-rays {
+  background: repeating-conic-gradient(from 0deg at 50% 38%, rgba(242, 11, 11, 0.07) 0deg 10deg, transparent 10deg 30deg);
+  animation: bf-rays-spin 24s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bf-rankup, .bf-rankup-badge, .bf-rankup-rays { animation: none !important; }
+}

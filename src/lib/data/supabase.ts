@@ -7,7 +7,7 @@ import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Backend, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, defaultXpConfig } from "./types";
+import { type AdminContent, type Backend, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig } from "./types";
 import { EMPTY_CONTENT } from "./local";
 
 interface ProfileRow {
@@ -18,9 +18,11 @@ interface ProfileRow {
   avatar: string | null;
   role: Profile["role"];
   xp: number;
+  daily_xp?: number;
+  rank_level?: number;
   created_at: string;
 }
-const toProfile = (r: ProfileRow): Profile => ({ id: r.id, name: r.name, campus: r.campus, studentId: r.student_id, avatar: r.avatar, role: r.role, xp: r.xp, createdAt: r.created_at });
+const toProfile = (r: ProfileRow): Profile => ({ id: r.id, name: r.name, campus: r.campus, studentId: r.student_id, avatar: r.avatar, role: r.role, xp: r.xp, dailyXp: r.daily_xp ?? 0, rankLevel: r.rank_level ?? 1, createdAt: r.created_at });
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
@@ -142,20 +144,35 @@ export class SupabaseBackend implements Backend {
     check(await this.sb.from("progress").upsert({ user_id: p.userId, bookmarks: p.bookmarks, last_topic: p.lastTopic, watched_videos: p.watchedVideos, records: p.records }));
   }
 
-  async awardXp(userId: string, type: XpEventType, refId: string): Promise<{ awarded: number; total: number }> {
+  async awardXp(userId: string, type: XpEventType, refId: string, _amount?: number, description?: string): Promise<{ awarded: number; total: number }> {
     void userId;
     if (type === "lesson-complete") {
       const awarded = check(await this.sb.rpc("complete_lesson", { p_topic: refId })) as number;
       const me = await this.currentUser();
       return { awarded, total: me?.xp ?? 0 };
     }
-    const rows = check(await this.sb.rpc("award_xp", { p_type: type, p_ref: refId })) as { awarded: number; total: number }[];
+    const rows = check(await this.sb.rpc("award_xp", { p_type: type, p_ref: refId, p_amount: null, p_description: description ?? null })) as { awarded: number; total: number }[];
     return rows[0] ?? { awarded: 0, total: 0 };
   }
   async listXpEvents(userId?: string) {
-    let q = this.sb.from("xp_events").select("*");
+    let q = this.sb.from("xp_events").select("*").order("at", { ascending: false });
     if (userId) q = q.eq("user_id", userId);
-    return (check(await q) as Record<string, unknown>[]).map((e): XpEvent => ({ id: String(e.id), userId: String(e.user_id), type: e.type as XpEventType, refId: String(e.ref_id), amount: Number(e.amount), at: String(e.at) }));
+    return (check(await q) as Record<string, unknown>[]).map(
+      (e): XpEvent => ({ id: String(e.id), userId: String(e.user_id), type: e.type as XpEventType, refId: String(e.ref_id), amount: Number(e.amount), at: String(e.at), source: (e.source as XpEvent["source"]) ?? undefined, description: (e.description as string | null) ?? null, attemptId: (e.attempt_id as string | null) ?? null }),
+    );
+  }
+  async listLeaderboard() {
+    // filtered and sorted by the database: only students above LEADERBOARD_MIN_XP lifetime XP
+    const rows = check(await this.sb.from("profiles").select("*").gt("xp", LEADERBOARD_MIN_XP).order("xp", { ascending: false }).order("created_at", { ascending: true })) as ProfileRow[];
+    return rows.map(toProfile);
+  }
+  async listRankHistory(userId: string): Promise<RankEvent[]> {
+    const rows = check(await this.sb.from("rank_history").select("*").eq("user_id", userId).order("at", { ascending: false })) as Record<string, unknown>[];
+    return rows.map((r) => ({ id: String(r.id), oldLevel: r.old_level === null ? null : Number(r.old_level), newLevel: Number(r.new_level), xpAt: Number(r.xp_at), at: String(r.at), seen: Boolean(r.seen), note: (r.note as string | null) ?? null }));
+  }
+  async markRankSeen(ids: string[]) {
+    if (!ids.length) return;
+    check(await this.sb.rpc("mark_rank_seen", { p_ids: ids.map(Number) }));
   }
   async getXpConfig(): Promise<XpConfig> {
     const cfg = defaultXpConfig();

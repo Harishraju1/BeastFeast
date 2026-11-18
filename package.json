@@ -17,7 +17,8 @@
     "cloud:smoke": "tsx scripts/cloud-smoke.ts setup && tsx scripts/cloud-smoke.ts cleanup",
     "admin:bootstrap": "tsx scripts/admin-bootstrap.ts",
     "roles:smoke": "tsx scripts/roles-smoke.ts",
-    "xp:smoke": "tsx scripts/xp-smoke.ts"
+    "xp:smoke": "tsx scripts/xp-smoke.ts",
+    "brand:assets": "node scripts/brand-assets.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

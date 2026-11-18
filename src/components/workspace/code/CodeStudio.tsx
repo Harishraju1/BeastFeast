@@ -120,7 +120,7 @@ export default function CodeStudio({ project }: { project: Project }) {
     setTab("check");
     if (ok) {
       const own = checkOriginality(code);
-      if (own.original) await award("code-check-pass", project.id);
+      if (own.original) await award("code-check-pass", project.id, undefined, `Own code matches the circuit: ${project.name}`);
       else toast("info", `Code matches the circuit, but no XP: ${own.reason}`);
     }
     const m = monacoRef.current,

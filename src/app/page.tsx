@@ -12,6 +12,7 @@ import { LEARNING_PATHS, TOPICS, WEEKLY_MISSIONS_DEFAULT, getTopic } from "@/lib
 import { ACHIEVEMENTS, earnedAchievements, rankFor, streakDays } from "@/lib/gamification";
 import { Badge, LinkButton, Panel, Progress, Stat } from "@/components/ui";
 import { youtubeId } from "@/lib/youtube";
+import { NextSteps } from "@/components/home/NextSteps";
 
 const HeroRobot = dynamic(() => import("@/components/three/HeroRobot"), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-bg2" /> });
 
@@ -36,7 +37,7 @@ export default function Home() {
     if (!user) return;
     void getBackend().then(async (b) => {
       setEvents(await b.listXpEvents(user.id));
-      setLeaders((await b.listProfiles()).sort((a, b) => b.xp - a.xp).slice(0, 5));
+      setLeaders((await b.listLeaderboard()).slice(0, 5));
     });
   }, [user]);
 
@@ -44,7 +45,7 @@ export default function Home() {
   const today = new Date().toLocaleDateString("en-GB", { weekday: "long" });
   const done = new Set(progress?.completedTopics ?? []);
   const earned = useMemo(() => earnedAchievements(events, projects, progress), [events, projects, progress]);
-  const rank = rankFor(user?.xp ?? 0);
+  const rank = rankFor(user?.xp ?? 0, user?.rankLevel);
   const stats = {
     projects: projects.length,
     circuits: projects.filter((p) => p.wires.length > 0).length,
@@ -101,6 +102,9 @@ export default function Home() {
             </div>
           </Panel>
         )}
+
+        {/* next steps: what to do now, from what the student has actually done */}
+        {user && <NextSteps projects={projects} progress={progress} events={events} />}
 
         {/* A. workspace stats */}
         {user && (
