@@ -46,7 +46,45 @@ Every static `href` in the source points to an existing route.
 
 ## Line-following simulation
 
-_Pending: results from the line-following test matrix are added here when that work finishes._
+A test matrix (`tests/garage/line-matrix.test.ts`, 135 tests) covers five robots: LF-01, LF-02 and LF-03 plus the `line-basic` and `line-pid` templates. It runs each one on 14 tracks:
+- straight, 90° left and right, 120° and 135° corners, an S-bend, a 12 mm line and a wide curve
+- a mixed closed course, Beginner Oval, Sharp Corners, Figure-8 and Beast Zig-Zag
+- the mixed course at three speeds, plus a high-speed 135° corner
+- starts 3–5 cm beside the line, and the end of an open line
+
+Before the fix, results were poor:
+- 4 of the 5 robots turned the wrong way at 120°–135° corners and then **followed the track backwards**: 2–11 s of wrong-way driving on the mixed course and Zig-Zag.
+- Every robot **U-turned and drove 1.6–1.9 m back** at the end of an open line.
+- Both templates drove off the track when started beside the line.
+
+The simulator still counted those runs as completed laps, because a lap counts in either direction. The new tests check the direction separately.
+
+Root causes, all in the robot code (no physics or sensor bug was found):
+- At an acute corner the remembered "which side is the line" flipped on a brief glimpse of the old line.
+- The lost-line search spun without a limit until it found *any* line, usually the one the robot had just come from.
+- LF-03's PID took a fake error while lost, which caused derivative spikes and integral wind-up.
+
+Fixes in `src/lib/code/templates.ts` and `src/lib/garage/projects/line.ts` (Garage firmware v1.1.0):
+- The remembered side locks for 100–200 ms after an outer-sensor sighting.
+- The search is bounded: about 135° toward the remembered side, then about 135° the other way, then the robot stops.
+- When the search gives up, the robot brakes hard instead of coasting.
+- Speed drops near the edge of the sensor array.
+- LF-03's PID pauses while lost and has an anti-windup integral; line-pid gained a clamped integral term.
+
+Pins and Serial tuning commands are unchanged.
+
+After the fix:
+- All 5 robots complete every track in the matrix in the right direction.
+- None drives backwards for more than 0.3 s.
+- They stop at the end of an open line.
+- They find the line from a start beside it within 1.3 s.
+- The longest line loss at default speed is 0.64 s.
+- The Garage report still passes 45/45 required scenarios.
+
+Remaining limits:
+- With three digital sensors (LF-01, line-basic) at top speed (230), the robot sometimes searches the wrong way first at a 135° corner. It loses the line for about 1.9 s, then recovers without turning round.
+- The ±135° search is time-based, tuned to the simulated motors. Real robots need `sweepTime` re-tuned.
+- At 90° corners the robot centre still cuts 5–7 cm inside the line. That comes from the geometry: the sensors sit 11–16 cm ahead of the centre.
 
 ## Automated checks
 
@@ -57,7 +95,8 @@ _Pending: results from the line-following test matrix are added here when that w
 | `npm run xp:smoke` (live database) | 34 / 34 pass |
 | `npm run cloud:smoke` (live database) | 19 / 19 pass |
 | `npm run roles:smoke` (live database + dev server) | 23 / 23 pass |
-| `vitest` | see DEVELOPMENT_STATUS.md for the final count |
+| `vitest` | 841 / 841 pass (22 files, including 135 line-matrix tests) |
+| `npm run garage:report` | 45 / 45 required scenarios; all 9 Garage robots READY TO SIMULATE |
 
 ## Not changed, and why
 

@@ -84,7 +84,7 @@ Simulator fixes found while building the Garage:
 
 ## Testing results
 
-`npm test` → **612 tests in 15 files, all passing**. `tsc` and ESLint are clean, and `next build` succeeds.
+`npm test` → **841 tests in 22 files, all passing** (2026-11-18, including the 135-test line-following matrix; see AUDIT_REPORT.md). `tsc` and ESLint are clean, and `next build` succeeds.
 
 | Required scenario | Automated test | Browser check |
 | --- | --- | --- |

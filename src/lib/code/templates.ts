@@ -100,7 +100,7 @@ void loop() {
   {
     id: "line-basic",
     title: "Line Following (basic 3-sensor)",
-    description: "Left / centre / right sensors. Turns towards the line, remembers which side it last saw it, and pivots back when a sharp corner throws it off.",
+    description: "Left / centre / right sensors. Turns towards the line, remembers which side it last saw it, and recovers a lost line with a slow, bounded search that can never swing round and follow the track backwards.",
     competition: "line",
     code: `// BASIC LINE FOLLOWER — 3 digital sensors read HIGH over the black line.
 // LEFT and RIGHT sit either side of the line, CENTRE sits on it.
@@ -112,10 +112,78 @@ ${PINS}
 int baseSpeed = 140;     // straight-line speed
 int turnFast = 170;      // outer wheel in a turn
 int turnSlow = -60;      // inner wheel in a turn (negative = backwards → tight pivot for sharp corners)
-int searchSpeed = 130;   // spin speed while looking for a lost line
-int lastSide = 0;        // -1 = line last seen on the left, +1 = right, 0 = centre
+
+// ---- lost-line recovery ----
+int searchSpeed = 110;   // slow pivot while the line is lost (about 195 deg/s on the reference robot)
+int sweepTime = 700;     // ms of pivoting = about 135 deg. The search never turns further than this either
+                         // way, so it can never swing round onto the line behind it and drive back.
+int gapTime = 150;       // ms to roll straight on when the line vanishes while centred (a gap or line end)
+
+int lastSide = 0;        // -1 = line last seen on the left, +1 = right, 0 = centred
+int rawSide = 0;         // side of the very latest off-centre reading (unfiltered)
+unsigned long sideTime = 0;
+unsigned long cornerTime = 0;    // when a sharp-corner point decided the side (locks it for 100 ms)
+int pattern = 2;         // the sensors as one number: left*4 + centre*2 + right (2 = only centre black)
+int before1 = 2;         // the previous pattern ...
+int before2 = 2;         // ... and the one before that
+bool lost = false;
+unsigned long lostAt = 0;
+int searchDir = -1;
 
 ${DRIVE_FUNCS}
+
+// Remember which side the line went to. Within 100 ms after a sharp-corner point decided the side,
+// a glimpse on the OTHER side is just the end of the old line flashing past, so it is ignored.
+void rememberSide(int side) {
+  unsigned long now = millis();
+  rawSide = side;
+  if (side == lastSide || lastSide == 0 || now - cornerTime > 100) {
+    lastSide = side;
+    sideTime = now;
+  }
+}
+
+// Hard stop for the L298N: both direction inputs equal with the enable fully on shorts the motor
+// (brake). analogWrite(EN, 0) would only switch the bridge off and let the robot coast on.
+void brakeMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 255);
+  analogWrite(ENB, 255);
+}
+
+void pivot(int dir) {      // dir -1 = turn left on the spot, +1 = turn right
+  setMotors(dir * searchSpeed, -dir * searchSpeed);
+}
+
+// Bounded search: turn towards the remembered side, then sweep the other way, then back
+// to where the line was lost, then stop (it never turns more than about 135 deg from there).
+// loop() leaves it as soon as any sensor sees black.
+void searchLine() {
+  if (!lost) {
+    lost = true;
+    lostAt = millis();
+    searchDir = lastSide != 0 ? lastSide : -1;
+  }
+  long t = millis() - lostAt;
+  if (lastSide == 0) {
+    // No idea where it went (a gap, the end of the line, or we started beside it): roll on a
+    // little, then try a narrow sweep (about 45 deg each way) before the wide one.
+    if (t < gapTime) { setMotors(90, 90); return; }
+    t -= gapTime;
+    int narrow = sweepTime / 3;
+    if (t < narrow) { pivot(searchDir); return; }
+    if (t < 3 * narrow) { pivot(-searchDir); return; }
+    if (t < 4 * narrow) { pivot(searchDir); return; }
+    t -= 4 * narrow;
+  }
+  if (t < sweepTime) pivot(searchDir);
+  else if (t < 3 * sweepTime) pivot(-searchDir);
+  else if (t < 4 * sweepTime) pivot(searchDir);
+  else brakeMotors();                  // not within reach: stop safely instead of wandering off
+}
 
 void setup() {
 ${SETUP_PINS}
@@ -128,23 +196,54 @@ void loop() {
   int left = digitalRead(LEFT_SENSOR);
   int centre = digitalRead(CENTRE_SENSOR);
   int right = digitalRead(RIGHT_SENSOR);
+  int p = left * 4 + centre * 2 + right;
+  bool changed = p != pattern;
+  if (changed) {
+    before2 = before1;
+    before1 = pattern;
+    pattern = p;
+  }
+
+  if (p == 0) {
+    searchLine();                         // all white: the line is lost
+    return;
+  }
+  lost = false;
 
   if (left == HIGH && right == HIGH) {
-    setMotors(baseSpeed, baseSpeed);      // crossing / T-junction → keep going straight
-  } else if (left == HIGH) {
-    lastSide = -1;
+    // A crossing, or the corner point of a sharp turn. Which way does the corner go?
+    //  - two separate lines (pattern 5) while the old one was under one outer sensor: the new one
+    //    is on the other side
+    //  - centred, then a second line touched ONE side (2 → 3 or 2 → 6): the new leg is on that side
+    //  - the line was coming back from an outer sensor (1 → 3 or 4 → 6): no clue yet, so let the
+    //    next reading decide (at a 90° corner the new leg stays under one side)
+    //  - otherwise trust the side seen last
+    if (changed && before1 != 5 && before1 != 7) {   // just arrived (not 5 <-> 7)
+      int corner = 0;
+      if (p == 5 && before1 == 1) corner = -1;
+      else if (p == 5 && before1 == 4) corner = 1;
+      else if (before2 == 2 && before1 == 3) corner = 1;
+      else if (before2 == 2 && before1 == 6) corner = -1;
+      else if (!(before2 == 1 && before1 == 3) && !(before2 == 4 && before1 == 6)) corner = rawSide;
+      cornerTime = 0;
+      if (corner != 0) {
+        lastSide = corner;
+        sideTime = millis();
+        cornerTime = millis();
+      }
+    }
+    setMotors(baseSpeed, baseSpeed);      // keep going straight over a crossing
+    return;
+  }
+  if (left == HIGH) {
+    rememberSide(-1);
     setMotors(turnSlow, turnFast);        // line is on the left → turn left
   } else if (right == HIGH) {
-    lastSide = 1;
+    rememberSide(1);
     setMotors(turnFast, turnSlow);        // line is on the right → turn right
-  } else if (centre == HIGH) {
-    setMotors(baseSpeed, baseSpeed);      // centred → straight ahead
-  } else if (lastSide < 0) {
-    setMotors(-searchSpeed, searchSpeed); // lost after a left turn → spin left until a sensor finds it
-  } else if (lastSide > 0) {
-    setMotors(searchSpeed, -searchSpeed); // lost after a right turn → spin right
   } else {
-    setMotors(90, 90);                    // never saw a side yet → creep forward to find the line
+    if (millis() - sideTime > 300) lastSide = 0;   // centred for a while: forget the old side
+    setMotors(baseSpeed, baseSpeed);      // centred → straight ahead
   }
 }
 `,
@@ -152,7 +251,7 @@ void loop() {
   {
     id: "line-pid",
     title: "PID Line Following (5-sensor array)",
-    description: "Weighted error from a 5-channel array with PD control, slows down in sharp turns, and pivots back to the side where the line was last seen.",
+    description: "Weighted error from a 5-channel array with PID control (integral anti-windup), slows down in sharp turns, and recovers a lost line with a bounded search towards the side where it was last seen.",
     competition: "line",
     code: `// PID LINE FOLLOWER — 5 digital sensors, S1 (left) ... S5 (right), HIGH = black line.
 ${PINS}
@@ -161,12 +260,76 @@ const int sensorPins[5] = {A0, A1, A2, A3, A4};
 int baseSpeed = 150;     // speed on straights
 int minSpeed = 70;       // speed in the sharpest turns
 float Kp = 40.0;
+float Ki = 0.5;
 float Kd = 40.0;
-int searchSpeed = 140;   // pivot speed while the line is lost
+int integralLimit = 40;  // anti-windup: the I term can never add more than Ki * 40 = 20
+
+// ---- lost-line recovery ----
+int searchSpeed = 110;   // slow pivot while the line is lost (about 195 deg/s on the reference robot)
+int sweepTime = 700;     // ms of pivoting = about 135 deg. The search never turns further than this either
+                         // way, so it can never swing round onto the line behind it and drive back.
+int gapTime = 150;       // ms to roll straight on when the line vanishes while centred (a gap or line end)
+
 int lastError = 0;
-int lastSide = 0;        // -1 = line last seen left of centre, +1 = right; only updated off-centre
+int integral = 0;
+int lastSpeed = 0;       // forward speed just before the line was lost
+int lastSide = 0;        // -1 = line last seen on the LEFT edge, +1 = RIGHT edge, 0 = centred
+unsigned long sideTime = 0;
+unsigned long edgeTime = 0;
+bool lost = false;
+unsigned long lostAt = 0;
+int searchDir = -1;
 
 ${DRIVE_FUNCS}
+
+// Hard stop for the L298N: both direction inputs equal with the enable fully on shorts the motor
+// (brake). analogWrite(EN, 0) would only switch the bridge off and let the robot coast on.
+void brakeMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 255);
+  analogWrite(ENB, 255);
+}
+
+void pivot(int dir) {      // dir -1 = turn left on the spot, +1 = turn right
+  setMotors(dir * searchSpeed, -dir * searchSpeed);
+}
+
+// Bounded search: turn towards the remembered side, then sweep the other way, then back
+// to where the line was lost, then stop (it never turns more than about 135 deg from there).
+// loop() leaves it as soon as any sensor sees black again.
+void searchLine() {
+  if (!lost) {
+    lost = true;
+    lostAt = millis();
+    searchDir = lastSide != 0 ? lastSide : (lastError > 0 ? 1 : -1);
+    integral = 0;                      // anti-windup: forget the old integral
+  }
+  long t = millis() - lostAt;
+  if (lastSide != 0) {
+    // The first part of the turn also has to stop the forward run, so it lasts a little longer
+    // the faster we were going (it does not count towards the sweep angle).
+    int brake = lastSpeed / 2;
+    if (t < brake) { pivot(searchDir); return; }
+    t -= brake;
+  } else {
+    // No idea where it went (a gap, the end of the line, or we started beside it): roll on a
+    // little, then try a narrow sweep (about 45 deg each way) before the wide one.
+    if (t < gapTime) { setMotors(minSpeed, minSpeed); return; }
+    t -= gapTime;
+    int narrow = sweepTime / 3;
+    if (t < narrow) { pivot(searchDir); return; }
+    if (t < 3 * narrow) { pivot(-searchDir); return; }
+    if (t < 4 * narrow) { pivot(searchDir); return; }
+    t -= 4 * narrow;
+  }
+  if (t < sweepTime) pivot(searchDir);
+  else if (t < 3 * sweepTime) pivot(-searchDir);
+  else if (t < 4 * sweepTime) pivot(searchDir);
+  else brakeMotors();                  // not within reach: stop safely instead of wandering off
+}
 
 void setup() {
 ${SETUP_PINS}
@@ -177,29 +340,44 @@ ${SETUP_PINS}
 }
 
 void loop() {
+  int s[5];
   int sum = 0;
   int weighted = 0;
   for (int i = 0; i < 5; i++) {
-    int s = digitalRead(sensorPins[i]);
-    sum += s;
-    weighted += s * (i - 2);    // -2 (far left) ... +2 (far right)
+    s[i] = digitalRead(sensorPins[i]);
+    sum += s[i];
+    weighted += s[i] * (i - 2);  // -2 (far left) ... +2 (far right)
   }
 
   if (sum == 0) {
-    // Lost the line (usually just past a sharp corner): pivot on the spot towards the side
-    // where we last saw it, instead of driving on and wandering off.
-    if (lastSide < 0) setMotors(-searchSpeed, searchSpeed);
-    else if (lastSide > 0) setMotors(searchSpeed, -searchSpeed);
-    else setMotors(90, 90);    // it was centred: creep forward until a sensor finds it
+    searchLine();
     return;
   }
 
   int error = (weighted * 2) / sum;   // -4 (line far left) ... +4 (far right)
-  if (error != 0) lastSide = error > 0 ? 1 : -1;
+  if (lost) {
+    lost = false;
+    lastError = error;                 // no derivative kick when the line comes back
+  }
+
+  // Remember which side the line went to. At a sharp corner the new leg appears under an OUTER
+  // sensor (S1 or S5) just before the line disappears, so an outer sighting wins for 200 ms over an
+  // inner sensor glimpsing the end of the old leg on the other side.
+  unsigned long now = millis();
+  if (s[0] && !s[4]) { lastSide = -1; edgeTime = now; sideTime = now; }
+  else if (s[4] && !s[0]) { lastSide = 1; edgeTime = now; sideTime = now; }
+  else if (now - edgeTime > 200 && error <= -2) { lastSide = -1; sideTime = now; }
+  else if (now - edgeTime > 200 && error >= 2) { lastSide = 1; sideTime = now; }
+  if (abs(error) < 2 && now - sideTime > 300) lastSide = 0;   // centred for a while: forget the old side
+
+  // integral with anti-windup: clamp it, and reset it whenever the line crosses the centre
+  if (error == 0 || (error > 0 && lastError < 0) || (error < 0 && lastError > 0)) integral = 0;
+  integral = constrain(integral + error, -integralLimit, integralLimit);
 
   // slow down as the turn gets sharper, so the robot can follow tight corners
   int speed = baseSpeed - (baseSpeed - minSpeed) * abs(error) / 4;
-  int correction = Kp * error + Kd * (error - lastError);
+  lastSpeed = speed;
+  int correction = Kp * error + Ki * integral + Kd * (error - lastError);
   lastError = error;
   setMotors(speed + correction, speed - correction);
   delay(5);

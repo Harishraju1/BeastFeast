@@ -33,9 +33,23 @@ const LF01_CODE = `// ==========================================================
 int baseSpeed = 150;   // straight-line speed (0-255)
 int turnSpeed = 150;   // outer wheel speed while correcting
 int innerSpeed = 0;    // inner wheel speed while correcting
-int searchSpeed = 140; // spin speed when the line is lost
 
-int lastSeen = 0;      // -1 = line was last on the left, +1 = right
+// ---- lost-line recovery ----
+int searchSpeed = 110; // slow pivot while the line is lost (about 195 deg/s on this robot)
+int sweepTime = 700;   // ms of pivoting = about 135 deg. The search never turns further than this
+                       // either way, so it cannot swing round onto the line behind it and drive back.
+int gapTime = 150;     // ms to roll straight on when the line vanishes while centred (gap / line end)
+
+int lastSeen = 0;      // -1 = line was last on the left, +1 = right, 0 = centred
+int rawSeen = 0;       // side of the very latest off-centre reading (unfiltered)
+unsigned long seenTime = 0;
+unsigned long cornerTime = 0;  // when a sharp-corner point decided the side (locks it for 100 ms)
+int pattern = 2;       // the sensors as one number: L*4 + C*2 + R (2 = only the centre is black)
+int before1 = 2;       // the previous pattern ...
+int before2 = 2;       // ... and the one before that
+bool lost = false;
+unsigned long lostAt = 0;
+int searchDir = -1;
 
 void drive(int left, int right) {
   left = constrain(left, -255, 255);
@@ -46,6 +60,59 @@ void drive(int left, int right) {
   digitalWrite(IN4, right >= 0 ? LOW : HIGH);
   analogWrite(ENA, abs(left));
   analogWrite(ENB, abs(right));
+}
+
+// Remember which side the line went to. Within 100 ms after a sharp-corner point decided the side,
+// a glimpse on the OTHER side is just the end of the old line flashing past, so it is ignored.
+void rememberSide(int side) {
+  unsigned long now = millis();
+  rawSeen = side;
+  if (side == lastSeen || lastSeen == 0 || now - cornerTime > 100) {
+    lastSeen = side;
+    seenTime = now;
+  }
+}
+
+// Hard stop for the L298N: both direction inputs equal with the enable fully on shorts the motor
+// (brake). analogWrite(EN, 0) would only switch the bridge off and let the robot coast on.
+void brake() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENA, 255);
+  analogWrite(ENB, 255);
+}
+
+void pivot(int dir) {  // -1 = turn left on the spot, +1 = turn right
+  drive(dir * searchSpeed, -dir * searchSpeed);
+}
+
+// Bounded search: turn towards the remembered side, sweep back the other way, return to the
+// heading where the line was lost, then stop (it never turns more than about 135 deg from there).
+// loop() leaves it as soon as a sensor sees black.
+void searchLine() {
+  if (!lost) {
+    lost = true;
+    lostAt = millis();
+    searchDir = lastSeen != 0 ? lastSeen : -1;
+  }
+  long t = millis() - lostAt;
+  if (lastSeen == 0) {
+    // No idea where it went (a gap, the end of the line, or we started beside it): roll on a
+    // little, then try a narrow sweep (about 45 deg each way) before the wide one.
+    if (t < gapTime) { drive(90, 90); return; }
+    t -= gapTime;
+    int narrow = sweepTime / 3;
+    if (t < narrow) { pivot(searchDir); return; }
+    if (t < 3 * narrow) { pivot(-searchDir); return; }
+    if (t < 4 * narrow) { pivot(searchDir); return; }
+    t -= 4 * narrow;
+  }
+  if (t < sweepTime) pivot(searchDir);
+  else if (t < 3 * sweepTime) pivot(-searchDir);
+  else if (t < 4 * sweepTime) pivot(searchDir);
+  else brake();                                   // not within reach: stop safely (and stay put)
 }
 
 // Optional live tuning from the Serial monitor: "B150" base speed, "T150" turn speed
@@ -70,18 +137,54 @@ void loop() {
   int L = digitalRead(S_LEFT);
   int C = digitalRead(S_CENTER);
   int R = digitalRead(S_RIGHT);
+  int p = L * 4 + C * 2 + R;
+  bool changed = p != pattern;
+  if (changed) {
+    before2 = before1;
+    before1 = pattern;
+    pattern = p;
+  }
 
-  if (L == HIGH && R == LOW) {          // line drifting to the left -> steer left
-    drive(innerSpeed, turnSpeed);
-    lastSeen = -1;
-  } else if (R == HIGH && L == LOW) {   // line drifting to the right -> steer right
-    drive(turnSpeed, innerSpeed);
-    lastSeen = 1;
-  } else if (C == HIGH) {               // centred (or crossing an intersection) -> straight
+  if (p == 0) {                         // all white: line lost -> bounded search
+    searchLine();
+    return;
+  }
+  lost = false;
+
+  if (L == HIGH && R == HIGH) {         // crossing, or the corner point of a sharp turn -> straight.
+    // Which way does the corner go?
+    //  - two separate lines (pattern 5) while the old one was under one outer sensor: the new one
+    //    is on the other side
+    //  - centred, then a second line touched ONE side (2 -> 3 or 2 -> 6): the new leg is on that side
+    //  - the line was coming back from an outer sensor (1 -> 3 or 4 -> 6): no clue yet, so let the
+    //    next reading decide (at a 90 deg corner the new leg stays under one side)
+    //  - otherwise trust the side seen last
+    if (changed && before1 != 5 && before1 != 7) {   // just arrived (not 5 <-> 7)
+      int corner = 0;
+      if (p == 5 && before1 == 1) corner = -1;
+      else if (p == 5 && before1 == 4) corner = 1;
+      else if (before2 == 2 && before1 == 3) corner = 1;
+      else if (before2 == 2 && before1 == 6) corner = -1;
+      else if (!(before2 == 1 && before1 == 3) && !(before2 == 4 && before1 == 6)) corner = rawSeen;
+      cornerTime = 0;
+      if (corner != 0) {
+        lastSeen = corner;
+        seenTime = millis();
+        cornerTime = millis();
+      }
+    }
     drive(baseSpeed, baseSpeed);
-  } else {                              // all white: line lost -> spin towards where we last saw it
-    if (lastSeen < 0) drive(-searchSpeed, searchSpeed);
-    else drive(searchSpeed, -searchSpeed);
+    return;
+  }
+  if (L == HIGH) {                      // line drifting to the left -> steer left
+    rememberSide(-1);
+    drive(innerSpeed, turnSpeed);
+  } else if (R == HIGH) {               // line drifting to the right -> steer right
+    rememberSide(1);
+    drive(turnSpeed, innerSpeed);
+  } else {                              // centred -> straight
+    if (millis() - seenTime > 300) lastSeen = 0;   // centred for a while: forget the old side
+    drive(baseSpeed, baseSpeed);
   }
 }
 `;
@@ -90,13 +193,13 @@ export const LF01: ProjectTemplate = {
   metadata: {
     id: "LF-01",
     name: "Basic Line Follower",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "line",
     difficulty: "beginner",
     learningLevel: "First robot — digital sensors and if/else steering",
     description: "A classic 2WD line follower: three digital IR sensors tell an Arduino Uno whether the black line is left, centre or right, and an L298N steers the robot back over it.",
     workingPrinciple:
-      "Each IR sensor shines infrared light at the floor. White reflects it (output LOW), black absorbs it (output HIGH). The sketch reads the three outputs every loop: centre only → drive straight; left sensor black → slow the left wheel to turn left; right sensor black → turn right; nothing black → spin towards the side where the line was last seen.",
+      "Each IR sensor shines infrared light at the floor. White reflects it (output LOW), black absorbs it (output HIGH). The sketch reads the three outputs every loop: centre only → drive straight; left sensor black → slow the left wheel to turn left; right sensor black → turn right. The sketch remembers which side the line went to (at a sharp corner the new leg touches one side sensor first). When nothing is black it searches with a slow, bounded pivot: towards the remembered side, then back the other way, never more than about 135° from where the line was lost, so it cannot swing round and follow the track backwards. If the line is not found it stops.",
     learningObjectives: ["Wire an L298N with PWM speed control", "Read digital IR sensors", "Write bang-bang (if/else) steering", "Recover a lost line"],
     limitations: ["Bang-bang steering wobbles on straights and is slow on tight curves", "Three sensors give only coarse position information", "Speed is limited by the L298N voltage drop (≈2 V)"],
     author: "Robotics Club KKH · BEAST FEAST",
@@ -140,7 +243,7 @@ export const LF01: ProjectTemplate = {
     adjustable: [
       { name: "baseSpeed", meaning: "Straight-line speed (0–255). Live: send B<value> on Serial." },
       { name: "turnSpeed / innerSpeed", meaning: "Outer / inner wheel speed while correcting. Live: T<value>." },
-      { name: "searchSpeed", meaning: "Spin speed while searching for a lost line." },
+      { name: "searchSpeed / sweepTime", meaning: "Pivot speed and duration (≈135°) of the bounded search for a lost line." },
     ],
   },
   simulation: {
@@ -160,8 +263,8 @@ export const LF01: ProjectTemplate = {
 const LF02_CODE = `// =============================================================
 // LF-02 ADVANCED FIVE-SENSOR LINE FOLLOWER — BEAST PROJECT GARAGE
 // Arduino Uno R3 + TB6612FNG + 2x TT motor + 5x TCRT5000 (analog A0-A4)
-// Calibrates every sensor, computes a weighted line position and
-// steers with proportional control.
+// Calibrates every sensor, computes a weighted line position,
+// steers with proportional control and slows down in sharp turns.
 // =============================================================
 
 #define PWMA 5
@@ -178,11 +281,25 @@ int value[5];        // calibrated 0 (white) .. 1000 (black)
 
 // ---- adjustable parameters ----
 int baseSpeed = 140;
-float Kp = 0.07;      // steering gain (position range is -2000 .. +2000)
-int searchSpeed = 150;
+int minSpeed = 70;       // speed when the line is at the edge of the array (sharp turn)
+float Kp = 0.07;         // steering gain (position range is -2000 .. +2000)
 int lineThreshold = 300; // sum of calibrated values below this = line lost
 
+// ---- lost-line recovery ----
+int searchSpeed = 110;   // slow pivot while the line is lost (about 270 deg/s on this robot)
+int sweepTime = 500;     // ms of pivoting = about 135 deg. The search never turns further than this
+                         // either way, so it cannot swing round onto the line behind it and drive back.
+int gapTime = 150;       // ms to roll straight on when the line vanishes while centred (gap / line end)
+
 int lastPosition = 0;
+int lastSpeed = 0;       // forward speed command just before the line was lost
+bool lineSeen = false;   // set by readLine()
+int lastSide = 0;        // -1 = line last seen on the LEFT edge, +1 = RIGHT edge, 0 = centred
+unsigned long sideTime = 0;
+unsigned long edgeTime = 0;
+bool lost = false;
+unsigned long lostAt = 0;
+int searchDir = -1;
 
 void drive(int left, int right) {
   left = constrain(left, -255, 255);
@@ -218,7 +335,8 @@ void calibrate() {
   Serial.println();
 }
 
-// Returns -2000 (line under the far-left sensor) .. +2000 (far right). Updates lastPosition.
+// Returns -2000 (line under the far-left sensor) .. +2000 (far right) and sets lineSeen.
+// When the line is lost it returns the last position it saw.
 int readLine() {
   long weighted = 0;
   long sum = 0;
@@ -230,12 +348,58 @@ int readLine() {
     weighted += (long)value[i] * (i * 1000);
     sum += value[i];
   }
-  if (sum < lineThreshold) {
-    // lost-line recovery: pretend the line is fully to the side where we last saw it
-    return lastPosition > 0 ? 2000 : -2000;
-  }
-  lastPosition = weighted / sum - 2000;
+  lineSeen = sum >= lineThreshold;
+  if (lineSeen) lastPosition = weighted / sum - 2000;
   return lastPosition;
+}
+
+// Remember which side the line went to. At a sharp corner the new leg appears under an OUTER
+// sensor just before the line disappears, so an outer sighting wins for 200 ms over an inner
+// sensor glimpsing the end of the old leg on the other side.
+void rememberSide(int position) {
+  unsigned long now = millis();
+  if (value[0] > 500 && value[4] < 500) { lastSide = -1; edgeTime = now; sideTime = now; }
+  else if (value[4] > 500 && value[0] < 500) { lastSide = 1; edgeTime = now; sideTime = now; }
+  else if (now - edgeTime > 200 && position < -1000) { lastSide = -1; sideTime = now; }
+  else if (now - edgeTime > 200 && position > 1000) { lastSide = 1; sideTime = now; }
+  if (abs(position) < 1000 && now - sideTime > 300) lastSide = 0;   // centred for a while: forget it
+}
+
+void pivot(int dir) {  // -1 = turn left on the spot, +1 = turn right
+  drive(dir * searchSpeed, -dir * searchSpeed);
+}
+
+// Bounded search: turn towards the remembered side, sweep back the other way, return to the
+// heading where the line was lost, then stop (it never turns more than about 135 deg from there).
+// loop() leaves it as soon as the sensors see the line again.
+void searchLine() {
+  if (!lost) {
+    lost = true;
+    lostAt = millis();
+    searchDir = lastSide != 0 ? lastSide : (lastPosition > 0 ? 1 : -1);
+  }
+  long t = millis() - lostAt;
+  if (lastSide != 0) {
+    // The first part of the turn also has to stop the forward run, so it lasts a little longer
+    // the faster we were going (it does not count towards the sweep angle).
+    int brake = lastSpeed / 2;
+    if (t < brake) { pivot(searchDir); return; }
+    t -= brake;
+  } else {
+    // No idea where it went (a gap, the end of the line, or we started beside it): roll on a
+    // little, then try a narrow sweep (about 45 deg each way) before the wide one.
+    if (t < gapTime) { drive(minSpeed, minSpeed); return; }
+    t -= gapTime;
+    int narrow = sweepTime / 3;
+    if (t < narrow) { pivot(searchDir); return; }
+    if (t < 3 * narrow) { pivot(-searchDir); return; }
+    if (t < 4 * narrow) { pivot(searchDir); return; }
+    t -= 4 * narrow;
+  }
+  if (t < sweepTime) pivot(searchDir);
+  else if (t < 3 * sweepTime) pivot(-searchDir);
+  else if (t < 4 * sweepTime) pivot(searchDir);
+  else drive(0, 0);                               // not within reach: stop safely
 }
 
 void readCommands() {
@@ -256,14 +420,19 @@ void setup() {
 void loop() {
   readCommands();
   int position = readLine();
-  int correction = Kp * position;
-  if (abs(position) >= 2000) {
-    // line lost: spin on the spot towards it
-    if (position > 0) drive(searchSpeed, -searchSpeed);
-    else drive(-searchSpeed, searchSpeed);
-  } else {
-    drive(baseSpeed + correction, baseSpeed - correction);
+  if (!lineSeen) {
+    searchLine();
+    return;
   }
+  lost = false;
+  rememberSide(position);
+
+  // slow down as the line moves towards the edge of the array, so sharp turns stay on the line
+  int speed = baseSpeed - (long)(baseSpeed - minSpeed) * abs(position) / 2000;
+  if (speed < minSpeed) speed = minSpeed;
+  lastSpeed = speed;
+  int correction = Kp * position;
+  drive(speed + correction, speed - correction);
 }
 `;
 
@@ -273,13 +442,13 @@ export const LF02: ProjectTemplate = {
   metadata: {
     id: "LF-02",
     name: "Advanced Five-Sensor Line Follower",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "line",
     difficulty: "intermediate",
     learningLevel: "Analog sensors, calibration and proportional control",
     description: "Five analog TCRT5000 sensors and a TB6612FNG driver. The robot calibrates itself, computes a weighted line position and steers smoothly in proportion to the error.",
     workingPrinciple:
-      "During the first 2.4 s the robot sweeps left and right across the line and records each sensor's darkest and brightest reading. Afterwards each reading is scaled to 0–1000 and a weighted average gives the line position (−2000 … +2000). The correction Kp × position is added to one wheel and subtracted from the other. If every sensor sees white, the robot spins towards the last known side.",
+      "During the first 2.4 s the robot sweeps left and right across the line and records each sensor's darkest and brightest reading. Afterwards each reading is scaled to 0–1000 and a weighted average gives the line position (−2000 … +2000). The correction Kp × position is added to one wheel and subtracted from the other, and the robot slows down as the line moves towards the edge of the array. It remembers which edge the line was last seen at; if every sensor sees white it searches with a slow, bounded pivot towards that side, then back the other way (never more than about 135°), and stops if the line is not within reach.",
     learningObjectives: ["Calibrate analog sensors", "Compute a weighted average line position", "Tune a proportional controller (Kp)", "Use a MOSFET driver (TB6612FNG) with standby"],
     limitations: ["Proportional-only control can oscillate at high speed", "Must start with the sensor bar over the line so calibration sees black and white", "Five sensors span only 56 mm — very sharp turns rely on lost-line recovery"],
     author: "Robotics Club KKH · BEAST FEAST",
@@ -326,6 +495,7 @@ export const LF02: ProjectTemplate = {
       { name: "baseSpeed", meaning: "Cruise speed. Live: B<value>." },
       { name: "Kp", meaning: "Proportional steering gain. Live: P<value>." },
       { name: "lineThreshold", meaning: "Below this summed reading the line counts as lost." },
+      { name: "minSpeed / searchSpeed / sweepTime", meaning: "Speed in the sharpest turns; pivot speed and duration (≈135°) of the bounded lost-line search." },
     ],
   },
   simulation: {
@@ -365,6 +535,7 @@ const LF03_CODE = `// ==========================================================
 const int qtr[8] = {A0, A1, A2, A3, A4, A5, A6, A7};   // OUT1 (left) ... OUT8 (right)
 int minV[8];
 int maxV[8];
+int value[8];        // calibrated 0 (white) .. 1000 (black)
 
 // ---- adjustable parameters ----
 float Kp = 0.09;
@@ -372,6 +543,14 @@ float Ki = 0.0002;
 float Kd = 0.9;
 int baseSpeed = 170;
 int maxSpeed = 255;
+int minSpeed = 60;       // speed in the sharpest turns
+long integralLimit = 20000;
+
+// ---- lost-line recovery ----
+int searchSpeed = 110;   // slow pivot while the line is lost (about 235 deg/s on this robot)
+int sweepTime = 570;     // ms of pivoting = about 135 deg. The search never turns further than this
+                         // either way, so it cannot swing round onto the line behind it and drive back.
+int gapTime = 120;       // ms to roll straight on when the line vanishes while centred (gap / line end)
 
 float error = 0;
 float prevError = 0;
@@ -379,8 +558,17 @@ float integral = 0;
 float derivative = 0;
 float output = 0;
 int lastPosition = 0;
+int lastSpeed = 0;       // forward speed command just before the line was lost
+bool lineSeen = false;
 int leftCmd = 0;
 int rightCmd = 0;
+
+int lastSide = 0;        // -1 = line last seen on the LEFT edge, +1 = RIGHT edge, 0 = centred
+unsigned long sideTime = 0;
+unsigned long edgeTime = 0;
+bool lost = false;
+unsigned long lostAt = 0;
+int searchDir = -1;
 
 volatile long ticksL = 0;
 volatile long ticksR = 0;
@@ -423,7 +611,8 @@ void calibrate() {
   Serial.println();
 }
 
-// -3500 (far left) .. +3500 (far right)
+// -3500 (far left) .. +3500 (far right); sets lineSeen. When the line is lost it returns the
+// last position it saw.
 int readLine() {
   long weighted = 0;
   long sum = 0;
@@ -432,12 +621,65 @@ int readLine() {
     if (span < 50) span = 50;
     int v = constrain((long)(analogRead(qtr[i]) - minV[i]) * 1000 / span, 0, 1000);
     if (v < 80) v = 0;                 // ignore noise
+    value[i] = v;
     weighted += (long)v * (i * 1000);
     sum += v;
   }
-  if (sum < 250) return lastPosition > 0 ? 3500 : -3500;   // lost: hold the last side
-  lastPosition = weighted / sum - 3500;
+  lineSeen = sum >= 250;
+  if (lineSeen) lastPosition = weighted / sum - 3500;
   return lastPosition;
+}
+
+// Remember which side the line went to. At a sharp corner the new leg appears under the OUTER
+// sensors just before the line disappears, so an outer sighting wins for 200 ms over an inner
+// sensor glimpsing the end of the old leg on the other side.
+void rememberSide(int position) {
+  unsigned long now = millis();
+  bool leftEdge = value[0] > 500;     // OUT1, the outermost left sensor
+  bool rightEdge = value[7] > 500;    // OUT8, the outermost right sensor
+  if (leftEdge && !rightEdge) { lastSide = -1; edgeTime = now; sideTime = now; }
+  else if (rightEdge && !leftEdge) { lastSide = 1; edgeTime = now; sideTime = now; }
+  else if (now - edgeTime > 200 && position < -1500) { lastSide = -1; sideTime = now; }
+  else if (now - edgeTime > 200 && position > 1500) { lastSide = 1; sideTime = now; }
+  if (abs(position) < 1500 && now - sideTime > 300) lastSide = 0;   // centred for a while: forget it
+}
+
+void pivot(int dir) {  // -1 = turn left on the spot, +1 = turn right
+  drive(dir * searchSpeed, -dir * searchSpeed);
+}
+
+// Bounded search: turn towards the remembered side, sweep back the other way, return to the
+// heading where the line was lost, then stop (it never turns more than about 135 deg from there).
+// loop() leaves it as soon as the array sees the line again.
+void searchLine() {
+  if (!lost) {
+    lost = true;
+    lostAt = millis();
+    searchDir = lastSide != 0 ? lastSide : (lastPosition > 0 ? 1 : -1);
+    integral = 0;                      // anti-windup: the old integral means nothing any more
+  }
+  long t = millis() - lostAt;
+  if (lastSide != 0) {
+    // The first part of the turn also has to stop the forward run, so it lasts a little longer
+    // the faster we were going (it does not count towards the sweep angle).
+    int brake = lastSpeed / 2;
+    if (t < brake) { pivot(searchDir); return; }
+    t -= brake;
+  } else {
+    // No idea where it went (a gap, the end of the line, or we started beside it): roll on a
+    // little, then try a narrow sweep (about 45 deg each way) before the wide one.
+    if (t < gapTime) { drive(minSpeed, minSpeed); return; }
+    t -= gapTime;
+    int narrow = sweepTime / 3;
+    if (t < narrow) { pivot(searchDir); return; }
+    if (t < 3 * narrow) { pivot(-searchDir); return; }
+    if (t < 4 * narrow) { pivot(searchDir); return; }
+    t -= 4 * narrow;
+  }
+  if (t < sweepTime) pivot(searchDir);
+  else if (t < 3 * sweepTime) pivot(-searchDir);
+  else if (t < 4 * sweepTime) pivot(searchDir);
+  else drive(0, 0);                               // not within reach: stop safely
 }
 
 void readCommands() {
@@ -447,6 +689,22 @@ void readCommands() {
     else if (c == 'I') { Ki = Serial.parseFloat(); integral = 0; }
     else if (c == 'D') Kd = Serial.parseFloat();
     else if (c == 'B') baseSpeed = Serial.parseInt();
+  }
+}
+
+void sendTelemetry() {
+  if (millis() - lastTelemetry >= 100) {
+    lastTelemetry = millis();
+    Serial.print("PID,");
+    Serial.print(error); Serial.print(",");
+    Serial.print(prevError); Serial.print(",");
+    Serial.print(integral); Serial.print(",");
+    Serial.print(derivative); Serial.print(",");
+    Serial.print(output); Serial.print(",");
+    Serial.print(leftCmd); Serial.print(",");
+    Serial.print(rightCmd); Serial.print(",");
+    Serial.print(ticksL); Serial.print(",");
+    Serial.println(ticksR);
   }
 }
 
@@ -464,30 +722,29 @@ void setup() {
 void loop() {
   readCommands();
   int position = readLine();
-  error = position;
-  integral = constrain(integral + error, -20000, 20000);
-  derivative = error - prevError;
-  output = Kp * error + Ki * integral + Kd * derivative;
-  prevError = error;
+  if (!lineSeen) {
+    searchLine();                      // lost: bounded search instead of PID on a made-up error
+  } else {
+    if (lost) {
+      lost = false;
+      prevError = position;            // no derivative kick when the line comes back
+    }
+    rememberSide(position);
+    error = position;
+    derivative = error - prevError;
+    prevError = error;
 
-  // slow down on big errors so the robot can make sharp turns
-  int speed = baseSpeed - abs(error) / 30;
-  if (speed < 60) speed = 60;
-  drive(speed + output, speed - output);
+    // slow down on big errors so the robot can make sharp turns
+    int speed = baseSpeed - abs(error) / 30;
+    if (speed < minSpeed) speed = minSpeed;
+    lastSpeed = speed;
 
-  if (millis() - lastTelemetry >= 100) {
-    lastTelemetry = millis();
-    Serial.print("PID,");
-    Serial.print(error); Serial.print(",");
-    Serial.print(prevError); Serial.print(",");
-    Serial.print(integral); Serial.print(",");
-    Serial.print(derivative); Serial.print(",");
-    Serial.print(output); Serial.print(",");
-    Serial.print(leftCmd); Serial.print(",");
-    Serial.print(rightCmd); Serial.print(",");
-    Serial.print(ticksL); Serial.print(",");
-    Serial.println(ticksR);
+    // integral anti-windup: clamp it, and only let it grow while the motors are not saturated
+    output = Kp * error + Ki * integral + Kd * derivative;
+    if (abs(speed) + abs(output) < maxSpeed) integral = constrain(integral + error, -integralLimit, integralLimit);
+    drive(speed + output, speed - output);
   }
+  sendTelemetry();
   delay(2);
 }
 `;
@@ -497,15 +754,15 @@ export const LF03: ProjectTemplate = {
   metadata: {
     id: "LF-03",
     name: "PID Line Follower",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "line",
     difficulty: "advanced",
     learningLevel: "PID control, 8-sensor arrays, encoders and live tuning",
     description: "A fast competition-style follower: Pololu QTR-8A array, N20 gearmotors with Hall encoders, TB6612FNG and full PID control that you can tune while the robot runs.",
     workingPrinciple:
-      "Eight calibrated analog sensors give a line position from −3500 to +3500. The PID controller adds a proportional term (how far off the line), an integral term (persistent offset) and a derivative term (how fast the error changes, which damps oscillation). The robot also slows down automatically when the error is large so it can take sharp corners. Encoders count wheel pulses for speed telemetry.",
+      "Eight calibrated analog sensors give a line position from −3500 to +3500. The PID controller adds a proportional term (how far off the line), an integral term (persistent offset) and a derivative term (how fast the error changes, which damps oscillation). The robot also slows down automatically when the error is large so it can take sharp corners. When the array loses the line, PID is paused (no derivative kick, integral reset) and the robot searches with a slow, bounded pivot towards the edge where the line was last seen, never more than about 135°, so it cannot turn round onto the track behind it. Encoders count wheel pulses for speed telemetry.",
     learningObjectives: ["Implement and tune PID (Kp, Ki, Kd)", "Use an 8-channel analog array", "Count encoder pulses with interrupts", "Tune a robot live over Serial while watching telemetry"],
-    limitations: ["The Nano has exactly 8 analog inputs — all are used by the array", "Integral windup is clamped; very high Ki still destabilises the robot", "Encoders are used for telemetry, not closed-loop speed control"],
+    limitations: ["The Nano has exactly 8 analog inputs — all are used by the array", "The integral is clamped, frozen while the motors are saturated and reset when the line is lost; very high Ki still destabilises the robot", "Encoders are used for telemetry, not closed-loop speed control"],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "QTR-8A 8-channel analog array + 2 Hall encoders",
   },
@@ -550,6 +807,7 @@ export const LF03: ProjectTemplate = {
     libraries: [],
     adjustable: [
       { name: "Kp / Ki / Kd", meaning: "PID gains. Live: P<value>, I<value>, D<value>." },
+      { name: "minSpeed / searchSpeed / sweepTime", meaning: "Speed in the sharpest turns; pivot speed and duration (≈135°) of the bounded lost-line search." },
       { name: "baseSpeed", meaning: "Cruise speed. Live: B<value>." },
     ],
   },

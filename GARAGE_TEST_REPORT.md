@@ -1,6 +1,6 @@
 # BEAST PROJECT GARAGE — TEST REPORT
 
-Generated 2026-11-16T14:09:40.401Z by `npm run garage:report`. Every scenario runs the real stack: the project's firmware in the sandboxed interpreter → its circuit graph → driver/motor models → planar physics → sensor geometry → back to the firmware. No path following or scripted results are used.
+Generated 2026-11-18T09:52:57.784Z by `npm run garage:report`. Every scenario runs the real stack: the project's firmware in the sandboxed interpreter → its circuit graph → driver/motor models → planar physics → sensor geometry → back to the firmware. No path following or scripted results are used.
 
 ## Readiness (14 automated checks per project)
 
@@ -27,31 +27,31 @@ Generated 2026-11-16T14:09:40.401Z by `npm run garage:report`. Every scenario ru
 | --- | --- | --- | --- | --- | --- |
 | Straight line | LF-01 | 2.4 m straight black line, 19 mm tape | Travels along the line, staying within 3 cm of it | Reached x = 0.95 m; max deviation after calibration 0.5 cm | ✅ PASS |
 | Curved line | LF-01 | Student loop: 1.2 m straights joined by 0.35 m-radius curves | Completes a lap | Lap completed in 15.0 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
-| Sharp turns | LF-01 | Line · Sharp Corners (90° corners) | Completes a lap; may briefly leave the line at corners | Lap completed in 14.0 s; on the line 82% of samples; 4 off-track event(s) | ✅ PASS |
-| Line width 12 mm | LF-01 | Rounded loop with 12 mm line | Completes a lap | Lap completed in 16.5 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
+| Sharp turns | LF-01 | Line · Sharp Corners (90° corners) | Completes a lap; may briefly leave the line at corners | Lap completed in 14.0 s; on the line 82% of samples; 5 off-track event(s) | ✅ PASS |
+| Line width 12 mm | LF-01 | Rounded loop with 12 mm line | Completes a lap | Lap completed in 17.0 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
 | Line width 30 mm | LF-01 | Rounded loop with 30 mm line | Completes a lap | Lap completed in 16.5 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
-| Intersections | LF-01 | Line · Figure-8 Crossing (one + intersection and a side loop) | Crosses the intersection and completes a lap | Lap completed in 19.5 s; on the line 76% of samples; 2 off-track event(s) | ✅ PASS |
+| Intersections | LF-01 | Line · Figure-8 Crossing (one + intersection and a side loop) | Crosses the intersection and completes a lap | Lap completed in 19.5 s; on the line 79% of samples; 2 off-track event(s) | ✅ PASS |
 | Custom student course | LF-01 | Student course: straight, 18 cm-radius curve, sharp 90° corner, wide curve | Attempts the course using only its sensors (tight 18 cm curves are hard) | Lap completed in 12.5 s; on the line 84% of samples; 1 off-track event(s) | ✅ PASS |
-| Lost-line recovery | LF-01 | Starts 25 mm beside the line, angled 20° across it | Re-acquires the line and ends up following it (|y| < 1.5 cm) | First centred at 3.1 s; final offset -0.9 cm | ✅ PASS |
-| Straight line | LF-02 | 2.4 m straight black line, 19 mm tape | Travels along the line, staying within 3 cm of it | Reached x = 0.97 m; max deviation after calibration 0.3 cm | ✅ PASS |
-| Curved line | LF-02 | Student loop: 1.2 m straights joined by 0.35 m-radius curves | Completes a lap | Lap completed in 14.0 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
-| Sharp turns | LF-02 | Line · Sharp Corners (90° corners) | Completes a lap; may briefly leave the line at corners | Lap completed in 13.5 s; on the line 90% of samples; 5 off-track event(s) | ✅ PASS |
-| Line width 12 mm | LF-02 | Rounded loop with 12 mm line | Completes a lap | Lap completed in 15.0 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
-| Line width 30 mm | LF-02 | Rounded loop with 30 mm line | Completes a lap | Lap completed in 15.0 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
-| Intersections | LF-02 | Line · Figure-8 Crossing (one + intersection and a side loop) | Crosses the intersection and completes a lap | Lap completed in 14.0 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
-| Custom student course | LF-02 | Student course: straight, 18 cm-radius curve, sharp 90° corner, wide curve | Attempts the course using only its sensors (tight 18 cm curves are hard) | Lap completed in 12.5 s; on the line 95% of samples; 1 off-track event(s) | ✅ PASS |
-| Lost-line recovery | LF-02 | Starts 25 mm beside the line, angled 20° across it | Re-acquires the line and ends up following it (|y| < 1.5 cm) | First centred at 3.1 s; final offset -0.3 cm | ✅ PASS |
-| Straight line | LF-03 | 2.4 m straight black line, 19 mm tape | Travels along the line, staying within 3 cm of it | Reached x = 0.92 m; max deviation after calibration 0.2 cm | ✅ PASS |
+| Lost-line recovery | LF-01 | Starts 25 mm beside the line, angled 20° across it | Re-acquires the line and ends up following it (|y| < 1.5 cm) | First centred at 3.1 s; final offset -0.3 cm | ✅ PASS |
+| Straight line | LF-02 | 2.4 m straight black line, 19 mm tape | Travels along the line, staying within 3 cm of it | Reached x = 0.96 m; max deviation after calibration 0.3 cm | ✅ PASS |
+| Curved line | LF-02 | Student loop: 1.2 m straights joined by 0.35 m-radius curves | Completes a lap | Lap completed in 15.0 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
+| Sharp turns | LF-02 | Line · Sharp Corners (90° corners) | Completes a lap; may briefly leave the line at corners | Lap completed in 14.0 s; on the line 82% of samples; 5 off-track event(s) | ✅ PASS |
+| Line width 12 mm | LF-02 | Rounded loop with 12 mm line | Completes a lap | Lap completed in 15.5 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
+| Line width 30 mm | LF-02 | Rounded loop with 30 mm line | Completes a lap | Lap completed in 15.5 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
+| Intersections | LF-02 | Line · Figure-8 Crossing (one + intersection and a side loop) | Crosses the intersection and completes a lap | Lap completed in 14.5 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
+| Custom student course | LF-02 | Student course: straight, 18 cm-radius curve, sharp 90° corner, wide curve | Attempts the course using only its sensors (tight 18 cm curves are hard) | Lap completed in 13.0 s; on the line 100% of samples; 1 off-track event(s) | ✅ PASS |
+| Lost-line recovery | LF-02 | Starts 25 mm beside the line, angled 20° across it | Re-acquires the line and ends up following it (|y| < 1.5 cm) | First centred at 3.1 s; final offset -0.1 cm | ✅ PASS |
+| Straight line | LF-03 | 2.4 m straight black line, 19 mm tape | Travels along the line, staying within 3 cm of it | Reached x = 0.93 m; max deviation after calibration 0.2 cm | ✅ PASS |
 | Curved line | LF-03 | Student loop: 1.2 m straights joined by 0.35 m-radius curves | Completes a lap | Lap completed in 15.0 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
-| Sharp turns | LF-03 | Line · Sharp Corners (90° corners) | Completes a lap; may briefly leave the line at corners | Lap completed in 14.0 s; on the line 100% of samples; 2 off-track event(s) | ✅ PASS |
+| Sharp turns | LF-03 | Line · Sharp Corners (90° corners) | Completes a lap; may briefly leave the line at corners | Lap completed in 14.0 s; on the line 100% of samples; 3 off-track event(s) | ✅ PASS |
 | Line width 12 mm | LF-03 | Rounded loop with 12 mm line | Completes a lap | Lap completed in 15.5 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
 | Line width 30 mm | LF-03 | Rounded loop with 30 mm line | Completes a lap | Lap completed in 15.5 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
 | Intersections | LF-03 | Line · Figure-8 Crossing (one + intersection and a side loop) | Crosses the intersection and completes a lap | Lap completed in 14.5 s; on the line 100% of samples; 0 off-track event(s) | ✅ PASS |
 | Custom student course | LF-03 | Student course: straight, 18 cm-radius curve, sharp 90° corner, wide curve | Attempts the course using only its sensors (tight 18 cm curves are hard) | Lap completed in 13.0 s; on the line 90% of samples; 1 off-track event(s) | ✅ PASS |
-| Lost-line recovery | LF-03 | Starts 25 mm beside the line, angled 20° across it | Re-acquires the line and ends up following it (|y| < 1.5 cm) | First centred at 3.1 s; final offset -0.2 cm | ✅ PASS |
+| Lost-line recovery | LF-03 | Starts 25 mm beside the line, angled 20° across it | Re-acquires the line and ends up following it (|y| < 1.5 cm) | First centred at 3.1 s; final offset -0.1 cm | ✅ PASS |
 | Sensor calibration | LF-02 | Firmware sweeps over the line during its first seconds | Every sensor records a white minimum and a black maximum at least 400 counts apart | Ranges: 51-972 51-972 51-972 51-972 51-972 | ✅ PASS |
 | Sensor calibration | LF-03 | Firmware sweeps over the line during its first seconds | Every sensor records a white minimum and a black maximum at least 400 counts apart | Ranges: 51-972 51-972 51-972 51-972 51-972 51-972 51-972 51-972 | ✅ PASS |
-| PID telemetry and live tuning | LF-03 | Runs 5 s, then sends P0.20 over Serial | Telemetry lines PID,error,prev,integral,derivative,output,left,right,ticksL,ticksR stream every 100 ms; firmware keeps running after retuning | 50 telemetry lines; last: PID,-96.00,-96.00,-20000.00,0.00,-23.20,142,189,3263,3732 | ✅ PASS |
+| PID telemetry and live tuning | LF-03 | Runs 5 s, then sends P0.20 over Serial | Telemetry lines PID,error,prev,integral,derivative,output,left,right,ticksL,ticksR stream every 100 ms; firmware keeps running after retuning | 50 telemetry lines; last: PID,-82.00,-82.00,-20000.00,0.00,-20.40,146,187,3270,3738 | ✅ PASS |
 
 ## Robo Race
 
@@ -104,4 +104,4 @@ Known limitations:
 - The reference robots' 25GA370 motors and sticky tyres out-push the built-in opponent robots, so head-on starts are usually decided in the first push
 - The Sharp sensor is out of range (>80 cm) at the start distance and reports 999
 
-Total runtime 118 s.
+Total runtime 121 s.
