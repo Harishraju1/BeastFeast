@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { formatIndianMobile, mobileError, niatIdError, normalizeNiatId, passwordError, sniffImageType, toE164India } from "@/lib/validation";
 
 describe("NIAT ID", () => {
-  it.each(["N24H0100001", "N25H0101234", "N26H0198765"])("accepts %s", (id) => expect(niatIdError(id)).toBeNull());
+  it.each(["N24H01A0001", "N25H01B1234", "N00H01X0000", "N26H01Z9876"])("accepts %s", (id) => expect(niatIdError(id)).toBeNull());
   it("normalises case and spaces", () => {
-    expect(normalizeNiatId("  n24h01 00001 ")).toBe("N24H0100001");
-    expect(niatIdError("  n24h0100001 ")).toBeNull();
+    expect(normalizeNiatId("  n24h01 a0001 ")).toBe("N24H01A0001");
+    expect(niatIdError("  n24h01a0001 ")).toBeNull();
   });
-  it.each(["", "N24H0200001", "N2H0100001", "N24H010001", "N24H01000011", "M24H0100001", "N24A0100001", "NAAH0100001"])("rejects %s", (id) =>
+  it.each(["", "N24H0100001", "N24H02A0001", "N2H01A0001", "N24H01A001", "N24H01A00011", "M24H01A0001", "N24A01A0001", "NAAH01A0001", "N24H01AA001", "N24H0110001"])("rejects %s", (id) =>
     expect(niatIdError(id)).not.toBeNull(),
   );
 });

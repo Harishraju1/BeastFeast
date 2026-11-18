@@ -211,7 +211,7 @@ export interface PrivateDetails {
   email: string | null;
   /** +919876543210 */
   phone: string | null;
-  /** NXXH01XXXXX — set at sign-up, cannot be changed by the student afterwards */
+  /** N00H01X0000 (e.g. N24H01A0001) — set at sign-up, cannot be changed by the student afterwards */
   niatId: string | null;
   /** student ID from before the NIAT format was enforced (kept, never reformatted) */
   legacyStudentId: string | null;
@@ -223,7 +223,7 @@ export interface SignUpInput {
   password: string;
   /** +919876543210 */
   phone: string;
-  /** NXXH01XXXXX */
+  /** N00H01X0000, e.g. N24H01A0001 */
   niatId: string;
 }
 
@@ -270,6 +270,12 @@ export interface Backend {
   /** Admins: registered accounts with contact details (cloud: admin_list_users). */
   adminListUsers(q: AdminUserQuery): Promise<{ rows: AdminUserRow[]; total: number }>;
   signIn(email: string, password: string): Promise<Profile>;
+  /** Emails a password-reset link (cloud mode). Never reveals whether the email is registered. */
+  requestPasswordReset(email: string): Promise<void>;
+  /** Sets a new password for the signed-in (or link-verified) user. */
+  updatePassword(newPassword: string): Promise<void>;
+  /** True when a reset link has signed the user in and they may choose a new password. */
+  hasRecoverySession(): Promise<boolean>;
   signOut(): Promise<void>;
   updateProfile(p: Partial<Profile> & { id: string }): Promise<Profile>;
   listProfiles(): Promise<Profile[]>;

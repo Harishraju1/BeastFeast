@@ -145,6 +145,19 @@ export class LocalBackend implements Backend {
   async signOut() {
     localStorage.removeItem(K.session);
   }
+  async requestPasswordReset(): Promise<void> {
+    throw new Error("Local mode has no email service. Ask this device's Super Admin, or create a new local account.");
+  }
+  async updatePassword(newPassword: string) {
+    const accounts = this.accounts();
+    const a = accounts.find((x) => x.profile.id === this.me().profile.id)!;
+    a.salt = crypto.randomUUID();
+    a.hash = await sha256(a.salt + newPassword);
+    write(K.accounts, accounts);
+  }
+  async hasRecoverySession() {
+    return !!(await this.currentUser());
+  }
 
   async updateProfile(p: Partial<Profile> & { id: string }) {
     const accounts = this.accounts();

@@ -164,7 +164,7 @@ The only Supabase key in the repository is the public publishable key in `.env.p
   - **RLS** on the tables
 - Students cannot raise their own role.
 - The Super Admin cannot be demoted from the app (`roles:smoke`, 23/23).
-- There is no password-reset flow in the app yet.
+- Password reset uses Supabase's emailed one-time link (PKCE). The app never reveals whether an email is registered. Reset requests are rate-limited by Supabase Auth.
 
 ### CORS
 The app's own API routes (`/api/avatar`, `/api/cron/daily-xp-reset`) send no CORS headers, so browsers allow only same-origin calls. `/api/avatar` also rejects requests whose `Origin` is another site. CORS for Supabase itself is managed by Supabase. As usual, CORS is not treated as authentication; every route checks the session.

@@ -22,7 +22,7 @@ const check = (name: string, ok: boolean, detail = "") => {
 const made: string[] = [];
 const tag = Date.now().toString().slice(-5);
 // test NIAT IDs are generated per run so reruns never collide; they are deleted with the accounts
-const niat = (n: number) => `N99H01${String((Number(tag) * 7 + n) % 100000).padStart(5, "0")}`;
+const niat = (n: number) => `N99H01Q${String((Number(tag) * 7 + n) % 10000).padStart(4, "0")}`;
 
 async function signUpViaApi(email: string, password: string, data: Record<string, unknown>) {
   const sb = createClient(URL_, PUB, { auth: { persistSession: false } });

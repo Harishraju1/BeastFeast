@@ -5,7 +5,7 @@ import { getBackend } from "@/lib/data";
 import type { PrivateDetails } from "@/lib/data/types";
 import { useApp } from "@/lib/store/app";
 import { Button } from "@/components/ui";
-import { COUNTRY_CODE, NIAT_ID_EXAMPLE, formatIndianMobile, mobileError, nationalMobileDigits, niatIdError, normalizeNiatId, toE164India } from "@/lib/validation";
+import { COUNTRY_CODE, NIAT_ID_EXAMPLE, NIAT_ID_FORMAT, formatIndianMobile, mobileError, nationalMobileDigits, niatIdError, normalizeNiatId, toE164India } from "@/lib/validation";
 
 /**
  * The student's private details. Only they and administrators can read these.
@@ -76,7 +76,7 @@ export function AccountDetails() {
         ) : (
           <>
             <input aria-label="NIAT student ID" className={`bf-input font-mono uppercase tracking-wider ${niatErr ? "!border-accent" : ""}`} placeholder={NIAT_ID_EXAMPLE} value={niat} onChange={(e) => setNiat(e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 11))} />
-            <p className="text-[11px] text-dim">Format NXXH01XXXXX. It can be set once — ask an administrator to correct it later.</p>
+            <p className="text-[11px] text-dim">Format {NIAT_ID_FORMAT}, e.g. {NIAT_ID_EXAMPLE}. It can be set once — ask an administrator to correct it later.</p>
           </>
         )}
         {d.legacyStudentId && d.legacyStudentId !== d.niatId && <p className="text-[11px] text-dim">Earlier student ID on record: <span className="font-mono">{d.legacyStudentId}</span></p>}

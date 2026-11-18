@@ -54,6 +54,12 @@ export class SupabaseBackend implements Backend {
     // layout checks the user's role on the server before rendering anything.
     // Outside a browser (tests, scripts, pre-rendering) there are no cookies: use a session-less client.
     this.sb = typeof window === "undefined" ? createClient(url, anonKey, { auth: { persistSession: false } }) : createBrowserClient(url, anonKey);
+    if (typeof window !== "undefined") {
+      // a password-reset link that lands anywhere other than /reset-password still ends up on the reset form
+      this.sb.auth.onAuthStateChange((event) => {
+        if (event === "PASSWORD_RECOVERY" && window.location.pathname !== "/reset-password") window.location.assign("/reset-password");
+      });
+    }
   }
 
   private async uid() {
@@ -89,6 +95,27 @@ export class SupabaseBackend implements Backend {
   }
   async signOut() {
     await this.sb.auth.signOut();
+  }
+  async requestPasswordReset(email: string) {
+    const redirectTo = `${window.location.origin}/reset-password`;
+    const { error } = await this.sb.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    if (!error) return;
+    if (/rate limit|security purposes|only request this/i.test(error.message)) throw new Error("Too many reset requests. Please wait a few minutes and try again.");
+    if (/invalid.*email|validate email/i.test(error.message)) throw new Error("Enter a valid email address.");
+    throw new Error(friendlyError(error.message));
+  }
+  async updatePassword(newPassword: string) {
+    const { error } = await this.sb.auth.updateUser({ password: newPassword });
+    if (!error) return;
+    if (/different from the old/i.test(error.message)) throw new Error("Choose a password different from your old one.");
+    if (/session|not authenticated|jwt/i.test(error.message)) throw new Error("Your reset link has expired. Request a new one.");
+    if (/weak|at least/i.test(error.message)) throw new Error("That password is too weak. Use at least 8 characters with letters and a number.");
+    throw new Error(friendlyError(error.message));
+  }
+  async hasRecoverySession() {
+    // getSession() waits until the client has exchanged the ?code= from the reset link for a session
+    const { data } = await this.sb.auth.getSession();
+    return !!data.session;
   }
   async updateProfile(p: Partial<Profile> & { id: string }) {
     // name and campus only — the avatar goes through /api/avatar, IDs through complete_my_details()

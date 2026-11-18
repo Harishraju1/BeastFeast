@@ -1,11 +1,12 @@
 /**
- * Sign-up and profile field rules. The database enforces the same rules (migration 0010), so these exist
+ * Sign-up and profile field rules. The database enforces the same rules (migrations 0010–0011), so these exist
  * for instant feedback in the form and for local mode — they are not the security boundary.
  */
 
-/** Official NIAT student ID: N + 2 digits + H01 + 5 digits, e.g. N24H0100001. */
-export const NIAT_ID_RE = /^N\d{2}H01\d{5}$/;
-export const NIAT_ID_EXAMPLE = "N24H0100001";
+/** Official NIAT student ID, format N00H01X0000: N + 2 digits + H01 + 1 letter + 4 digits, e.g. N24H01A0001. */
+export const NIAT_ID_RE = /^N\d{2}H01[A-Z]\d{4}$/;
+export const NIAT_ID_FORMAT = "N00H01X0000";
+export const NIAT_ID_EXAMPLE = "N24H01A0001";
 
 /** Uppercase and remove spaces (users often type "n24h01 00001"). */
 export function normalizeNiatId(raw: string): string {
@@ -15,7 +16,7 @@ export function normalizeNiatId(raw: string): string {
 export function niatIdError(raw: string): string | null {
   const v = normalizeNiatId(raw);
   if (!v) return "Enter your NIAT ID.";
-  if (!NIAT_ID_RE.test(v)) return `Use the format NXXH01XXXXX, e.g. ${NIAT_ID_EXAMPLE}.`;
+  if (!NIAT_ID_RE.test(v)) return `Use the format ${NIAT_ID_FORMAT} (letter in the 7th place), e.g. ${NIAT_ID_EXAMPLE}.`;
   return null;
 }
 

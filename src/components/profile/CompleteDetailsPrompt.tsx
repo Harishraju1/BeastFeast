@@ -33,7 +33,7 @@ export function CompleteDetailsPrompt() {
       .catch(() => setNeed(null));
   }, [user]);
 
-  if (!user || !need || path.startsWith("/login")) return null;
+  if (!user || !need || path.startsWith("/login") || path.startsWith("/reset-password")) return null;
 
   async function save() {
     if (busy) return;

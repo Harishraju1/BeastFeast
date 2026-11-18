@@ -8,14 +8,17 @@ import { Camera, CheckCircle2, X } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { BACKEND_MODE, getBackend } from "@/lib/data";
 import { Button } from "@/components/ui";
-import { COUNTRY_CODE, NIAT_ID_EXAMPLE, avatarFileError, mobileError, niatIdError, normalizeNiatId, passwordError, toE164India } from "@/lib/validation";
+import { COUNTRY_CODE, NIAT_ID_EXAMPLE, NIAT_ID_FORMAT, avatarFileError, mobileError, niatIdError, normalizeNiatId, passwordError, toE164India } from "@/lib/validation";
 
 type Fields = { name: string; email: string; phone: string; niatId: string; password: string; confirm: string };
 const EMPTY: Fields = { name: "", email: "", phone: "", niatId: "", password: "", confirm: "" };
 
-function validate(f: Fields, mode: "in" | "up"): Partial<Record<keyof Fields, string>> {
+type Mode = "in" | "up" | "forgot";
+
+function validate(f: Fields, mode: Mode): Partial<Record<keyof Fields, string>> {
   const e: Partial<Record<keyof Fields, string>> = {};
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) e.email = "Enter a valid email address.";
+  if (mode === "forgot") return e;
   if (mode === "in") {
     if (!f.password) e.password = "Enter your password.";
     return e;
@@ -43,7 +46,9 @@ function FieldRow({ id, label, error, hint, children }: { id: string; label: str
 
 function LoginInner() {
   const params = useSearchParams();
-  const [mode, setMode] = useState<"in" | "up">(params.get("mode") === "signup" ? "up" : "in");
+  const initial = params.get("mode");
+  const [mode, setMode] = useState<Mode>(initial === "signup" ? "up" : initial === "forgot" ? "forgot" : "in");
+  const [sent, setSent] = useState(false);
   const [f, setF] = useState<Fields>(EMPTY);
   const [touched, setTouched] = useState<Partial<Record<keyof Fields, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -108,6 +113,11 @@ function LoginInner() {
     if (Object.keys(errors).length) return;
     setBusy(true);
     try {
+      if (mode === "forgot") {
+        await (await getBackend()).requestPasswordReset(f.email.trim());
+        setSent(true);
+        return;
+      }
       if (mode === "in") {
         await signIn(f.email.trim(), f.password);
         router.replace(safeNext);
@@ -146,13 +156,15 @@ function LoginInner() {
       <form onSubmit={submit} noValidate className="bf-panel bf-on-ivory bf-raised relative w-full max-w-md space-y-4 border-t-4 !border-t-accent p-5 sm:p-7">
         <div>
           <div className="bf-label">BEAST FEAST · ROBOTICS CLUB KKH</div>
-          <h1 className="font-display text-2xl font-bold">{mode === "in" ? "Enter the lab" : "Create your engineer account"}</h1>
+          <h1 className="font-display text-2xl font-bold">{mode === "in" ? "Enter the lab" : mode === "forgot" ? "Reset your password" : "Create your engineer account"}</h1>
           <p className="mt-1 text-xs text-muted">
             {BACKEND_MODE === "local"
               ? "Local mode: accounts and projects are stored in this browser only. The first account created on this device becomes its Super Admin."
               : mode === "up"
                 ? "Your phone number and NIAT ID are visible only to you and the club administrators."
-                : "Cloud mode: your projects sync across devices."}
+                : mode === "forgot"
+                  ? "Enter the email you signed up with and we'll send you a link to choose a new password."
+                  : "Cloud mode: your projects sync across devices."}
           </p>
         </div>
 
@@ -174,7 +186,7 @@ function LoginInner() {
                 <input id="su-phone" className={`${input("phone")} min-w-0 flex-1 font-mono`} type="tel" inputMode="numeric" placeholder="9876543210" value={f.phone} onChange={set("phone")} onBlur={blur("phone")} autoComplete="tel-national" aria-invalid={!!show("phone")} />
               </div>
             </FieldRow>
-            <FieldRow id="su-niat" label="NIAT student ID" error={show("niatId") ?? (niatTaken ? errors.niatId : undefined)} hint={`Format NXXH01XXXXX, e.g. ${NIAT_ID_EXAMPLE}.`}>
+            <FieldRow id="su-niat" label="NIAT student ID" error={show("niatId") ?? (niatTaken ? errors.niatId : undefined)} hint={`Format ${NIAT_ID_FORMAT}, e.g. ${NIAT_ID_EXAMPLE}.`}>
               <div className="relative">
                 <input id="su-niat" className={`${input("niatId")} font-mono uppercase tracking-wider`} placeholder={NIAT_ID_EXAMPLE} value={f.niatId} onChange={set("niatId")} onBlur={blur("niatId")} autoComplete="off" spellCheck={false} aria-invalid={!!show("niatId")} />
                 {niatTaken === false && !errors.niatId && <CheckCircle2 size={16} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#2f7a46]" aria-label="NIAT ID available" />}
@@ -182,9 +194,23 @@ function LoginInner() {
             </FieldRow>
           </>
         )}
-        <FieldRow id="su-pw" label="Password" error={show("password")} hint={mode === "up" ? "At least 8 characters with letters and a number." : undefined}>
-          <input id="su-pw" className={input("password")} type="password" value={f.password} onChange={set("password")} onBlur={blur("password")} autoComplete={mode === "in" ? "current-password" : "new-password"} aria-invalid={!!show("password")} />
-        </FieldRow>
+        {mode !== "forgot" && (
+          <FieldRow id="su-pw" label="Password" error={show("password")} hint={mode === "up" ? "At least 8 characters with letters and a number." : undefined}>
+            <input id="su-pw" className={input("password")} type="password" value={f.password} onChange={set("password")} onBlur={blur("password")} autoComplete={mode === "in" ? "current-password" : "new-password"} aria-invalid={!!show("password")} />
+          </FieldRow>
+        )}
+        {mode === "in" && (
+          <div className="-mt-2 text-right">
+            <button type="button" className="text-xs text-brand hover:underline" onClick={() => { setMode("forgot"); setErr(null); setInfo(null); setSent(false); setSubmitted(false); }}>
+              Forgot password?
+            </button>
+          </div>
+        )}
+        {mode === "forgot" && sent && (
+          <div role="status" className="rounded border border-[#2f7a46]/40 bg-[#2f7a46]/10 px-3 py-2 text-sm text-[#215c34]">
+            If an account exists for <b>{f.email.trim()}</b>, a reset link is on its way. Open it <b>in this browser</b> within an hour. Check your spam folder if it doesn&apos;t arrive in a few minutes.
+          </div>
+        )}
         {mode === "up" && (
           <>
             <FieldRow id="su-pw2" label="Confirm password" error={show("confirm")}>
@@ -212,19 +238,23 @@ function LoginInner() {
         {err && <div role="alert" className="rounded border border-accent/50 bg-accent/10 px-3 py-2 text-sm text-accent-ink">{err}</div>}
         {info && <div role="status" className="rounded border border-[#2f7a46]/40 bg-[#2f7a46]/10 px-3 py-2 text-sm text-[#215c34]">{info}</div>}
         <Button variant="primary" size="lg" className="w-full" disabled={busy}>
-          {busy ? (mode === "in" ? "Signing in…" : "Creating account…") : mode === "in" ? "SIGN IN" : "CREATE ACCOUNT"}
+          {busy
+            ? mode === "in" ? "Signing in…" : mode === "forgot" ? "Sending…" : "Creating account…"
+            : mode === "in" ? "SIGN IN" : mode === "forgot" ? (sent ? "SEND AGAIN" : "SEND RESET LINK") : "CREATE ACCOUNT"}
         </Button>
         <button
           type="button"
           className="w-full text-center text-sm text-brand hover:underline"
           onClick={() => {
             setMode(mode === "in" ? "up" : "in");
+            setSent(false);
+            setInfo(null);
             setErr(null);
             setSubmitted(false);
             setTouched({});
           }}
         >
-          {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
+          {mode === "in" ? "New here? Create an account" : mode === "forgot" ? "Back to sign in" : "Already have an account? Sign in"}
         </button>
       </form>
     </div>

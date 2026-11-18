@@ -170,7 +170,24 @@ See SECURITY_REPORT.md:
 - tsc and ESLint are clean, and the production build succeeds.
 - No CSP violations on the WebGL views, the Garage, the arena or Monaco.
 
+### Follow-up (same day)
+
+**Password reset.** "Forgot password?" on the sign-in page sends a Supabase reset email.
+- The page never says whether the email is registered.
+- The link opens `/reset-password`. That page exchanges the one-time code (PKCE, so it must be the same browser) and asks for a new password with confirmation, using the same rules as sign-up.
+- Clear messages for expired or used links, with a button to request a new one.
+- Supabase allows the redirect on both the live domain and localhost.
+- Verified:
+  - the new password works and the old one is rejected
+  - fake codes are refused
+  - all page states were checked in the browser
+
+**NIAT ID format corrected to N00H01X0000.**
+- That is N + 2 digits + H01 + **one letter** + 4 digits, e.g. N24H01A0001; regex `^N\d{2}H01[A-Z]\d{4}$`. The first version wrongly expected five digits.
+- Migration `0011` fixes the database check, the sign-up trigger, the availability check and `complete_my_details`.
+- All 5 existing accounts' IDs already used this format, so they are now their NIAT IDs; the legacy copies are kept.
+- An old five-digit ID is now rejected by the database.
+
 ## Not changed, and why
 
-- **Password reset:** the app has no "forgot password" flow yet. Students who forget their password currently need an administrator. Adding one requires the reset redirect URL to be allowed in Supabase Auth.
 - **Phone verification:** numbers are format-checked, not verified by SMS. The UI says so.
