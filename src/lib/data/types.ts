@@ -24,6 +24,8 @@ export interface QuizAttempt {
   percent: number;
   passed: boolean;
   xpAwarded: number;
+  /** Part of xpAwarded that is the quiz-pass bonus (null for attempts recorded before the breakdown existed). */
+  passBonus?: number | null;
 }
 
 export type XpEventType =
@@ -315,8 +317,12 @@ export interface Backend {
   recordActivity(kind: LearningActivityKind, ref: string): Promise<void>;
   /** Applies the daily penalty for past days without learning activity (server-side in cloud mode). */
   applyInactivityPenalties(): Promise<{ deducted: number; days: number }>;
-  /** Graded on the server in Supabase mode (answer keys are not readable by students). */
-  submitQuiz(userId: string, quizId: string, answers: Record<string, number>): Promise<QuizAttempt>;
+  /**
+   * Graded on the server in Supabase mode (answer keys are not readable by students).
+   * Idempotent per attempt: the client creates `attemptId` (a UUID) when the attempt starts and sends the same id
+   * on every retry. A repeat returns the stored result and awards no XP; only a new attempt id is a new attempt.
+   */
+  submitQuiz(userId: string, quizId: string, answers: Record<string, number>, attemptId?: string): Promise<QuizAttempt>;
 
   getContent(): Promise<AdminContent>;
   saveContent(c: Partial<AdminContent>): Promise<AdminContent>;

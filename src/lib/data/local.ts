@@ -89,6 +89,20 @@ async function sha256(text: string): Promise<string> {
 }
 const rid = (p: string) => `${p}_${crypto.randomUUID().slice(0, 12)}`;
 
+/**
+ * Serialises every XP-ledger change in this browser so a duplicate check and its write can never interleave:
+ * Web Locks across tabs, plus a promise chain inside this tab (also used where Web Locks are unavailable).
+ * Without it, two overlapping submissions both passed the "already awarded?" check and both reported the XP.
+ */
+let xpChain: Promise<unknown> = Promise.resolve();
+function withXpLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== "undefined" ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
+  const run = locks?.request ? () => locks.request("bf5.xp-ledger", fn) as Promise<T> : fn;
+  const next = xpChain.then(run, run);
+  xpChain = next.catch(() => undefined);
+  return next;
+}
+
 export const EMPTY_CONTENT: AdminContent = {
   videos: [], announcements: [], missions: null, rules: DEFAULT_RULES, componentOverrides: {}, addedComponents: [], featuredProjects: [], topicOverrides: {}, extraQuestions: [],
 };
@@ -334,16 +348,21 @@ export class LocalBackend implements Backend {
   }
 
   async awardXp(userId: string, type: XpEventType, refId: string, amount?: number, description?: string) {
+    return withXpLock(() => this.awardUnlocked(userId, type, refId, amount, description));
+  }
+
+  /** Caller must hold the XP lock. Idempotent per (user, type, refId) — the same rule as the database. */
+  private async awardUnlocked(userId: string, type: XpEventType, refId: string, amount?: number, description?: string, attempt?: { id: string; source: XpEvent["source"] }) {
     if (type === "inactivity-penalty") throw new Error("Penalties are applied automatically.");
-    const events = read<XpEvent[]>(K.xp, []);
     const rule = (await this.getXpConfig()).rules[type];
+    const events = read<XpEvent[]>(K.xp, []); // read after every await, right before the check and the write
     const value = type === "question-correct" ? Math.max(0, Math.min(15, amount ?? 0)) : rule.amount;
     const mine = events.filter((e) => e.userId === userId);
     const dup = mine.some((e) => e.type === type && e.refId === refId);
     const overLimit = rule.limit !== null && mine.filter((e) => e.type === type).length >= rule.limit;
     let awarded = 0;
     if (!dup && !overLimit && value > 0) {
-      events.push({ id: rid("xp"), userId, type, refId, amount: value, at: new Date().toISOString(), source: sourceOf({ type, refId }), description: description ?? null });
+      events.push({ id: rid("xp"), userId, type, refId, amount: value, at: new Date().toISOString(), source: attempt?.source ?? sourceOf({ type, refId }), description: description ?? null, ...(attempt ? { attemptId: attempt.id } : {}) });
       write(K.xp, events);
       awarded = value;
     }
@@ -412,6 +431,9 @@ export class LocalBackend implements Backend {
 
   /** Same rules as the Supabase apply_inactivity_penalties() function. */
   async applyInactivityPenalties() {
+    return withXpLock(() => this.applyPenaltiesUnlocked());
+  }
+  private async applyPenaltiesUnlocked() {
     const me = await this.currentUser();
     const cfg = await this.getXpConfig();
     const pen = cfg.rules["inactivity-penalty"].amount;
@@ -451,28 +473,38 @@ export class LocalBackend implements Backend {
     return read<XpEvent[]>(K.xp, []).filter((e) => !userId || e.userId === userId);
   }
 
-  async submitQuiz(userId: string, quizId: string, answers: Record<string, number>): Promise<QuizAttempt> {
+  async submitQuiz(userId: string, quizId: string, answers: Record<string, number>, attemptId?: string): Promise<QuizAttempt> {
+    return withXpLock(() => this.submitUnlocked(userId, quizId, answers, attemptId));
+  }
+
+  /** Caller must hold the XP lock. One attempt id = one graded result = its XP awarded once. */
+  private async submitUnlocked(userId: string, quizId: string, answers: Record<string, number>, attemptId?: string): Promise<QuizAttempt> {
     const progress = await this.getProgress(userId);
+    const existing = attemptId ? progress.quizAttempts.find((a) => a.id === attemptId) : undefined;
+    if (existing) {
+      if (existing.quizId !== quizId) throw new Error("This attempt belongs to a different quiz");
+      return existing; // repeat of an attempt that was already graded: same result, no XP
+    }
     const content = await this.getContent();
     const g = gradeQuiz(quizId, answers, new Set(progress.correctQuestions), content.extraQuestions);
-    let xp = 0;
-    const attemptId = rid("qa");
+    const id = attemptId ?? rid("qa");
     const { quizTitle } = await import("@/lib/learning/history");
+    const { getQuestion } = await import("@/lib/learning");
     const title = quizTitle(quizId);
-    const before = new Set(read<XpEvent[]>(K.xp, []).map((e) => e.id));
+    const tag = { id, source: (quizId.startsWith("topic:") ? "quiz" : "challenge") as XpEvent["source"] };
+    let xp = 0;
     for (const qid of g.newlyCorrect) {
-      const q = (await import("@/lib/learning")).getQuestion(qid) ?? content.extraQuestions.find((e) => e.question.id === qid)?.question;
-      xp += (await this.awardXp(userId, "question-correct", qid, q?.xp ?? 0, `Correct answer — ${title}`)).awarded;
+      const q = getQuestion(qid) ?? content.extraQuestions.find((e) => e.question.id === qid)?.question;
+      xp += (await this.awardUnlocked(userId, "question-correct", qid, q?.xp ?? 0, `Correct answer — ${title}`, tag)).awarded;
     }
-    if (g.passed) xp += (await this.awardXp(userId, "quiz-pass", quizId, undefined, `Passed: ${title}`)).awarded;
-    // tag this submission's ledger rows with the attempt and its source (topic quiz or challenge)
-    const source = quizId.startsWith("topic:") ? "quiz" : "challenge";
-    write(K.xp, read<XpEvent[]>(K.xp, []).map((e) => (before.has(e.id) ? e : { ...e, attemptId, source })));
+    const passBonus = g.passed ? (await this.awardUnlocked(userId, "quiz-pass", quizId, undefined, `Passed: ${title}`, tag)).awarded : 0;
+    xp += passBonus;
     await this.recordActivity("quiz", quizId);
-    const attempt: QuizAttempt = { id: attemptId, quizId, at: new Date().toISOString(), answers, correct: g.correct, total: g.total, percent: g.percent, passed: g.passed, xpAwarded: xp };
-    progress.correctQuestions = [...new Set([...progress.correctQuestions, ...g.newlyCorrect])];
-    progress.quizAttempts = [...progress.quizAttempts, attempt];
-    await this.saveProgress(progress);
+    const attempt: QuizAttempt = { id, quizId, at: new Date().toISOString(), answers, correct: g.correct, total: g.total, percent: g.percent, passed: g.passed, xpAwarded: xp, passBonus };
+    const latest = await this.getProgress(userId); // re-read: recordActivity/awards awaited in between
+    latest.correctQuestions = [...new Set([...latest.correctQuestions, ...g.newlyCorrect])];
+    latest.quizAttempts = [...latest.quizAttempts, attempt];
+    await this.saveProgress(latest);
     return attempt;
   }
 

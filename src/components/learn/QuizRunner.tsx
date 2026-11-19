@@ -1,7 +1,7 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardCheck, History, SkipForward } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardCheck, History, Loader2, SkipForward } from "lucide-react";
 import type { QuizQuestion } from "@/lib/learning/types";
 import { useApp } from "@/lib/store/app";
 import { getBackend } from "@/lib/data";
@@ -18,6 +18,46 @@ const TYPE_LABEL: Record<QuizQuestion["type"], string> = {
 
 type QState = "answered" | "skipped" | "unanswered";
 
+/* ── one attempt = one id, kept across retries and page refreshes ───────────────────────── */
+const newAttemptId = () => crypto.randomUUID();
+const pendingKey = (userId: string, quizId: string) => `bf.quizPending.${userId}.${quizId}`;
+type Pending = { attemptId: string; answers: Record<string, number> };
+function readPending(key: string): Pending | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as Pending) : null;
+  } catch {
+    return null;
+  }
+}
+function writePending(key: string, p: Pending | null) {
+  try {
+    if (p) sessionStorage.setItem(key, JSON.stringify(p));
+    else sessionStorage.removeItem(key);
+  } catch {
+    /* storage blocked: retries in this page still reuse the same attempt id */
+  }
+}
+const TIMEOUT_MS = 20_000;
+const RETRIES = 2;
+/** Lost connection or no answer in time: safe to resend, because the attempt id makes the request idempotent. */
+const transient = (e: unknown) => /network|failed to fetch|load failed|timed out|timeout/i.test((e as Error)?.message ?? "");
+function withTimeout<T>(p: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("The server did not answer in time (request timed out).")), TIMEOUT_MS);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
 /**
  * Exam-style quiz: move freely with Previous / Skip / Next, see which questions are answered, skipped or
  * still open, review everything, then submit once. The attempt is graded by the backend (server-side in
@@ -31,7 +71,10 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
   const [phase, setPhase] = useState<"answer" | "review">("answer");
   const [result, setResult] = useState<QuizAttempt | null>(null);
   const [busy, setBusy] = useState(false);
-  const submitted = useRef(false); // one submission per attempt, even on double-click
+  const submitted = useRef(false); // one submission in flight per attempt, even on double-click
+  // The attempt id is created when the attempt starts and sent with every try of this attempt. The server
+  // returns the stored result for a repeated id, so retries, double requests and refreshes never add XP.
+  const [attemptId, setAttemptId] = useState(newAttemptId);
   const already = new Set(progress?.correctQuestions ?? []);
 
   const stateOf = (q: QuizQuestion): QState => (answers[q.id] !== undefined ? "answered" : skipped.has(q.id) ? "skipped" : "unanswered");
@@ -43,6 +86,7 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
 
   const restart = () => {
     submitted.current = false;
+    setAttemptId(newAttemptId()); // only a deliberate "Try again" starts a new attempt
     setResult(null);
     setAnswers({});
     setSkipped(new Set());
@@ -76,26 +120,56 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
     else setPhase("review");
   };
 
-  const submit = async () => {
-    if (!user) return toast("error", "Sign in to save quiz results and earn XP.");
-    if (submitted.current) return;
+  /** Sends this attempt (same id every time) and shows the result only once the server has confirmed it. */
+  const send = async (p: Pending) => {
+    if (!user || submitted.current) return;
     submitted.current = true;
     setBusy(true);
+    const key = pendingKey(user.id, quizId);
+    writePending(key, p); // a refresh during submission resumes this same attempt
     try {
       const be = await getBackend();
-      const a = await be.submitQuiz(user.id, quizId, answers);
+      let a: QuizAttempt | null = null;
+      for (let n = 0; !a; n++) {
+        try {
+          a = await withTimeout(be.submitQuiz(user.id, quizId, p.answers, p.attemptId));
+        } catch (e) {
+          if (n >= RETRIES || !transient(e)) throw e;
+          await new Promise((r) => setTimeout(r, 800 * (n + 1)));
+        }
+      }
+      writePending(key, null);
       setResult(a);
       await refreshUser();
       useApp.setState({ progress: await be.getProgress(user.id) });
       if (a.xpAwarded) toast("xp", `+${a.xpAwarded} XP`);
       onDone?.(a);
     } catch (e) {
-      submitted.current = false;
+      submitted.current = false; // pressing Submit again resends the SAME attempt id
+      if (!transient(e)) writePending(key, null);
       toast("error", (e as Error).message);
     } finally {
       setBusy(false);
     }
   };
+  const submit = async () => {
+    if (!user) return toast("error", "Sign in to save quiz results and earn XP.");
+    await send({ attemptId, answers });
+  };
+
+  // the page was refreshed while this attempt was being submitted: finish that attempt (no new attempt, no extra XP)
+  useEffect(() => {
+    if (!user) return;
+    const p = readPending(pendingKey(user.id, quizId));
+    if (!p) return;
+    void Promise.resolve().then(() => {
+      setAnswers(p.answers);
+      setAttemptId(p.attemptId);
+      setPhase("review");
+      return send(p);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, quizId]);
 
   // ───────── results ─────────
   if (result) {
@@ -113,6 +187,11 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
             <span className="text-muted">{result.passed ? "PASSED" : `Pass mark ${passPercent}%`}</span>
             <span className="font-semibold text-accent-ink">+{result.xpAwarded} XP</span>
           </div>
+          {!!result.passBonus && result.xpAwarded > 0 && (
+            <div className="text-xs text-muted">
+              +{result.xpAwarded - result.passBonus} XP for newly correct answers · +{result.passBonus} XP pass bonus
+            </div>
+          )}
           <div className="text-xs text-dim">XP is awarded once per correctly answered question — retakes help you learn but don&apos;t farm points. Skipped questions earn no XP.</div>
           <div className="flex flex-wrap justify-center gap-2 pt-1">
             <Button onClick={restart}>Try again</Button>
@@ -194,9 +273,10 @@ export function QuizRunner({ quizId, questions, title, passPercent, onDone }: { 
         <div className="flex flex-wrap justify-between gap-2">
           <Button onClick={() => go(i)}><ArrowLeft size={14} /> Back to questions</Button>
           <Button variant="primary" disabled={busy || !user} onClick={() => void submit()}>
-            <ClipboardCheck size={15} /> {busy ? "Submitting…" : "Submit quiz"}
+            {busy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <ClipboardCheck size={15} />} {busy ? "Submitting…" : "Submit quiz"}
           </Button>
         </div>
+        {busy && <div className="text-right text-xs text-muted" aria-live="polite">Waiting for the server to confirm your result…</div>}
         {!user && <div className="text-right text-xs text-warn">Sign in to submit and earn XP.</div>}
       </div>
     );

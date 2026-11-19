@@ -46,6 +46,11 @@ const toDetails = (r: { phone: string | null; niat_id: string | null; legacy_stu
   legacyStudentId: r?.legacy_student_id ?? null,
 });
 
+const toAttempt = (a: Record<string, unknown>): QuizAttempt => ({
+  id: String(a.id), quizId: String(a.quiz_id), at: String(a.at), answers: a.answers as Record<string, number>, correct: Number(a.correct), total: Number(a.total), percent: Number(a.percent), passed: Boolean(a.passed), xpAwarded: Number(a.xp_awarded),
+  passBonus: a.pass_bonus === null || a.pass_bonus === undefined ? null : Number(a.pass_bonus),
+});
+
 export class SupabaseBackend implements Backend {
   readonly mode = "supabase" as const;
   private sb: SupabaseClient;
@@ -231,9 +236,7 @@ export class SupabaseBackend implements Backend {
       check(await this.sb.from("progress").insert({ user_id: userId }));
       row = { completed_topics: [], bookmarks: [], last_topic: null, correct_questions: [], watched_videos: [], records: {} };
     }
-    const attempts = (check(await this.sb.from("quiz_attempts").select("*").eq("user_id", userId)) as Record<string, unknown>[]).map(
-      (a): QuizAttempt => ({ id: String(a.id), quizId: String(a.quiz_id), at: String(a.at), answers: a.answers as Record<string, number>, correct: Number(a.correct), total: Number(a.total), percent: Number(a.percent), passed: Boolean(a.passed), xpAwarded: Number(a.xp_awarded) }),
-    );
+    const attempts = (check(await this.sb.from("quiz_attempts").select("*").eq("user_id", userId)) as Record<string, unknown>[]).map((a) => toAttempt(a));
     return {
       userId,
       completedTopics: (row.completed_topics as string[]) ?? [],
@@ -301,9 +304,11 @@ export class SupabaseBackend implements Backend {
     const rows = check(await this.sb.rpc("apply_inactivity_penalties")) as { deducted: number; days: number }[];
     return rows?.[0] ?? { deducted: 0, days: 0 };
   }
-  async submitQuiz(_userId: string, quizId: string, answers: Record<string, number>): Promise<QuizAttempt> {
-    const a = check(await this.sb.rpc("submit_quiz", { p_quiz: quizId, p_answers: answers })) as Record<string, unknown>;
-    return { id: String(a.id), quizId, at: String(a.at), answers, correct: Number(a.correct), total: Number(a.total), percent: Number(a.percent), passed: Boolean(a.passed), xpAwarded: Number(a.xp_awarded) };
+  async submitQuiz(_userId: string, quizId: string, answers: Record<string, number>, attemptId?: string): Promise<QuizAttempt> {
+    // the database grades the attempt, writes its XP rows and the profile totals in one transaction;
+    // a repeat of the same attempt id returns the stored result and awards nothing
+    const a = check(await this.sb.rpc("submit_quiz", { p_quiz: quizId, p_answers: answers, p_attempt: attemptId ?? null })) as Record<string, unknown>;
+    return toAttempt(a);
   }
 
   async getContent(): Promise<AdminContent> {

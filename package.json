@@ -20,7 +20,9 @@
     "xp:smoke": "tsx scripts/xp-smoke.ts",
     "brand:assets": "node scripts/brand-assets.mjs",
     "profile:smoke": "tsx scripts/profile-smoke.ts",
-    "secret:scan": "tsx scripts/secret-scan.ts"
+    "secret:scan": "tsx scripts/secret-scan.ts",
+    "quiz-xp:smoke": "tsx scripts/quiz-xp-smoke.ts",
+    "xp:audit": "tsx scripts/xp-duplicate-audit.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
