@@ -293,7 +293,7 @@ void loop() {
     examples: [
       {
         title: "Sizing a pack for a race day",
-        body: "Two N20 motors average about 0.6 A each during driving plus 0.1 A for the electronics: 1.3 A total. Each heat lasts about 2 minutes and you expect 10 runs and 20 minutes of testing: 40 minutes total. Required capacity ≈ 1.3 A × 0.67 h ≈ 0.87 Ah. A 2S 18650 pack of typical 2000+ mAh cells gives a comfortable margin; a 2S 500 mAh LiPo would need recharging mid-event.",
+        body: "A 4WD car has four N20 motors averaging about 0.4 A each during driving, plus 0.1 A for the electronics: 1.7 A total. Each heat lasts about 2 minutes and you expect 10 runs and 20 minutes of testing: 40 minutes total. Required capacity ≈ 1.7 A × 0.67 h ≈ 1.1 Ah. A 2S 18650 pack of typical 2000+ mAh cells gives a comfortable margin; a 2S 500 mAh LiPo would need recharging mid-event.",
       },
       {
         title: "Logging battery voltage under load",

@@ -233,7 +233,7 @@ export const RR02: ProjectTemplate = {
   metadata: {
     id: "RR-02",
     name: "Four-Wheel Drive Racer",
-    version: "1.1.0",
+    version: "1.1.1",
     competition: "race",
     difficulty: "intermediate",
     learningLevel: "4WD skid steering, multiple drivers, motor synchronisation",
@@ -259,7 +259,7 @@ export const RR02: ProjectTemplate = {
     { componentId: "arduino-uno-r3", label: "U1" },
     { componentId: "tb6612fng", label: "DRV1" },
     { componentId: "tb6612fng", label: "DRV2" },
-    { componentId: "18650-li-ion-cell", label: "BAT1", config: { series: 2, capacity: 2500 } },
+    { componentId: "lipo-2s-battery", label: "BAT1", config: { capacity: 2500 } },
     { componentId: "toggle-switch", label: "SW1" },
     { componentId: "hc-05-bluetooth-module", label: "BT1" },
   ],

@@ -450,7 +450,7 @@ void loop() {
       {
         title: "Sizing a pack",
         body:
-          "Two motors stall at about 1.5 A each, so peak demand is roughly 3 A plus 0.1 A of logic. A 300 mAh 20C pack can supply 0.3 × 20 = 6 A continuously, giving a 2× margin. A 300 mAh 10C pack (3 A) would be marginal and would sag heavily during long pushes."
+          "A 4WD robot's four N20 motors stall at about 0.75 A each, so peak demand is roughly 3 A plus 0.1 A of logic. A 300 mAh 20C pack can supply 0.3 × 20 = 6 A continuously, giving a 2× margin. A 300 mAh 10C pack (3 A) would be marginal and would sag heavily during long pushes."
       }
     ],
     commonMistakes: [

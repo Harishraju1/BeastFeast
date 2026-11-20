@@ -426,7 +426,7 @@ void loop() {
       {
         heading: "Mechanical and electrical upgrades",
         body:
-          "- Weight: lighter robots accelerate and turn faster with the same motors (F = m × a). Remove unnecessary brackets, use a smaller battery if runtime allows.\n- Grip: soft silicone or urethane tyres reduce slip in corners; clean them before each run.\n- Gearing: choose a ratio so the robot reaches its usable top speed on the longest straight without being too slow to accelerate.\n- Driver: replacing an L298N with a MOSFET driver recovers roughly 2 V for the motors at 1 A.\n- Centre of mass: low and between the wheels for stability; a small rear caster or skid that does not catch.\n- Sensor bar: rigid, at a consistent height, and at a lookahead distance that matches your speed.",
+          "- Weight: lighter robots accelerate and turn faster with the same motors (F = m × a). Remove unnecessary brackets, use a smaller battery if runtime allows.\n- Grip: soft silicone or urethane tyres reduce slip in corners; clean them before each run.\n- Gearing: choose a ratio so the robot reaches its usable top speed on the longest straight without being too slow to accelerate.\n- Driver: replacing an L298N with a MOSFET driver recovers roughly 2 V for the motors at 1 A.\n- Centre of mass: low and between the front and rear axles for stability, so all four driven wheels of the club's 4WD robot share the load. Keep the sensor array at the front light so it does not lift or scrape.\n- Sensor bar: rigid, at a consistent height, and at a lookahead distance that matches your speed.",
       },
     ],
     workingPrinciple:

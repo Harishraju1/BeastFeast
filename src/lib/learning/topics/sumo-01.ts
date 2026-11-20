@@ -378,17 +378,17 @@ void loop() {
     introduction:
       "A good sumo robot is a set of deliberate trade-offs. You have a fixed footprint and mass, and you must divide them between motors, battery, electronics, sensors, chassis and ballast. This topic walks through a design process that starts from the rules and ends with a wiring and mass plan you can actually build.",
     beginner:
-      "Designing a sumo robot is like packing a small suitcase with a strict weight limit for an important trip. Everything you put in must earn its place. Heavy motors give strength but use up weight; a big battery lasts longer but takes space; extra sensors help you see but add wires and grams.\n\nThe winning idea in sumo is simple: be low, be heavy over your driven wheels, grip the floor, and push straight. So a typical design puts two strong geared motors at the back or middle, a sloped wedge at the front to scoop under the opponent, the battery low down, and distance sensors facing forward and to the sides. Downward IR sensors at the front corners watch for the white edge.\n\nBefore buying parts, write a mass budget: a list of every part and its weight. Add it up and compare with the limit. Then sketch the layout from the top and the side to check the 10 × 10 cm box. Only then start building. Planning first saves you from discovering on competition day that the robot is too heavy, too tall at the back, or that the battery will not fit.",
+      "Designing a sumo robot is like packing a small suitcase with a strict weight limit for an important trip. Everything you put in must earn its place. Heavy motors give strength but use up weight; a big battery lasts longer but takes space; extra sensors help you see but add wires and grams.\n\nThe winning idea in sumo is simple: be low, be heavy over your driven wheels, grip the floor, and push straight. So the club's standard design is 4WD: four small N20 geared motors so every wheel pushes, a sloped wedge at the front to scoop under the opponent, the battery low down, and distance sensors facing forward and to the sides. Downward IR sensors at the front corners watch for the white edge.\n\nBefore buying parts, write a mass budget: a list of every part and its weight. Add it up and compare with the limit. Then sketch the layout from the top and the side to check the 10 × 10 cm box. Only then start building. Planning first saves you from discovering on competition day that the robot is too heavy, too tall at the back, or that the battery will not fit.",
     technical: [
       {
         heading: "Design requirements from the rules and physics",
         body:
-          "Derive measurable requirements:\n\n- Footprint ≤ 10 × 10 cm, mass ≤ 500 g (mini-sumo; check your club rulebook).\n- Maximum push F = μ × N ⇒ maximise mass on driven wheels and tyre μ.\n- Wheel force from torque: F_wheel = τ_wheel / r. For two motors each giving 0.1 N·m at the wheel with r = 0.02 m, total force = 2 × 0.1 / 0.02 = 10 N, well above a traction limit of about 4 N, so the motors are sufficient and traction is the limit.\n- Reaction time: a sensor-to-motor loop under about 10–20 ms keeps the robot responsive at typical sumo speeds."
+          "Derive measurable requirements:\n\n- Footprint ≤ 10 × 10 cm, mass ≤ 500 g (mini-sumo; check your club rulebook).\n- Maximum push F = μ × N ⇒ maximise mass on driven wheels and tyre μ.\n- Wheel force from torque: F_wheel = τ_wheel / r. For four motors (the club's 4WD layout) each giving 0.05 N·m at the wheel with r = 0.02 m, total force = 4 × 0.05 / 0.02 = 10 N, well above a traction limit of about 4 N, so the motors are sufficient and traction is the limit.\n- Reaction time: a sensor-to-motor loop under about 10–20 ms keeps the robot responsive at typical sumo speeds."
       },
       {
         heading: "Mass budget example",
         body:
-          "A realistic mini-sumo mass budget (example values; weigh your own parts):\n\n- 2 × N20 metal gear motors with brackets: 30 g\n- Wheels and tyres: 40 g\n- Arduino Nano and wiring: 15 g\n- TB6612FNG driver: 3 g\n- 2S LiPo battery: 30–50 g\n- Sensors (2 × distance, 2 × edge): 20 g\n- Chassis and wedge: 120 g\n- Total ≈ 280 g ⇒ about 200 g available for ballast.\n\nBallast placed low and over the driven wheels directly increases N and therefore the traction-limited push. Steel or tungsten blocks are common."
+          "A realistic 4WD mini-sumo mass budget (example values; weigh your own parts):\n\n- 4 × N20 metal gear motors with brackets: 60 g\n- Four wheels and tyres: 60 g\n- Arduino Nano and wiring: 15 g\n- TB6612FNG driver (left pair on channel A, right pair on channel B): 3 g\n- 2S LiPo battery: 30–50 g\n- Sensors (2 × distance, 2 × edge): 20 g\n- Chassis and wedge: 120 g\n- Total ≈ 330 g ⇒ about 170 g available for ballast.\n\nWith 4WD every wheel is driven, so ballast placed low between the axles directly increases N on driven wheels and therefore the traction-limited push. Steel or tungsten blocks are common."
       },
       {
         heading: "Electrical architecture",
@@ -406,7 +406,7 @@ void loop() {
           { id: "sw", label: "Power switch", x: 160, y: 60 },
           { id: "drv", label: "TB6612FNG", x: 300, y: 60 },
           { id: "uno", label: "Arduino Nano", x: 300, y: 200 },
-          { id: "m", label: "2 × N20 motors", x: 460, y: 60 },
+          { id: "m", label: "4 × N20 motors", x: 460, y: 60 },
           { id: "sens", label: "HC-SR04 + edge sensors", x: 460, y: 200 }
         ],
         edges: [
@@ -414,7 +414,7 @@ void loop() {
           { from: "sw", to: "drv", label: "VM", color: "red" },
           { from: "sw", to: "uno", label: "Vin", color: "red" },
           { from: "uno", to: "drv", label: "AIN/BIN/PWM/STBY" },
-          { from: "drv", to: "m", label: "AO/BO" },
+          { from: "drv", to: "m", label: "AO left pair / BO right pair" },
           { from: "uno", to: "sens", label: "5V, GND, signals" },
           { from: "bat", to: "uno", label: "common GND", color: "black" }
         ]
@@ -429,12 +429,12 @@ void loop() {
       {
         title: "Checking motors against the traction limit",
         body:
-          "Robot mass 495 g, μ assumed 0.9, all weight on the two driven wheels: traction limit = 0.495 × 9.81 × 0.9 ≈ 4.37 N. Wheels are 30 mm diameter (r = 0.015 m). Required wheel torque in total to reach the traction limit = 4.37 × 0.015 ≈ 0.066 N·m, or about 0.033 N·m per motor. Any motor that can deliver comfortably more than this at the wheel without stalling is strong enough; extra torque beyond this only spins the tyres."
+          "Robot mass 495 g, μ assumed 0.9, all weight on the four driven wheels of a 4WD robot: traction limit = 0.495 × 9.81 × 0.9 ≈ 4.37 N. Wheels are 30 mm diameter (r = 0.015 m). Required wheel torque in total to reach the traction limit = 4.37 × 0.015 ≈ 0.066 N·m, or about 0.017 N·m per motor across four motors. Any motor that can deliver comfortably more than this at the wheel without stalling is strong enough; extra torque beyond this only spins the tyres."
       },
       {
         title: "Pin plan for an Arduino Nano sumo",
         body:
-          "A clean pin plan avoids conflicts: PWM pins for motor speed, plain digital pins for direction, analog pins for edge sensors.",
+          "A clean pin plan avoids conflicts: PWM pins for motor speed, plain digital pins for direction, analog pins for edge sensors. On the 4WD robot, channel A drives the left motor pair (wired in parallel) and channel B the right pair.",
         code: `// Motor driver (TB6612FNG)
 const int PWMA = 5;   // left speed (PWM)
 const int AIN1 = 7;

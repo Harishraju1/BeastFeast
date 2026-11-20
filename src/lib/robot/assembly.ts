@@ -70,7 +70,7 @@ function nextLabel(project: Project, c: ComponentRecord, pos: Vec3): string {
 
 /** Choose a sensible starting position for a new part. */
 export function suggestPlacement(project: Project, c: ComponentRecord, cfg: PartInstance["config"]): { position: Vec3; rotation: Vec3; attachedTo?: string | null; role?: string } {
-  const ch = project.chassis ?? chassisFrom("2wd-robot-chassis");
+  const ch = project.chassis ?? chassisFrom("4wd-robot-chassis");
   const L = ch.length_mm,
     W = ch.width_mm,
     T = ch.thickness_mm;

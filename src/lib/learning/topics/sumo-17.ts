@@ -504,7 +504,7 @@ void loop() {
       {
         heading: "Traction limits pushing force",
         body:
-          "The maximum horizontal force your tyres can transmit is F_max = μ x N, where N is the normal force on the driven wheels (m x g if all weight is on them) and μ is the coefficient of friction between tyre and ring.\n\nWorked example: a 500 g robot (N = 0.5 x 9.81 = 4.9 N) with μ = 0.8 can push with at most 0.8 x 4.9 = 3.9 N, no matter how strong its motors are. Doubling motor torque beyond what is needed to reach this limit only makes the wheels spin.\n\nTorque needed to reach the limit: with 20 mm radius wheels, total wheel torque = F x r = 3.9 x 0.02 = 0.078 N·m, so about 0.039 N·m per wheel on a two-wheel-drive robot (before losses). Choosing gear ratios to reach this torque at a useful speed is the core of drivetrain design.",
+          "The maximum horizontal force your tyres can transmit is F_max = μ x N, where N is the normal force on the driven wheels (m x g if all weight is on them) and μ is the coefficient of friction between tyre and ring.\n\nWorked example: a 500 g robot (N = 0.5 x 9.81 = 4.9 N) with μ = 0.8 can push with at most 0.8 x 4.9 = 3.9 N, no matter how strong its motors are. Doubling motor torque beyond what is needed to reach this limit only makes the wheels spin.\n\nTorque needed to reach the limit: with 20 mm radius wheels, total wheel torque = F x r = 3.9 x 0.02 = 0.078 N·m, so about 0.02 N·m per wheel on the club's 4WD robot (before losses), or about 0.039 N·m per wheel if only two wheels were driven. Choosing gear ratios to reach this torque at a useful speed is the core of drivetrain design.",
       },
       {
         heading: "Wedges, lifting and traction stealing",

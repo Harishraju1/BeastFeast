@@ -67,7 +67,7 @@ describe("4WD Garage reference robots", () => {
     for (const id of ["LF-01", "LF-02", "LF-03"]) {
       expect(getTemplate(id)!.metadata.legacy).toBeUndefined();
       expect(getTemplate(id)!.metadata.drivetrain).toBe("4WD");
-      expect(getTemplate(id)!.metadata.version).toBe("2.0.0");
+      expect(getTemplate(id)!.metadata.version).toMatch(/^2./);
     }
   });
 

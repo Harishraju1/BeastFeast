@@ -202,12 +202,12 @@ void loop() {
       {
         heading: "Newton's second law for a robot",
         body:
-          "a = F / m, where F is the net forward force at the tyre contact patches.\n\nDrive force from torque: each motor delivers torque tau at the wheel shaft, and the force at the ground is F = tau / r, where r is wheel radius. For n driven wheels, F_total = n x tau / r.\n\nWorked example (hypothetical numbers): two motors each producing 0.05 N m at the wheel at the speed of interest, wheel radius 0.02 m, robot mass 0.8 kg. F = 2 x 0.05 / 0.02 = 5 N, so a = 5 / 0.8 = 6.25 m/s^2.\n\nMotor torque falls as speed rises (roughly linearly from stall torque to zero at no-load speed for a brushed DC motor), so acceleration is greatest at launch and drops off towards top speed."
+          "a = F / m, where F is the net forward force at the tyre contact patches.\n\nDrive force from torque: each motor delivers torque tau at the wheel shaft, and the force at the ground is F = tau / r, where r is wheel radius. For n driven wheels, F_total = n x tau / r.\n\nWorked example (hypothetical numbers, club 4WD car): four motors each producing 0.025 N m at the wheel at the speed of interest, wheel radius 0.02 m, robot mass 0.8 kg. F = 4 x 0.025 / 0.02 = 5 N, so a = 5 / 0.8 = 6.25 m/s^2.\n\nMotor torque falls as speed rises (roughly linearly from stall torque to zero at no-load speed for a brushed DC motor), so acceleration is greatest at launch and drops off towards top speed."
       },
       {
         heading: "Grip limit",
         body:
-          "Maximum friction force = mu x N, where N is the normal force on the driven wheels. If all the weight is on the driven wheels, N = m x g and a_max = mu x g.\n\nWith mu = 0.8: a_max = 0.8 x 9.81 = 7.85 m/s^2. If only 70% of the weight is on the drive wheels (2WD with a front caster carrying 30%), a_max = 0.7 x 0.8 x 9.81 = 5.5 m/s^2 even though the motors in the previous example could deliver 6.25 m/s^2. That robot is grip-limited: extra motor torque just spins the wheels.\n\nWeight transfer: under acceleration, load shifts towards the rear by m x a x h / L (h = CoG height, L = wheelbase). Rear-wheel-drive robots gain grip when accelerating; front-wheel-drive ones lose it."
+          "Maximum friction force = mu x N, where N is the normal force on the driven wheels. If all the weight is on the driven wheels, N = m x g and a_max = mu x g.\n\nWith mu = 0.8: a_max = 0.8 x 9.81 = 7.85 m/s^2. The club's 4WD cars drive every wheel, so all the weight counts and the 6.25 m/s^2 from the previous example is below the grip limit: that car is torque-limited. For comparison, if only 70% of the weight were on the drive wheels (2WD with a front caster carrying 30%), a_max = 0.7 x 0.8 x 9.81 = 5.5 m/s^2 even though the motors could deliver 6.25 m/s^2. That robot is grip-limited: extra motor torque just spins the wheels.\n\nWeight transfer: under acceleration, load shifts towards the rear by m x a x h / L (h = CoG height, L = wheelbase). Rear-wheel-drive robots gain grip when accelerating; front-wheel-drive ones lose it. On a 4WD car the total stays the same, but the front pair is unloaded, so the front wheels are the first to spin on a hard launch."
       },
       {
         heading: "Time and distance to reach speed",
@@ -363,7 +363,7 @@ void loop() {}`,
       {
         heading: "Braking distance",
         body:
-          "With constant deceleration a, stopping distance s = v^2 / (2a). Maximum deceleration without sliding is a_max = mu x g (if all wheels can brake; scale down by the weight fraction on braked wheels for 2WD with a caster).\n\nWorked example: v = 1.5 m/s, mu = 0.7, all weight on braked wheels. a_max = 0.7 x 9.81 = 6.87 m/s^2, so s = 2.25 / 13.7 = 0.16 m. Coasting might give only 1 m/s^2 of deceleration and need 1.1 m.\n\nDoubling speed to 3 m/s quadruples distance to about 0.66 m at the same deceleration."
+          "With constant deceleration a, stopping distance s = v^2 / (2a). Maximum deceleration without sliding is a_max = mu x g (on the club's 4WD cars all four wheels brake through their motors; a 2WD car with a caster must scale this down by the weight fraction on its braked wheels).\n\nWorked example: v = 1.5 m/s, mu = 0.7, all weight on braked wheels. a_max = 0.7 x 9.81 = 6.87 m/s^2, so s = 2.25 / 13.7 = 0.16 m. Coasting might give only 1 m/s^2 of deceleration and need 1.1 m.\n\nDoubling speed to 3 m/s quadruples distance to about 0.66 m at the same deceleration."
       },
       {
         heading: "Friction circle",
@@ -395,7 +395,7 @@ void loop() {}`,
     examples: [
       {
         title: "Brake and coast functions for TB6612FNG",
-        body: "Two motors on a TB6612FNG. brakeAll() uses short brake on both channels for symmetrical stopping; coastAll() lets the robot roll.",
+        body: "Two channels on a TB6612FNG. On a 4WD car the left pair shares channel A and the right pair shares channel B, so check the channel current rating covers two motors. brakeAll() uses short brake on both channels for symmetrical stopping; coastAll() lets the robot roll.",
         code: `const int PWMA = 5, AIN1 = 7, AIN2 = 8;
 const int PWMB = 6, BIN1 = 9, BIN2 = 10;
 const int STBY = 4;

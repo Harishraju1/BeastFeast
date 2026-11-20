@@ -30,10 +30,10 @@ The faster and more consistently this loop runs, the smoother the robot behaves.
         heading: "Subsystems of a club robot",
         body: `- Sensors: IR reflectance sensors (TCRT5000, QTR arrays) for lines, HC-SR04 ultrasonic (2–400 cm) or Sharp IR for obstacles and opponents, encoders for wheel speed.
 - Controller: Arduino Uno or Nano (ATmega328P, 5 V logic, 16 MHz) or ESP32 (3.3 V logic, faster, Wi-Fi/Bluetooth).
-- Actuators: brushed DC gear motors (TT, BO, N20).
+- Actuators: brushed DC gear motors (TT, BO, N20). The club standard is 4WD: four motors, one per wheel, with the left pair and the right pair steering together (skid steer).
 - Motor driver: an H-bridge such as L298N, TB6612FNG or DRV8833, which converts weak logic signals into high-current motor power and allows direction reversal.
 - Power: Li-ion 18650 cells or LiPo packs, often with a regulator or buck converter for the logic.
-- Mechanics: chassis, wheels, caster, mounting of sensors at the right height.`,
+- Mechanics: chassis, four wheels (no caster), battery and electronics on the chassis, and the sensor array at the front, mounted at the right height.`,
       },
       {
         heading: "Signal levels and power levels",
@@ -52,7 +52,7 @@ All these blocks must share a common ground (0 V reference). Without it, a "HIGH
           { id: "sen", label: "IR sensors", x: 50, y: 60 },
           { id: "mcu", label: "Arduino Uno R3", x: 250, y: 100 },
           { id: "drv", label: "Motor driver (L298N)", x: 450, y: 100 },
-          { id: "mot", label: "Gear motors", x: 620, y: 100 },
+          { id: "mot", label: "4WD gear motors", x: 620, y: 100 },
         ],
         edges: [
           { from: "sen", to: "mcu", label: "sensor signals" },
@@ -66,7 +66,7 @@ All these blocks must share a common ground (0 V reference). Without it, a "HIGH
     examples: [
       {
         title: "Identify the blocks of a line follower",
-        body: `Take a standard 2-sensor line follower and label each part:\n\n- Sense: two TCRT5000 modules under the front bumper.\n- Think: Arduino Uno R3.\n- Act: two TT gear motors via an L298N.\n- Power: two 18650 cells in series (about 7.4 V nominal).\n\nIf the robot misbehaves, test each block on its own: print sensor values to Serial, spin each motor with a fixed command, and measure the battery voltage.`,
+        body: `Take a standard 2-sensor line follower and label each part:\n\n- Sense: two TCRT5000 modules under the front bumper.\n- Think: Arduino Uno R3.\n- Act: four TT gear motors via an L298N (the left pair in parallel on one channel, the right pair on the other).\n- Power: two 18650 cells in series (about 7.4 V nominal).\n\nIf the robot misbehaves, test each block on its own: print sensor values to Serial, spin each motor with a fixed command, and measure the battery voltage.`,
       },
       {
         title: "A minimal sense-think-act sketch",
@@ -179,9 +179,9 @@ A third, centre sensor lets the robot distinguish 'perfectly centred' from 'slig
 Loop rate also matters. If the robot moves at 0.5 m/s and the loop takes 20 ms, it travels 1 cm between readings. A 2 cm line can be crossed completely between two samples at high speed.`,
       },
     ],
-    workingPrinciple: `Each sensor converts reflected IR intensity into a voltage. The microcontroller converts this into 'line' or 'no line' (or a numeric position), computes how far the line is from the robot's centre, and slows one wheel relative to the other so the robot turns toward the line. Because the turn changes what the sensors see on the next loop, the robot continuously corrects itself and stays on the track.`,
+    workingPrinciple: `Each sensor converts reflected IR intensity into a voltage. The microcontroller converts this into 'line' or 'no line' (or a numeric position), computes how far the line is from the robot's centre, and slows one side relative to the other so the robot turns toward the line. On the club's 4WD line followers the sensor array sits at the front and both wheels on a side slow together. Because the turn changes what the sensors see on the next loop, the robot continuously corrects itself and stays on the track.`,
     diagrams: [
-      { kind: "flow", steps: ["Read left and right sensors", "Both white → drive forward", "Left black → slow left wheel, turn left", "Right black → slow right wheel, turn right", "Both white after losing line → turn toward last seen side", "Repeat"] },
+      { kind: "flow", steps: ["Read left and right sensors", "Both white → drive forward", "Left black → slow left side, turn left", "Right black → slow right side, turn right", "Both white after losing line → turn toward last seen side", "Repeat"] },
       {
         kind: "signal",
         title: "Single sensor sweeping across a black line (pull-up wiring)",
@@ -390,7 +390,7 @@ Good practice: run motor current and logic current on separate wires that meet a
       },
       {
         title: "Power budget",
-        body: "Two motors at 0.4 A each, Arduino about 50 mA, sensors about 40 mA, on a 7.4 V pack:\n\nI_total ≈ 0.4 + 0.4 + 0.05 + 0.04 = 0.89 A\nP ≈ 7.4 × 0.89 ≈ 6.6 W\n\nA 2000 mAh pack would last very roughly 2000 / 890 ≈ 2.2 hours at this average draw (less in practice, because motors draw more during acceleration).",
+        body: "A 4WD robot: four motors at 0.4 A each, Arduino about 50 mA, sensors about 40 mA, on a 7.4 V pack:\n\nI_total ≈ 4 × 0.4 + 0.05 + 0.04 = 1.69 A\nP ≈ 7.4 × 1.69 ≈ 12.5 W\n\nA 2000 mAh pack would last very roughly 2000 / 1690 ≈ 1.2 hours at this average draw (less in practice, because motors draw more during acceleration).",
       },
     ],
     commonMistakes: [

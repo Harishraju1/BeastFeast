@@ -20,7 +20,7 @@ export const SUMO_04: Topic[] = [
       {
         heading: "Stiffness and load paths",
         body:
-          "When the robot pushes, the force path is: tyre contact → wheel → motor shaft and gearbox → motor mount → chassis → wedge → opponent. Any compliant link in this path (a flexible printed bracket, a loose screw) deflects under load. A flexing chassis can lift the wedge edge off the ring, letting the opponent slide underneath.\n\nGood practice:\n\n- Clamp motors in metal brackets or tight printed cradles, not with hot glue alone.\n- Use at least two screws per bracket so it cannot rotate.\n- Box sections or folded edges dramatically increase bending stiffness compared with a flat plate of the same mass."
+          "When the robot pushes, the force path is: tyre contact → wheel → motor shaft and gearbox → motor mount → chassis → wedge → opponent. Any compliant link in this path (a flexible printed bracket, a loose screw) deflects under load. A flexing chassis can lift the wedge edge off the ring, letting the opponent slide underneath.\n\nGood practice:\n\n- Clamp all four motors (two per side on the club's 4WD layout) in metal brackets or tight printed cradles, not with hot glue alone.\n- Use at least two screws per bracket so it cannot rotate.\n- Box sections or folded edges dramatically increase bending stiffness compared with a flat plate of the same mass."
       },
       {
         heading: "Fasteners, clearance and wiring",
@@ -316,14 +316,14 @@ void loop() {}`,
       "Imagine pushing a wheelbarrow full of sand. If the sand is piled near the wheel, the barrow is easy to steer and push. If it is piled near the handles, you carry most of the weight in your arms. Where the weight sits changes which part of the system does the work.\n\nIn a sumo robot only the driven wheels can push. If most of the robot's weight rests on the front wedge or on a skid, the driven wheels are pressed lightly onto the floor and will spin as soon as the opponent resists. If most of the weight rests on the driven wheels, they grip hard and the robot pushes strongly.\n\nBut there is a balance. The wedge also needs some weight so it stays pressed to the floor and scoops under the opponent instead of riding up over it. Builders therefore aim for most of the weight on the driven wheels with just enough on the wedge to keep it scraping the floor. You can check the split by placing the wheels on one kitchen scale and the wedge on another, then adjusting ballast until the numbers look right.",
     technical: [
       {
-        heading: "Moment balance for a two-wheel robot with a front wedge",
+        heading: "Moment balance for a robot with a front wedge",
         body:
-          "Model the robot as resting on two supports: the driven wheel axle (rear) and the wedge edge (front), separated by a horizontal distance L. Let the CoG be a distance x in front of the axle. Taking moments about the wedge contact:\n\nN_wheels × L = W × (L − x)  ⇒  N_wheels = W × (L − x) / L\nN_wedge = W − N_wheels = W × x / L\n\nExample: m = 0.5 kg (W ≈ 4.905 N), L = 8 cm, x = 2 cm. N_wheels = 4.905 × 6 / 8 ≈ 3.68 N (75%), N_wedge ≈ 1.23 N (25%). With μ = 0.9 the traction limit becomes 0.9 × 3.68 ≈ 3.31 N rather than 4.41 N if all weight were on the wheels."
+          "On the club's 4WD mini-sumo both axles are driven, so the question is how much weight the wedge takes away from the wheels. A simple model treats the four wheels as one support (the axle line, midway between the front and rear axles) and the wedge edge as the other, separated by a horizontal distance L. Let the CoG be a distance x in front of the axle line. Taking moments about the wedge contact:\n\nN_wheels × L = W × (L − x)  ⇒  N_wheels = W × (L − x) / L\nN_wedge = W − N_wheels = W × x / L\n\nExample: m = 0.5 kg (W ≈ 4.905 N), L = 8 cm, x = 2 cm. N_wheels = 4.905 × 6 / 8 ≈ 3.68 N (75%), N_wedge ≈ 1.23 N (25%). With μ = 0.9 the traction limit becomes 0.9 × 3.68 ≈ 3.31 N rather than 4.41 N if all weight were on the wheels."
       },
       {
         heading: "Weight transfer while pushing",
         body:
-          "The static split changes during a push. Pushing force acts at the wedge contact and the drive force acts at the tyre contact, both near floor level, so in a low robot the transfer is small. However, if the opponent's wedge lifts your front, part of your weight now rests on their wedge instead of your own, your wedge loses contact, and if they lift you further your wheels unload and lose traction. If you lift the opponent, part of their weight rests on your wedge: their driven wheels lose normal force (and therefore pushing ability), while the extra load on your wedge adds no drive force to you.\n\nFour-wheel-drive designs avoid the problem of an unpowered support: every contact point that carries weight is also driven, so nearly the whole robot weight contributes to traction."
+          "The static split changes during a push. Pushing force acts at the wedge contact and the drive force acts at the tyre contact, both near floor level, so in a low robot the transfer is small. However, if the opponent's wedge lifts your front, part of your weight now rests on their wedge instead of your own, your wedge loses contact, and if they lift you further your wheels unload and lose traction. If you lift the opponent, part of their weight rests on your wedge: their driven wheels lose normal force (and therefore pushing ability), while the extra load on your wedge adds no drive force to you.\n\nThis is why the club builds 4WD sumo robots: apart from the lightly loaded wedge edge, every contact point that carries weight is also driven, so nearly the whole robot weight contributes to traction. A 2WD robot resting on an unpowered skid or caster loses that share."
       },
       {
         heading: "Left–right balance",
@@ -332,7 +332,7 @@ void loop() {}`,
       }
     ],
     workingPrinciple:
-      "Weight distribution follows static equilibrium: the sum of vertical support forces equals the weight, and the sum of moments about any point is zero. Moving ballast toward the driven axle increases N_wheels and therefore the friction-limited pushing force μ·N_wheels, while keeping enough load on the wedge to hold its edge down against the floor.",
+      "Weight distribution follows static equilibrium: the sum of vertical support forces equals the weight, and the sum of moments about any point is zero. Moving ballast toward the driven wheels (between the axles on a 4WD robot) increases N_wheels and therefore the friction-limited pushing force μ·N_wheels, while keeping enough load on the wedge to hold its edge down against the floor.",
     diagrams: [
       {
         kind: "formula",
@@ -340,8 +340,8 @@ void loop() {}`,
         legend: {
           N_wheels: "normal force on the driven wheels (N)",
           W: "robot weight m·g (N)",
-          L: "distance from axle to wedge contact (cm)",
-          x: "distance of CoG in front of the axle (cm)"
+          L: "distance from the wheels' axle line to the wedge contact (cm)",
+          x: "distance of CoG in front of the axle line (cm)"
         }
       },
       {
@@ -356,7 +356,7 @@ void loop() {}`,
       {
         title: "Two-scale measurement",
         body:
-          "Place the driven wheels on one kitchen scale and the wedge edge on another scale of the same height. A 490 g robot reads 355 g under the wheels and 135 g under the wedge: 72 percent on the wheels. Moving a 40 g ballast block 3 cm rearward (toward the axle) shifts roughly 40 × 3 / L grams. With L = 8 cm that is about 15 g, giving about 370 g / 120 g (76 percent)."
+          "Stand all four driven wheels on one kitchen scale (on a small flat board if needed) and the wedge edge on another scale of the same height. A 490 g robot reads 355 g under the wheels and 135 g under the wedge: 72 percent on the wheels. Moving a 40 g ballast block 3 cm rearward (toward the wheels) shifts roughly 40 × 3 / L grams. With L = 8 cm that is about 15 g, giving about 370 g / 120 g (76 percent)."
       },
       {
         title: "Compensating a slight motor mismatch with integer-safe trim",
@@ -383,7 +383,7 @@ void loop() {
       {
         mistake: "Putting all the ballast at the very front behind the wedge",
         why: "Weight on an undriven wedge does not create drive force; the wheels are unloaded and spin.",
-        fix: "Place most ballast over or just in front of the driven axle; keep only enough on the wedge to hold it down."
+        fix: "Place most ballast low over the driven wheels, between the front and rear axles; keep only enough on the wedge to hold it down."
       },
       {
         mistake: "Lifting the wedge completely off the floor to 'maximise' wheel load",

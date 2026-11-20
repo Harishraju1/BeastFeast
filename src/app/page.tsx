@@ -1,5 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
+import { buildFromTemplate, getTemplate } from "@/lib/garage";
+import { getComponent } from "@/lib/catalogue";
 import { Avatar } from "@/components/profile/Avatar";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -17,21 +19,38 @@ import { NextSteps } from "@/components/home/NextSteps";
 
 const HeroRobot = dynamic(() => import("@/components/three/HeroRobot"), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-bg2" /> });
 
-const HIGHLIGHTS = [
-  { kind: "controller", label: "Arduino Uno R3 — the brain" },
-  { kind: "motor-driver", label: "L298N — the muscle switch" },
-  { kind: "dc-motor", label: "TT gear motors — the drive" },
-  { kind: "battery", label: "2S Li-ion — the power" },
-  { kind: "wheel", label: "Rubber wheels — the grip" },
-];
+/** The 4WD line-up shown in the hero — real Garage robots, not pictures. */
+const LINEUP = [
+  { id: "RR-04", tab: "Robo Race", blurb: "Four 12 V geared motors, 11.1 V 3S LiPo, Bluetooth control." },
+  { id: "RR-05", tab: "Off-Road", blurb: "Big knobby tyres and 30 mm clearance for rocks, mud and hills." },
+  { id: "RW-04", tab: "Sumo", blurb: "Compact, low and heavy at the front, wedge-first." },
+  { id: "LF-02", tab: "Line Following", blurb: "Five-sensor array up front, both wheel pairs steering." },
+] as const;
+const ROLE: Record<string, string> = { controller: "the brain", "motor-driver": "the muscle switch", "dc-motor": "the drive", battery: "the power", wheel: "the grip" };
+const HIGHLIGHT_KINDS = ["controller", "motor-driver", "dc-motor", "battery", "wheel"] as const;
 
 export default function Home() {
   const { user, projects, progress, content, ready } = useApp();
   const [hi, setHi] = useState(0);
+  const [robotIdx, setRobotIdx] = useState(0);
+  const [pinned, setPinned] = useState(false);
+  const lineup = useMemo(() => LINEUP.map((l) => ({ ...l, project: buildFromTemplate(getTemplate(l.id)!, "showcase", "original") })), []);
+  const robot = lineup[robotIdx];
+  // callouts come from the robot's actual parts (count × component name)
+  const callouts = useMemo(() => HIGHLIGHT_KINDS.map((kind) => {
+    const parts = robot.project.parts.filter((p) => getComponent(p.componentId)?.kind === kind);
+    const comp = parts[0] && getComponent(parts[0].componentId);
+    return comp ? { kind, label: `${parts.length > 1 ? `${parts.length}× ` : ""}${comp.name} — ${ROLE[kind]}` } : null;
+  }).filter((x): x is { kind: (typeof HIGHLIGHT_KINDS)[number]; label: string } => !!x), [robot]);
+  useEffect(() => {
+    if (pinned) return;
+    const t = setInterval(() => setRobotIdx((i) => (i + 1) % LINEUP.length), 13000);
+    return () => clearInterval(t);
+  }, [pinned]);
   const [events, setEvents] = useState<XpEvent[]>([]);
   const [leaders, setLeaders] = useState<Profile[]>([]);
   useEffect(() => {
-    const t = setInterval(() => setHi((h) => (h + 1) % HIGHLIGHTS.length), 2600);
+    const t = setInterval(() => setHi((h) => h + 1), 2600);
     return () => clearInterval(t);
   }, []);
   useEffect(() => {
@@ -81,15 +100,56 @@ export default function Home() {
             </div>
             <div className="mt-6 font-mono text-xs tracking-widest text-dim">BUILD. CODE. SIMULATE. DOMINATE.</div>
           </div>
-          <div className="relative h-[340px] overflow-hidden rounded-xl border border-line md:h-[440px]">
-            <HeroRobot highlight={HIGHLIGHTS[hi].kind} />
-            <div className="pointer-events-none absolute left-3 top-3 rounded border border-brand/40 bg-bg/70 px-2.5 py-1 font-mono text-[11px] text-brand backdrop-blur">◉ {HIGHLIGHTS[hi].label}</div>
-            <div className="pointer-events-none absolute bottom-3 right-3 font-mono text-[10px] text-dim">DRAG TO ROTATE · PROCEDURAL MODEL</div>
+          <div>
+            <div className="mb-2 flex flex-wrap gap-1.5" role="tablist" aria-label="4WD robot showcase">
+              {lineup.map((l, i) => (
+                <button key={l.id} role="tab" aria-selected={i === robotIdx} onClick={() => { setRobotIdx(i); setPinned(true); }} className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${i === robotIdx ? "border-accent bg-accent text-white" : "border-line2 text-muted hover:border-accent hover:text-text"}`}>
+                  {l.tab}
+                </button>
+              ))}
+            </div>
+            <div className="relative h-[320px] overflow-hidden rounded-xl border border-line md:h-[420px]">
+              <HeroRobot project={robot.project} highlight={callouts[hi % Math.max(1, callouts.length)]?.kind ?? null} />
+              {callouts.length > 0 && <div className="pointer-events-none absolute left-3 top-3 max-w-[85%] rounded border border-brand/40 bg-bg/70 px-2.5 py-1 font-mono text-[11px] text-brand backdrop-blur">◉ {callouts[hi % callouts.length].label}</div>}
+              <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3">
+                <div className="rounded bg-bg/70 px-2.5 py-1.5 backdrop-blur">
+                  <div className="font-display text-sm font-semibold text-heading">{robot.project.name.replace(/^[A-Z]{2}-\d{2} · /, "")}</div>
+                  <div className="text-[11px] text-muted">4WD · four powered wheels · {robot.blurb}</div>
+                </div>
+                <div className="hidden shrink-0 font-mono text-[10px] text-dim sm:block">DRAG TO ROTATE · PROCEDURAL MODEL</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       <div className="mx-auto max-w-7xl space-y-6 px-5 py-8">
+        {/* 4WD line-up */}
+        <section aria-labelledby="lineup-title">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <h2 id="lineup-title" className="font-display text-xl font-semibold">Every robot is <span className="text-accent-ink">4WD</span></h2>
+            <Link href="/garage" className="text-sm text-accent-ink hover:underline">Open the Project Garage →</Link>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {lineup.map((l, i) => {
+              const motors = l.project.parts.filter((p) => getComponent(p.componentId)?.kind === "dc-motor");
+              const wheel = l.project.parts.find((p) => getComponent(p.componentId)?.kind === "wheel");
+              const bat = l.project.parts.find((p) => getComponent(p.componentId)?.kind === "battery");
+              return (
+                <Link key={l.id} href={`/garage/${l.id}`} onMouseEnter={() => { setRobotIdx(i); setPinned(true); }} className="bf-panel group block p-4 transition hover:-translate-y-0.5 hover:border-accent">
+                  <div className="flex items-center justify-between"><span className="font-mono text-[11px] text-accent-ink">{l.id}</span><Badge tone="accent">4WD</Badge></div>
+                  <div className="mt-1 font-display text-base font-semibold">{l.tab}</div>
+                  <div className="text-xs text-muted">{l.blurb}</div>
+                  <dl className="mt-3 space-y-0.5 text-[11px]">
+                    <div className="flex justify-between gap-2"><dt className="text-dim">Motors</dt><dd className="truncate text-right">{motors.length}× {motors[0] ? getComponent(motors[0].componentId)?.name : "—"}</dd></div>
+                    <div className="flex justify-between gap-2"><dt className="text-dim">Wheels</dt><dd className="truncate text-right">{wheel ? getComponent(wheel.componentId)?.name : "—"}</dd></div>
+                    <div className="flex justify-between gap-2"><dt className="text-dim">Battery</dt><dd className="truncate text-right">{bat ? getComponent(bat.componentId)?.name : "—"}</dd></div>
+                  </dl>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
         {ready && !user && (
           <Panel>
             <div className="flex flex-wrap items-center justify-between gap-3">

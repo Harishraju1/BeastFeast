@@ -8,9 +8,9 @@ export const RACE_04: Topic[] = [
     minutes: 9,
     summary: "Comparing two-wheel and four-wheel drive for race cars: traction, turning, weight, current draw and driver wiring.",
     introduction:
-      "One of the first design decisions for a race car is how many wheels are driven. A 2WD car usually has two driven wheels and a caster or free wheels; a 4WD car drives all four wheels, usually with two motors per side. Each layout changes how much grip is available for acceleration, how easily the car turns, how much it weighs and how much current the motor driver must supply.",
+      "One of the first design decisions for a race car is how many wheels are driven. A 2WD car usually has two driven wheels and a caster or free wheels; a 4WD car drives all four wheels, usually with two motors per side. Each layout changes how much grip is available for acceleration, how easily the car turns, how much it weighs and how much current the motor driver must supply.\n\nThe club standard for every robot is 4WD: four DC gear motors, no caster, and skid steering with the left pair and the right pair driven together. This topic explains why, and what you trade for it, by comparing it with 2WD.",
     beginner:
-      "Think about pushing a heavy shopping trolley. If only you push, you can slip on a smooth floor. If a friend pushes too, there are two pairs of feet gripping the floor, so you can push harder before anyone slips. Driving all four wheels of a robot is like adding that friend: more wheels are pushing, so the robot can accelerate harder before the tyres spin.\n\nBut there is a catch. Steering a 4WD robot by running the left and right sides at different speeds forces some wheels to slide sideways in a turn. That 'scrubbing' wastes energy and makes tight turns harder. A 2WD robot with a ball caster turns very easily, because the caster rolls in any direction.\n\n4WD also means four motors, more weight and roughly double the current from the motor driver. So 4WD is great for fast starts and rough or slippery tracks, while 2WD is lighter, simpler, cheaper and often better on twisty tracks with tight turns. Many club racers start with 2WD, learn to tune it, and move to 4WD only when grip is clearly the limit.",
+      "Think about pushing a heavy shopping trolley. If only you push, you can slip on a smooth floor. If a friend pushes too, there are two pairs of feet gripping the floor, so you can push harder before anyone slips. Driving all four wheels of a robot is like adding that friend: more wheels are pushing, so the robot can accelerate harder before the tyres spin.\n\nBut there is a catch. Steering a 4WD robot by running the left and right sides at different speeds forces some wheels to slide sideways in a turn. That 'scrubbing' wastes energy and makes tight turns harder. A 2WD robot with a ball caster turns very easily, because the caster rolls in any direction.\n\n4WD also means four motors, more weight and roughly double the current from the motor driver. So 4WD is great for fast starts and rough or slippery tracks, while 2WD is lighter, simpler and turns more freely. The club builds every robot as 4WD because grip and pushing power matter in every event. You then tune it for corners by keeping the car short and wide.",
     technical: [
       {
         heading: "Traction limit",
@@ -36,8 +36,8 @@ export const RACE_04: Topic[] = [
     ],
     examples: [
       {
-        title: "Choosing a layout for a twisty track",
-        body: "A track with many 90° turns and short straights rewards turning agility. A 2WD car with the battery placed directly over the driven axle (f ≈ 0.7–0.8) gets most of the traction benefit of 4WD while turning easily on its caster. A track with long straights and a ramp rewards 4WD, where full traction lets the car launch and climb without wheelspin.",
+        title: "Setting up the club 4WD car for a twisty track",
+        body: "A track with long straights and a ramp suits 4WD well: full traction lets the car launch and climb without wheelspin. A track with many 90° turns and short straights rewards turning agility, which is where skid steering costs you. Keep the wheelbase similar to or shorter than the track width, use the same tyres on all four wheels, and slow down a little before tight turns so the motors have torque to spare for scrub. For comparison, a 2WD car with the battery over its driven axle (f ≈ 0.7–0.8) would turn more easily on its caster but launch and climb with less grip.",
       },
       {
         title: "Driving a 4WD car with one L298N",
@@ -72,16 +72,16 @@ void loop() {
     commonMistakes: [
       { mistake: "Wiring one of two parallel motors with reversed polarity.", why: "The two motors on that side push against each other, so the side barely moves and the driver channel overheats.", fix: "Test each motor individually, mark + and − on each, then connect pairs with matching polarity." },
       { mistake: "Using a small driver channel for two motors in parallel.", why: "Channel current is the sum of both motors; overloading causes thermal shutdown or damage.", fix: "Add the motors' currents and choose a driver whose per-channel rating covers it, or use one channel per motor." },
-      { mistake: "Building a long, narrow 4WD car for a twisty track.", why: "Skid-steer turning resistance increases with wheelbase relative to track width, so the car understeers and draws high current in turns.", fix: "Keep the wheelbase similar to or shorter than the track width, or choose 2WD with a caster." },
+      { mistake: "Building a long, narrow 4WD car for a twisty track.", why: "Skid-steer turning resistance increases with wheelbase relative to track width, so the car understeers and draws high current in turns.", fix: "Keep the wheelbase similar to or shorter than the track width, as on the club's standard 4WD chassis." },
     ],
     keyTakeaways: [
       "Traction limit a_max = μ·f·g: 4WD uses all the weight for traction.",
       "2WD with a caster turns easily; 4WD skid steering scrubs sideways in turns.",
       "Parallel motors on one channel add their currents.",
       "Matching motor polarity is essential when paralleling motors.",
-      "Pick the layout for the track: grip-limited straights favour 4WD, tight turns favour 2WD.",
+      "The club standard is 4WD; keep the car short and wide so it still turns well on twisty tracks.",
     ],
-    relatedComponents: ["L298N", "TB6612FNG", "DRV8833", "BO Gear Motor", "Ball Caster Wheels"],
+    relatedComponents: ["L298N", "TB6612FNG", "DRV8833", "BO Gear Motor", "N20 Micro Metal Gear Motor"],
     youtubeSearch: "2WD vs 4WD robot car comparison skid steering",
     quiz: [
       {

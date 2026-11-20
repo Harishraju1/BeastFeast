@@ -20,7 +20,7 @@ export const SUMO_07: Topic[] = [
       {
         heading: "Gearing and wheel radius",
         body:
-          "A gearbox with ratio G (input turns per output turn) and efficiency η gives:\n\nτ_out = τ_motor × G × η,  ω_out = ω_motor / G\n\nThe wheel turns torque into force: F = τ_wheel / r.\n\nWorked example: motor stall torque 0.002 N·m, G = 150, η = 0.6 ⇒ τ_wheel = 0.002 × 150 × 0.6 = 0.18 N·m. With r = 0.015 m, F_stall = 0.18 / 0.015 = 12 N per wheel. Two wheels: 24 N — far above a 500 g robot's traction limit of roughly 4–5 N. The robot will spin its tyres long before stalling, which is what you want: torque is not the limit, grip is."
+          "A gearbox with ratio G (input turns per output turn) and efficiency η gives:\n\nτ_out = τ_motor × G × η,  ω_out = ω_motor / G\n\nThe wheel turns torque into force: F = τ_wheel / r.\n\nWorked example: motor stall torque 0.002 N·m, G = 150, η = 0.6 ⇒ τ_wheel = 0.002 × 150 × 0.6 = 0.18 N·m. With r = 0.015 m, F_stall = 0.18 / 0.015 = 12 N per wheel. Four wheels on the club's 4WD robot: 48 N — far above a 500 g robot's traction limit of roughly 4–5 N. The robot will spin its tyres long before stalling, which is what you want: torque is not the limit, grip is."
       },
       {
         heading: "Units and numeric pitfalls",
@@ -51,7 +51,7 @@ export const SUMO_07: Topic[] = [
       {
         title: "Is this motor strong enough?",
         body:
-          "Target: reach a traction limit of 4.4 N with two driven wheels of radius 0.02 m. Required torque per wheel = (4.4 / 2) × 0.02 = 0.044 N·m. A gear motor rated 1 kgf·cm (≈ 0.098 N·m) at stall has more than double this, so it can break traction while still turning, rather than stalling."
+          "Target: reach a traction limit of 4.4 N with four driven wheels (4WD) of radius 0.02 m. Required torque per wheel = (4.4 / 4) × 0.02 = 0.022 N·m. An N20 gear motor rated 0.5 kgf·cm (≈ 0.049 N·m) at stall has more than double this, so it can break traction while still turning, rather than stalling."
       },
       {
         title: "Torque calculation without overflow",
@@ -323,7 +323,7 @@ void loop() {}`
     introduction:
       "Traction is the usable driving force your robot can apply to the ground. It brings together weight distribution, tyre grip, motor torque and control software. This topic connects those ideas, shows the maximum acceleration traction allows, and covers what happens electrically when traction holds and the motors are forced toward stall.",
     beginner:
-      "Imagine a tug-of-war on a muddy field. The team with the strongest arms does not always win; the team whose feet do not slip usually does. Traction is the 'feet not slipping' part of a sumo robot.\n\nThree things decide traction: how much weight presses on the driven wheels, how sticky the tyres are, and how cleverly the power is applied. More weight on driven wheels means more traction. Four-wheel drive uses every wheel that carries weight, so it often has more usable traction than two-wheel drive with an unpowered skid.\n\nTraction also limits how fast you can speed up. Even a super-powerful robot cannot accelerate faster than its tyres allow; extra power just spins the wheels. Software can help by ramping the power up smoothly instead of slamming it on.\n\nWhen traction is good and the opponent is heavy, the wheels barely turn and the motors work close to stall. They draw a lot of current, the battery voltage drops, and if the Arduino shares that battery it may even reset. Good traction design includes good power design.",
+      "Imagine a tug-of-war on a muddy field. The team with the strongest arms does not always win; the team whose feet do not slip usually does. Traction is the 'feet not slipping' part of a sumo robot.\n\nThree things decide traction: how much weight presses on the driven wheels, how sticky the tyres are, and how cleverly the power is applied. More weight on driven wheels means more traction. Four-wheel drive uses every wheel that carries weight, so it often has more usable traction than two-wheel drive with an unpowered skid. That is why the club's sumo robots are 4WD.\n\nTraction also limits how fast you can speed up. Even a super-powerful robot cannot accelerate faster than its tyres allow; extra power just spins the wheels. Software can help by ramping the power up smoothly instead of slamming it on.\n\nWhen traction is good and the opponent is heavy, the wheels barely turn and the motors work close to stall. They draw a lot of current, the battery voltage drops, and if the Arduino shares that battery it may even reset. Good traction design includes good power design.",
     technical: [
       {
         heading: "Traction limit and maximum acceleration",
@@ -333,12 +333,12 @@ void loop() {}`
       {
         heading: "2WD, 4WD and slip",
         body:
-          "- 2WD with a skid or wedge: some weight rests on undriven contacts, reducing N_driven.\n- 4WD: all contact points that carry weight are driven, so N_driven ≈ m·g. Costs mass and space for extra motors or a transmission.\n\nSlip ratio s = (ω·r − v) / (ω·r), where ω·r is the tyre surface speed and v the actual robot speed. Peak traction usually occurs at small slip; heavy slip (wheels spinning, robot stationary, s → 1) gives lower, kinetic-friction levels."
+          "- 2WD with a skid or wedge: some weight rests on undriven contacts, reducing N_driven.\n- 4WD: all contact points that carry weight are driven, so N_driven ≈ m·g. Costs mass and space for extra motors or a transmission. The club standard is 4WD with four N20 motors, which still fit the 10 × 10 cm, 500 g mini-sumo limits.\n\nSlip ratio s = (ω·r − v) / (ω·r), where ω·r is the tyre surface speed and v the actual robot speed. Peak traction usually occurs at small slip; heavy slip (wheels spinning, robot stationary, s → 1) gives lower, kinetic-friction levels."
       },
       {
         heading: "Electrical consequences of a traction-limited push",
         body:
-          "Near stall, motor current approaches I_stall = V / R_winding. Two motors near stall can draw several amperes from a small pack. Battery terminal voltage sags: V_terminal = E − I × R_internal. Example values: E = 7.6 V, R_internal = 0.15 Ω, I = 4 A ⇒ V ≈ 7.0 V.\n\nIf the microcontroller is powered from the same battery through a regulator and the voltage dips too low (worn cells, high resistance wiring, or a weak switch), the board can brown out and reset. After a reset the program restarts in setup(), often including the 5-second start delay — a disaster mid-match. Mitigations: good battery, short thick motor wires, a bulk capacitor at the driver, and sometimes a separate logic supply."
+          "Near stall, motor current approaches I_stall = V / R_winding. Four N20 motors near stall can draw several amperes from a small pack. Battery terminal voltage sags: V_terminal = E − I × R_internal. Example values: E = 7.6 V, R_internal = 0.15 Ω, I = 4 A ⇒ V ≈ 7.0 V.\n\nIf the microcontroller is powered from the same battery through a regulator and the voltage dips too low (worn cells, high resistance wiring, or a weak switch), the board can brown out and reset. After a reset the program restarts in setup(), often including the 5-second start delay — a disaster mid-match. Mitigations: good battery, short thick motor wires, a bulk capacitor at the driver, and sometimes a separate logic supply."
       }
     ],
     workingPrinciple:

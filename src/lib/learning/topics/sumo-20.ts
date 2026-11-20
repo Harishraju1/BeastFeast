@@ -276,7 +276,7 @@ void loop() {}`,
       },
     ],
     workingPrinciple:
-      "The robot estimates its position and heading from known starting conditions plus wheel motion. Wheel rotation, measured by encoder pulses (or estimated from time and speed), is converted to distance with revolutions x π x D, and the difference between the two wheels gives rotation using the track width. Because these estimates drift with slip and battery voltage, the robot re-references itself whenever an edge sensor detects the white border, which marks a known distance from the centre. Navigation moves are always executed with edge sensors active.",
+      "The robot estimates its position and heading from known starting conditions plus wheel motion. Wheel rotation, measured by encoder pulses (or estimated from time and speed), is converted to distance with revolutions x π x D, and the difference between the left and right sides (each motor pair on a 4WD robot) gives rotation using the track width. Because these estimates drift with slip and battery voltage, the robot re-references itself whenever an edge sensor detects the white border, which marks a known distance from the centre. Navigation moves are always executed with edge sensors active.",
     diagrams: [
       {
         kind: "formula",

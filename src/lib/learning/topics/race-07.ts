@@ -25,7 +25,7 @@ export const RACE_07: Topic[] = [
       {
         heading: "How much torque does the car need?",
         body:
-          "Required total wheel force F = m · a + F_rolling (+ m · g · sin θ on a ramp of angle θ). Divide by the number of driven motors and multiply by wheel radius.\n\nWorked example: m = 0.8 kg, target a = 2 m/s², two driven wheels of radius 0.0325 m. F = 0.8 × 2 = 1.6 N total, 0.8 N per wheel, τ = 0.8 × 0.0325 ≈ 0.026 N·m ≈ 0.27 kg·cm per motor. Add a margin of 2–3× for rolling resistance, gear losses, battery sag and ramps, so choose motors that can deliver roughly 0.6–0.8 kg·cm while still moving (not just at stall).\n\nTorque is only useful up to the traction limit: if τ / r exceeds μ · N on that wheel, the tyre spins.",
+          "Required total wheel force F = m · a + F_rolling (+ m · g · sin θ on a ramp of angle θ). Divide by the number of driven motors and multiply by wheel radius.\n\nWorked example (the club's 4WD car): m = 0.8 kg, target a = 2 m/s², four driven wheels of radius 0.0325 m. F = 0.8 × 2 = 1.6 N total, 0.4 N per wheel, τ = 0.4 × 0.0325 = 0.013 N·m ≈ 0.13 kg·cm per motor. Add a margin of 2–3× for rolling resistance, gear losses, battery sag and ramps, so choose motors that can deliver roughly 0.3–0.4 kg·cm while still moving (not just at stall). Skid-steer turns also need extra torque to scrub the tyres sideways, so do not cut the margin.\n\nTorque is only useful up to the traction limit: if τ / r exceeds μ · N on that wheel, the tyre spins.",
       },
     ],
     workingPrinciple:
@@ -41,7 +41,7 @@ export const RACE_07: Topic[] = [
       },
       {
         title: "Ramp check",
-        body: "A 0.6 kg car must climb a 15° ramp. The force needed just to hold position is m·g·sin θ = 0.6 × 9.81 × 0.259 ≈ 1.52 N. With two driven 65 mm wheels (r = 0.0325 m) each motor must supply at least 0.76 × 0.0325 ≈ 0.025 N·m (≈ 0.25 kg·cm) just to hold the car on the ramp; accelerating up it needs more.",
+        body: "A 0.6 kg car must climb a 15° ramp. The force needed just to hold position is m·g·sin θ = 0.6 × 9.81 × 0.259 ≈ 1.52 N. With four driven 65 mm wheels (r = 0.0325 m) each motor must supply at least 0.38 × 0.0325 ≈ 0.012 N·m (≈ 0.13 kg·cm) just to hold the car on the ramp; accelerating up it needs more.",
       },
     ],
     commonMistakes: [

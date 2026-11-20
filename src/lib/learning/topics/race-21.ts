@@ -11,7 +11,7 @@ export const RACE_21: Topic[] = [
     introduction:
       "Every corner on a race track asks one question: how fast can you go around this curve without sliding off or tipping over? The answer comes from simple physics that you can calculate before you build.\n\nThis topic explains centripetal acceleration, the grip-limited cornering speed v = sqrt(mu g R), how the inner and outer wheels must move during an arc, why 4WD skid-steer robots fight themselves in corners, and when to use a spin, pivot or smooth arc.",
     beginner:
-      "When you ride a bike around a corner, you feel pushed outward. Really, your body wants to keep going straight, and the tyres have to pull you inward to make you follow the curve. That inward pull comes from friction between the tyres and the ground.\n\nThere is a limit to how much friction the tyres can give. If you go too fast for a tight corner, the tyres cannot pull hard enough, and you slide outward. Tighter corners need slower speeds; wider corners allow faster speeds. Grippier tyres raise the limit for every corner.\n\nA robot turns by running its outer wheel faster than its inner wheel. The outer wheel travels a longer path around the bend, just as runners in the outside lane of a running track run further. On a smooth arc both wheels roll forward at different speeds.\n\nThere are three turn styles. An arc is smooth and fast, like a car on a curve. A pivot stops one wheel and swings around it. A spin runs the wheels in opposite directions so the robot rotates on the spot. Spins and pivots are useful for very sharp 90-degree turns, but they kill your forward speed. Good race robots use the smoothest arc the track allows.\n\nRobots with four driven wheels and no steering have to drag some wheels sideways to turn, which wastes energy and makes corners less predictable.",
+      "When you ride a bike around a corner, you feel pushed outward. Really, your body wants to keep going straight, and the tyres have to pull you inward to make you follow the curve. That inward pull comes from friction between the tyres and the ground.\n\nThere is a limit to how much friction the tyres can give. If you go too fast for a tight corner, the tyres cannot pull hard enough, and you slide outward. Tighter corners need slower speeds; wider corners allow faster speeds. Grippier tyres raise the limit for every corner.\n\nA robot turns by running its outer wheels faster than its inner wheels. The outer side travels a longer path around the bend, just as runners in the outside lane of a running track run further. On a smooth arc both sides roll forward at different speeds.\n\nThere are three turn styles. An arc is smooth and fast, like a car on a curve. A pivot stops one side and swings around it. A spin runs the two sides in opposite directions so the robot rotates on the spot. Spins and pivots are useful for very sharp 90-degree turns, but they kill your forward speed. Good race robots use the smoothest arc the track allows.\n\nThe club's 4WD robots have four driven wheels and no steering, so they drag some wheels sideways to turn. That wastes energy and makes corners less predictable, so plan for it.",
     technical: [
       {
         heading: "Centripetal force and the cornering speed limit",
@@ -31,7 +31,7 @@ export const RACE_21: Topic[] = [
       {
         heading: "Scrub in skid-steer (4WD) robots",
         body:
-          "A 4WD robot with fixed wheels has its front and rear wheels offset from the turning centre, so they must slip sideways to rotate the chassis. The sideways scrub friction creates a resisting torque. Consequences: the motors need more torque to turn than to go straight, current spikes in tight turns, and the actual turn rate is lower and less repeatable than the kinematic equations predict. A shorter wheelbase relative to track width reduces scrub. A 2WD robot with a ball caster has almost no scrub."
+          "A 4WD robot with fixed wheels has its front and rear wheels offset from the turning centre, so they must slip sideways to rotate the chassis. The sideways scrub friction creates a resisting torque. Consequences: the motors need more torque to turn than to go straight, current spikes in tight turns, and the actual turn rate is lower and less repeatable than the kinematic equations predict. A shorter wheelbase relative to track width reduces scrub, which is why the club's standard 4WD chassis is short and wide. For comparison, a 2WD robot with a ball caster has almost no scrub, but it gives up the grip of four driven wheels."
       }
     ],
     workingPrinciple:
@@ -86,7 +86,7 @@ void loop() {}`
       { mistake: "Taking every corner as a spin turn.", why: "A spin drops forward speed to zero and costs time to re-accelerate.", fix: "Use arcs with the largest radius the track allows; reserve spins for true right angles." },
       { mistake: "Ignoring that the outer wheel must go faster than the base speed.", why: "If base speed is already near maximum, the outer wheel saturates and the robot under-turns.", fix: "Lower base speed in corners so the outer wheel has headroom." },
       { mistake: "Assuming a heavier robot needs a slower corner speed.", why: "In the ideal model mass cancels: v_max = sqrt(mu g R).", fix: "Focus on grip (mu) and line radius; reduce mass mainly for acceleration and braking." },
-      { mistake: "Building 4WD skid-steer for a twisty line track without testing.", why: "Scrub makes turns weaker and less predictable, and raises current in corners.", fix: "Prefer 2WD with a caster for twisty tracks, or keep the wheelbase short relative to track width." }
+      { mistake: "Taking a 4WD skid-steer robot onto a twisty line track without testing its turns.", why: "Scrub makes turns weaker and less predictable, and raises current in corners.", fix: "Keep the wheelbase short relative to track width, test every corner type on a practice track, and lower corner speed if the robot runs wide." }
     ],
     keyTakeaways: [
       "Cornering needs inward force m v^2 / R, supplied only by tyre friction.",
@@ -95,7 +95,7 @@ void loop() {}`
       "Arcs keep speed; pivots and spins sacrifice it.",
       "Skid-steer 4WD scrubs in turns, needing more torque and giving less predictable turning."
     ],
-    relatedComponents: ["Ball Caster Wheels", "Silicone Robot Wheels", "N20 Micro Metal Gear Motor", "TB6612FNG", "Arduino Uno R3"],
+    relatedComponents: ["High-Grip Racing Wheels", "Silicone Robot Wheels", "N20 Micro Metal Gear Motor", "TB6612FNG", "Arduino Uno R3"],
     youtubeSearch: "robot cornering physics centripetal force friction turning radius",
     quiz: [
       {
@@ -153,7 +153,7 @@ void loop() {}`
     introduction:
       "The centre of gravity (CoG) is the single point where the whole weight of the robot can be considered to act. Its height decides whether the robot tips in corners; its front-to-back position decides how much weight presses on the drive wheels and sensors.\n\nThis topic shows how to calculate the CoG from component masses, how to measure it with two kitchen scales, and how to use the tipping and weight-transfer equations to place the battery and electronics for the best lap.",
     beginner:
-      "Try balancing a ruler on your finger. There is exactly one point where it balances: that is its centre of gravity. For a robot, it is the balance point of everything together: chassis, motors, battery, boards and wires.\n\nWhy does it matter for racing? First, height. A tall bus tips over more easily on a sharp turn than a low sports car, because its weight sits high above the wheels. A low CoG lets your robot corner hard without rolling over.\n\nSecond, front-to-back position. The tyres can only grip as hard as they are pressed onto the track. If most of the weight sits over the caster wheel instead of the driven wheels, the drive wheels slip easily. If the weight sits too far back, the nose can lift when you accelerate, and the line sensors at the front rise off the track and start reading wrongly.\n\nThe battery is usually the heaviest single part, so where you put it is the biggest CoG decision you make. Mount it low and close to the drive axle, and keep the sensor nose light but firmly on the ground.",
+      "Try balancing a ruler on your finger. There is exactly one point where it balances: that is its centre of gravity. For a robot, it is the balance point of everything together: chassis, motors, battery, boards and wires.\n\nWhy does it matter for racing? First, height. A tall bus tips over more easily on a sharp turn than a low sports car, because its weight sits high above the wheels. A low CoG lets your robot corner hard without rolling over.\n\nSecond, front-to-back position. The tyres can only grip as hard as they are pressed onto the track. On the club's 4WD cars all four wheels drive, so share the weight fairly evenly between the front and rear pairs. If one pair is barely loaded, those wheels slip first and waste power. If the weight sits too far back, the nose can lift when you accelerate, and the line sensors at the front rise off the track and start reading wrongly.\n\nThe battery is usually the heaviest single part, so where you put it is the biggest CoG decision you make. Mount it low and between the axles, and keep the sensor nose light but firmly on the ground.",
     technical: [
       {
         heading: "Calculating the CoG",
@@ -163,7 +163,7 @@ void loop() {}`
       {
         heading: "Measuring with two scales",
         body:
-          "Place the drive wheels on one scale and the caster (or front wheels) on another, with both scales level. If the rear scale reads W_r, the total is W, and the axle-to-caster distance is L, the CoG lies at L x W_r / W from the front contact point.\n\nExample: front reads 120 g, rear reads 280 g, L = 100 mm. CoG is 100 x 280 / 400 = 70 mm behind the front contact, and 70% of the weight is on the rear (drive) wheels, which is good for traction."
+          "Place the front pair of wheels on one scale and the rear pair on another, with both scales level. If the rear scale reads W_r, the total is W, and the wheelbase (front axle to rear axle) is L, the CoG lies at L x W_r / W from the front axle.\n\nExample: front reads 120 g, rear reads 280 g, L = 100 mm. CoG is 100 x 280 / 400 = 70 mm behind the front axle, so 70% of the weight is on the rear pair. On a 4WD car that is quite rear-heavy: the front wheels carry little load and slip first, and the nose may lift on launch. Moving the battery forward towards an even split shares the grip between all four driven wheels. (On a 2WD car with a caster, the same method works with the caster on the front scale.)"
       },
       {
         heading: "Tipping in corners",
@@ -173,7 +173,7 @@ void loop() {}`
       {
         heading: "Longitudinal weight transfer",
         body:
-          "Under acceleration a, load shifts rearward by dW = m x a x h / L (L = wheelbase). Under braking, it shifts forward by the same amount. A high CoG and short wheelbase make the shift large: a rear-drive robot may lift its front (sensors leave the track) on launch and pitch forward on hard braking. Keep h small and L reasonable."
+          "Under acceleration a, load shifts rearward by dW = m x a x h / L (L = wheelbase). Under braking, it shifts forward by the same amount. A high CoG and short wheelbase make the shift large: the robot may lift its front (sensors leave the track) on launch and pitch forward on hard braking. On a 4WD car the shift also unloads the front pair on launch, so those wheels spin first. Keep h small and L reasonable."
       }
     ],
     workingPrinciple:
@@ -187,9 +187,9 @@ void loop() {}`
       {
         kind: "circuit",
         nodes: [
-          { id: "front", label: "Caster scale: 120 g", x: 15, y: 60 },
-          { id: "cg", label: "CoG (70 mm from front)", x: 55, y: 30 },
-          { id: "rear", label: "Drive-wheel scale: 280 g", x: 90, y: 60 }
+          { id: "front", label: "Front pair: 120 g", x: 15, y: 60 },
+          { id: "cg", label: "CoG (70 mm back)", x: 55, y: 30 },
+          { id: "rear", label: "Rear pair: 280 g", x: 90, y: 60 }
         ],
         edges: [
           { from: "front", to: "cg", label: "70 mm" },
@@ -225,7 +225,7 @@ void loop() {}`
     ],
     commonMistakes: [
       { mistake: "Stacking boards and batteries vertically to save floor space.", why: "This raises h, lowering the tipping threshold g(b/2)/h and increasing weight transfer.", fix: "Spread components flat and put the heaviest (battery) lowest." },
-      { mistake: "Putting most of the weight over the caster.", why: "The driven wheels then carry little normal force, so the available traction (mu x N) is small.", fix: "Place the battery near the drive axle so most weight is on the driven wheels." },
+      { mistake: "Putting most of the weight over one axle.", why: "On a 4WD car the lightly loaded pair then carries little normal force, so its wheels slip first and part of the available traction (mu x N) is wasted.", fix: "Place the battery low and between the axles so the front and rear pairs share the load." },
       { mistake: "Letting the front sensor bar lift under acceleration.", why: "A rearward CoG plus rear drive can lift the nose; sensors then read the wrong distance and lose the line.", fix: "Keep a little weight forward, ramp the launch, and check sensor height during a hard start." },
       { mistake: "Ignoring sideways CoG offset.", why: "If one side is heavier, that wheel grips more and the robot drifts in a straight line.", fix: "Balance the left and right masses and check with two scales side to side." }
     ],
@@ -234,9 +234,9 @@ void loop() {}`
       "Measure CoG with two scales: position = L x W_rear / W_total from the front.",
       "Tipping needs lateral acceleration above g(b/2)/h; design so (b/2)/h > mu.",
       "Weight transfer m a h / L can lift sensors or unload drive wheels.",
-      "Low and central, with most weight on the driven wheels, is the racing rule."
+      "Low and central, with the load shared between both driven axles, is the racing rule."
     ],
-    relatedComponents: ["LiPo 2S Battery", "18650 Li-ion Cell", "Arduino Nano", "Ball Caster Wheels", "QTR-8A"],
+    relatedComponents: ["LiPo 2S Battery", "18650 Li-ion Cell", "Arduino Nano", "Silicone Robot Wheels", "QTR-8A"],
     youtubeSearch: "robot center of gravity stability weight distribution explained",
     quiz: [
       {

@@ -8,12 +8,27 @@ import { Badge, Button, Empty, Field, Modal, PageHeader } from "@/components/ui"
 import { useApp } from "@/lib/store/app";
 import { COMPETITIONS, type CompetitionId, type Project } from "@/lib/types";
 import { newProject, uid } from "@/lib/robot/assembly";
-import { reference2WD, referenceLineFollower, referenceSumo } from "@/lib/robot/reference";
+import { buildFromTemplate, getTemplate } from "@/lib/garage";
+
+/** Fully wired 4WD example robots students can start from (their own editable copy). */
+const EXAMPLES: Record<CompetitionId, { id: string; label: string }[]> = {
+  race: [
+    { id: "RR-04", label: "4WD Robo Race Car (RR-04)" },
+    { id: "RR-05", label: "4WD Off-Road Rover (RR-05)" },
+    { id: "RR-06", label: "4WD Experimental Robot (RR-06)" },
+  ],
+  line: [
+    { id: "LF-01", label: "4WD Basic Line Follower (LF-01)" },
+    { id: "LF-02", label: "4WD Five-Sensor Line Follower (LF-02)" },
+    { id: "LF-03", label: "4WD PID Line Follower (LF-03)" },
+  ],
+  sumo: [{ id: "RW-04", label: "4WD Sumo Robot (RW-04)" }],
+};
 
 const CARDS: { id: CompetitionId; icon: typeof Gauge; color: string; desc: string; features: string[] }[] = [
-  { id: "race", icon: Gauge, color: "accent", desc: "Build a high-performance robot car capable of navigating racing tracks.", features: ["2WD & 4WD designs", "Motor, wheel & driver selection", "Speed & turning mechanics", "Custom tracks & lap timing", "Keyboard control", "Obstacle simulation"] },
-  { id: "line", icon: Route, color: "brand", desc: "Build an autonomous robot that detects and follows a line using reflectance sensors.", features: ["TCRT5000 & QTR arrays", "Analog & digital sensors", "Calibration & PID", "Real-time sensor view", "Track configuration", "Speed optimisation"] },
-  { id: "sumo", icon: Swords, color: "red", desc: "Build an intelligent robot that detects, attacks and pushes an opponent out of the arena.", features: ["Sumo chassis & wedge", "Torque & high-grip wheels", "Opponent & edge detection", "Ultrasonic, Sharp IR, bumpers", "Attack & defence algorithms", "AI opponents"] },
+  { id: "race", icon: Gauge, color: "accent", desc: "Build a high-performance robot car capable of navigating racing tracks.", features: ["4WD skid-steer drivetrain", "Motor, wheel & driver selection", "Speed & turning mechanics", "Custom tracks & lap timing", "Keyboard control", "Obstacle simulation"] },
+  { id: "line", icon: Route, color: "brand", desc: "Build an autonomous robot that detects and follows a line using reflectance sensors.", features: ["4WD line follower", "TCRT5000 & QTR arrays", "Analog & digital sensors", "Calibration & PID", "Real-time sensor view", "Track configuration", "Speed optimisation"] },
+  { id: "sumo", icon: Swords, color: "red", desc: "Build an intelligent robot that detects, attacks and pushes an opponent out of the arena.", features: ["4WD sumo chassis & wedge", "Torque & high-grip wheels", "Opponent & edge detection", "Ultrasonic, Sharp IR, bumpers", "Attack & defence algorithms", "AI opponents"] },
 ];
 
 function ProjectsInner() {
@@ -29,8 +44,8 @@ function ProjectsInner() {
   async function create() {
     if (!user || !creating) return;
     let p: Project;
-    if (start === "example") {
-      const ex = creating === "line" ? referenceLineFollower(user.id) : creating === "sumo" ? referenceSumo(user.id) : reference2WD("race", user.id);
+    if (start.startsWith("example:")) {
+      const ex = buildFromTemplate(getTemplate(start.slice(8))!, user.id, "copy");
       p = { ...ex, id: uid("prj"), ownerId: user.id, name: name || ex.name };
     } else if (start !== "blank") {
       const src = projects.find((x) => x.id === start)!;
@@ -125,8 +140,12 @@ function ProjectsInner() {
           </Field>
           <Field label="Start from" hint="Building from scratch is the best way to learn. Examples are fully wired reference robots you can inspect and break on purpose.">
             <select className="bf-input" value={start} onChange={(e) => setStart(e.target.value)}>
-              <option value="blank">Empty project (recommended)</option>
-              <option value="example">Inspect a fully wired example robot</option>
+              <option value="blank">4WD starter: chassis, 4 motors and 4 wheels, you add the rest (recommended)</option>
+              {creating && (
+                <optgroup label="Fully wired 4WD example robots">
+                  {EXAMPLES[creating].map((e) => <option key={e.id} value={`example:${e.id}`}>{e.label}</option>)}
+                </optgroup>
+              )}
               {projects
                 .filter((p) => creating && p.competition !== "sumo" && creating !== "sumo")
                 .map((p) => (

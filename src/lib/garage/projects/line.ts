@@ -288,7 +288,7 @@ export const LF01: ProjectTemplate = {
   metadata: {
     id: "LF-01",
     name: "Basic Line Follower",
-    version: "2.0.0",
+    version: "2.0.1",
     competition: "line",
     difficulty: "beginner",
     learningLevel: "First robot — digital sensors and if/else steering",
@@ -313,7 +313,7 @@ export const LF01: ProjectTemplate = {
     // battery on standoffs above the Uno, set back so the centre of mass sits over the middle of the four wheels
     { componentId: "arduino-uno-r3", label: "U1", position: { x: 5, y: 0, z: 8 } },
     { componentId: "l298n", label: "DRV1", position: { x: 62, y: 0, z: 14 } },
-    { componentId: "18650-li-ion-cell", label: "BAT1", config: { series: 2, capacity: 2500 }, position: { x: -33, y: 0, z: 47.5 } },
+    { componentId: "lipo-2s-battery", label: "BAT1", config: { capacity: 2500 }, position: { x: -33, y: 0, z: 47.5 } },
     { componentId: "toggle-switch", label: "SW1" },
     { componentId: "3-channel-ir-sensor-array", label: "IR1", position: { x: 115, y: 0, z: sensorZ(LF01_DT, 10) }, yawDeg: 90 },
   ],
@@ -554,7 +554,7 @@ export const LF02: ProjectTemplate = {
   metadata: {
     id: "LF-02",
     name: "Advanced Five-Sensor Line Follower",
-    version: "2.0.0",
+    version: "2.0.1",
     competition: "line",
     difficulty: "intermediate",
     learningLevel: "Analog sensors, calibration and proportional control",
@@ -578,7 +578,7 @@ export const LF02: ProjectTemplate = {
     // battery on standoffs above the Uno, set back so the centre of mass sits over the middle of the four wheels
     { componentId: "arduino-uno-r3", label: "U1", position: { x: 10, y: 0, z: 8 } },
     { componentId: "tb6612fng", label: "DRV1" },
-    { componentId: "18650-li-ion-cell", label: "BAT1", config: { series: 2, capacity: 2500 }, position: { x: -38, y: 0, z: 39.9 } },
+    { componentId: "lipo-2s-battery", label: "BAT1", config: { capacity: 2500 }, position: { x: -38, y: 0, z: 39.9 } },
     { componentId: "toggle-switch", label: "SW1" },
     // five modules side by side, long axis pointing forward (14 mm wide boards at 15 mm pitch)
     ...[30, 15, 0, -15, -30].map((y, i) => ({ componentId: "tcrt5000", label: `S${i + 1}`, position: { x: LF02_X, y, z: lf02Z }, yawDeg: 0 })),

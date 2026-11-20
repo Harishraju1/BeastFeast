@@ -101,6 +101,12 @@ function ProjectCard({ t, project, report, onAction }: { t: ProjectTemplate; pro
   );
 }
 
+/**
+ * The Garage shows only the 4WD robots (the club standard). Legacy 2WD templates (RR-01, RR-03, RW-01..03)
+ * stay in the code so students' existing copies and direct links keep working, but they are not listed.
+ */
+const SHOWN = GARAGE_TEMPLATES.filter((t) => !t.metadata.legacy);
+
 export default function GaragePage() {
   const { user, ready } = useApp();
   const previews = usePreviewProjects();
@@ -122,8 +128,8 @@ export default function GaragePage() {
             card is checked by an automated readiness test that compiles the firmware, validates the circuit and actually starts the simulation.
           </p>
           <div className="mt-4 flex flex-wrap gap-4 font-mono text-xs text-dim">
-            <span><Box size={12} className="mr-1 inline" />{GARAGE_TEMPLATES.length} projects</span>
-            <span>{Object.values(reports).filter((r) => r.status === "READY TO SIMULATE").length}/{GARAGE_TEMPLATES.length} ready to simulate</span>
+            <span><Box size={12} className="mr-1 inline" />{SHOWN.length} 4WD robots</span>
+            <span>{SHOWN.filter((t) => reports[t.metadata.id]?.status === "READY TO SIMULATE").length}/{SHOWN.length} ready to simulate</span>
           </div>
         </div>
       </section>
@@ -137,10 +143,7 @@ export default function GaragePage() {
               <h2 className={`font-display text-2xl font-bold tracking-wide ${lab.accent}`}><span className="mr-2 inline-block h-5 w-1.5 translate-y-0.5 rounded-sm bg-accent" />{lab.title}</h2>
             </div>
             {(() => {
-              const inLab = GARAGE_TEMPLATES.filter((t) => t.metadata.competition === lab.competition);
-              // 4WD robots (the club standard) first, then the rest; legacy 2WD robots in a collapsed group
-              const current = [...inLab.filter((t) => !t.metadata.legacy && t.metadata.drivetrain === "4WD"), ...inLab.filter((t) => !t.metadata.legacy && t.metadata.drivetrain !== "4WD")];
-              const legacy = inLab.filter((t) => t.metadata.legacy);
+              const current = SHOWN.filter((t) => t.metadata.competition === lab.competition);
               const card = (t: ProjectTemplate) => (
                 <ProjectCard
                   key={t.metadata.id}
@@ -150,19 +153,7 @@ export default function GaragePage() {
                   onAction={(intent) => (ready && !user ? (location.href = `/login?next=/garage`) : setFlow({ id: t.metadata.id, intent }))}
                 />
               );
-              return (
-                <>
-                  <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-3">{current.map(card)}</div>
-                  {legacy.length > 0 && (
-                    <details className="relative mt-5 rounded-xl border border-line bg-bg2/40 p-3">
-                      <summary className="cursor-pointer select-none font-mono text-xs tracking-widest text-muted">
-                        LEGACY 2WD ROBOTS ({legacy.length}) — {legacy.map((t) => t.metadata.id).join(", ")} · kept so existing copies keep working; 4WD is the club standard
-                      </summary>
-                      <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{legacy.map(card)}</div>
-                    </details>
-                  )}
-                </>
-              );
+              return <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-3">{current.map(card)}</div>;
             })()}
           </section>
         ))}

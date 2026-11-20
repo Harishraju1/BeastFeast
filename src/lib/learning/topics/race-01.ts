@@ -15,7 +15,7 @@ export const RACE_01: Topic[] = [
       {
         heading: "The subsystems of a race car",
         body:
-          "A typical club race car has six subsystems:\n\n- Chassis: the frame that holds everything and sets the wheelbase, track width and centre of gravity.\n- Drivetrain: DC gear motors (TT/BO, N20 or larger), gearboxes, wheels and tyres.\n- Motor driver: an H-bridge board such as L298N, TB6612FNG or DRV8833 that switches battery current through the motors.\n- Power: a battery pack (often 2S Li-ion or LiPo, 7.4 V nominal), switch, wiring and sometimes a regulator for the logic.\n- Controller: an Arduino Uno/Nano or ESP32 that generates direction signals and PWM speed signals.\n- Command source: a wired controller, a wireless link (Bluetooth/Wi-Fi on an ESP32 or a Bluetooth module), or sensors for autonomous runs.\n\nThe signal flows one way (controller to driver to motors) and the energy flows from the battery through the driver to the motors.",
+          "A typical club race car has six subsystems:\n\n- Chassis: the frame that holds everything and sets the wheelbase, track width and centre of gravity.\n- Drivetrain: four DC gear motors (TT/BO, N20 or larger), one per wheel, with gearboxes, wheels and tyres. The club standard is 4WD with skid steering and no caster.\n- Motor driver: an H-bridge board such as L298N, TB6612FNG or DRV8833 that switches battery current through the motors.\n- Power: a battery pack (often 2S Li-ion or LiPo, 7.4 V nominal), switch, wiring and sometimes a regulator for the logic.\n- Controller: an Arduino Uno/Nano or ESP32 that generates direction signals and PWM speed signals.\n- Command source: a wired controller, a wireless link (Bluetooth/Wi-Fi on an ESP32 or a Bluetooth module), or sensors for autonomous runs.\n\nThe signal flows one way (controller to driver to motors) and the energy flows from the battery through the driver to the motors.",
       },
       {
         heading: "The speed equation you will use everywhere",
@@ -37,7 +37,7 @@ export const RACE_01: Topic[] = [
     examples: [
       {
         title: "First drive test with an L298N",
-        body: "This sketch drives both sides forward at about 80% PWM for two seconds, then stops. ENA/ENB are on PWM pins 5 and 6; remove the ENA/ENB jumpers on the L298N so the Arduino controls speed.",
+        body: "This sketch drives both sides forward at about 80% PWM for two seconds, then stops. ENA/ENB are on PWM pins 5 and 6; remove the ENA/ENB jumpers on the L298N so the Arduino controls speed. On the club's 4WD car the two left motors are wired in parallel on channel A and the two right motors on channel B, so this drives all four wheels.",
         code: `const int ENA = 5;
 const int IN1 = 7;
 const int IN2 = 8;
@@ -256,19 +256,19 @@ void loop() {
       {
         heading: "Layout rules of thumb",
         body:
-          "- Mount motors with proper brackets so both axles are collinear; misaligned motors make the car pull to one side.\n- Place the battery low and between the axles.\n- Keep the motor driver near the motors (short high-current wires) and the Arduino where its USB port is reachable.\n- Use standoffs to stack a second deck rather than gluing boards on top of each other.\n- Leave access to the power switch and battery connector without tools.",
+          "- Mount all four motors with proper brackets so the front pair and the rear pair each sit on one straight axle line; misaligned motors make the car pull to one side.\n- Place the battery low and between the axles.\n- Keep the motor driver near the motors (short high-current wires) and the Arduino where its USB port is reachable.\n- Use standoffs to stack a second deck rather than gluing boards on top of each other.\n- Leave access to the power switch and battery connector without tools.",
       },
     ],
     workingPrinciple:
       "The chassis transfers the motor reaction forces to the wheels and carries every component's weight. Its stiffness keeps wheel alignment constant under load, its mass sets how much force is needed to accelerate (a = F/m), and its geometry (wheelbase, track width, height of the heavy parts) decides how the robot responds in corners and whether it slides or tips.",
     diagrams: [
       { kind: "formula", latexish: "a_tip = g · (T / 2) / h", legend: { a_tip: "lateral acceleration at which the robot tips (m/s²)", g: "9.81 m/s²", T: "track width (m)", h: "height of centre of gravity (m)" } },
-      { kind: "circuit", nodes: [ { id: "lw", label: "Left wheel + motor", x: 10, y: 40 }, { id: "rw", label: "Right wheel + motor", x: 90, y: 40 }, { id: "bat", label: "Battery (low, central)", x: 50, y: 45 }, { id: "drv", label: "Motor driver", x: 50, y: 25 }, { id: "mcu", label: "Arduino (upper deck)", x: 50, y: 8 }, { id: "cas", label: "Ball caster", x: 50, y: 75 } ], edges: [ { from: "bat", to: "drv", label: "power", color: "red" }, { from: "drv", to: "lw", label: "motor A" }, { from: "drv", to: "rw", label: "motor B" }, { from: "mcu", to: "drv", label: "IN/EN signals" } ] },
+      { kind: "circuit", nodes: [ { id: "fl", label: "FL motor + wheel", x: 10, y: 20 }, { id: "fr", label: "FR motor + wheel", x: 90, y: 20 }, { id: "rl", label: "RL motor + wheel", x: 10, y: 80 }, { id: "rr", label: "RR motor + wheel", x: 90, y: 80 }, { id: "mcu", label: "Arduino (top deck)", x: 50, y: 0 }, { id: "drv", label: "Motor driver", x: 50, y: 35 }, { id: "bat", label: "Battery (low, mid)", x: 50, y: 70 } ], edges: [ { from: "bat", to: "drv", label: "power", color: "red" }, { from: "mcu", to: "drv", label: "IN/EN signals" }, { from: "drv", to: "fl", label: "ch A (left pair)" }, { from: "drv", to: "rl", label: "ch A (left pair)" }, { from: "drv", to: "fr", label: "ch B (right pair)" }, { from: "drv", to: "rr", label: "ch B (right pair)" } ] },
     ],
     examples: [
       {
-        title: "Weight budget for a 2WD race car",
-        body: "Example budget: 2 × N20 gear motors with brackets ≈ 30 g, wheels ≈ 30 g, Arduino Nano ≈ 7 g, TB6612FNG module ≈ 3 g, 2S 18650 pack in holder ≈ 100 g, chassis plate ≈ 40 g, wires/screws ≈ 30 g: total ≈ 240 g. Writing the budget down before building shows that the battery is the biggest single mass, so its position matters most for balance.",
+        title: "Weight budget for a 4WD race car",
+        body: "Example budget for the club's 4WD layout: 4 × N20 gear motors with brackets ≈ 60 g, four wheels ≈ 60 g, Arduino Nano ≈ 7 g, TB6612FNG module ≈ 3 g, 2S 18650 pack in holder ≈ 100 g, chassis plate ≈ 40 g, wires/screws ≈ 30 g: total ≈ 300 g. There is no caster: all four wheels are driven, and the left pair and right pair each share one driver channel. Writing the budget down before building shows that the battery is the biggest single mass, so its position matters most for balance.",
       },
       {
         title: "Checking a design for tipping",
@@ -287,7 +287,7 @@ void loop() {
       "Put the heaviest part (battery) low and central.",
       "Design for maintenance: reachable switch, battery and USB port.",
     ],
-    relatedComponents: ["N20 Micro Metal Gear Motor", "BO Gear Motor", "Ball Caster Wheels", "18650 Li-ion Cell", "Arduino Nano"],
+    relatedComponents: ["N20 Micro Metal Gear Motor", "BO Gear Motor", "Motor Mounting Brackets", "18650 Li-ion Cell", "Arduino Nano"],
     youtubeSearch: "robot car chassis design tips low center of gravity",
     quiz: [
       {

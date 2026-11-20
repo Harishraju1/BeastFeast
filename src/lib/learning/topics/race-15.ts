@@ -222,11 +222,11 @@ void loop() {}`,
     slug: "differential-steering",
     title: "Differential Steering",
     minutes: 14,
-    summary: "How a two-wheel-drive robot steers purely by running its left and right wheels at different speeds, with the kinematic equations to predict the path.",
+    summary: "How a robot steers purely by running its left and right sides at different speeds (on the club's 4WD cars, each side's motor pair together), with the kinematic equations to predict the path.",
     introduction:
-      "Most club race cars have no steering servo at all. They steer like a tank or a wheelchair: drive the left wheel faster than the right and the robot curves right; reverse one wheel and it spins on the spot. This is called differential steering (or differential drive).\n\nIt is mechanically simple and very agile, but you have to understand the maths to tune it well. In this topic you will learn the two key equations, how to convert motor RPM to wheel speed, how to compute the radius of a turn, and how to 'mix' a forward command and a turn command into left and right motor values.",
+      "Most club race cars have no steering servo at all. They steer like a tank or a wheelchair: drive the left wheel faster than the right and the robot curves right; reverse one wheel and it spins on the spot. This is called differential steering (or differential drive). On the club's 4WD cars the two left wheels always turn together and so do the two right wheels, so the same ideas apply side by side; this four-wheel version is called skid steering.\n\nIt is mechanically simple and very agile, but you have to understand the maths to tune it well. In this topic you will learn the two key equations, how to convert motor RPM to wheel speed, how to compute the radius of a turn, and how to 'mix' a forward command and a turn command into left and right motor values.",
     beginner:
-      "Imagine you are rowing a boat with two oars. Pull both oars equally and the boat goes straight. Pull the right oar harder and the boat turns left. Push one oar forward while pulling the other back and the boat spins in place. A differential-drive robot does exactly the same thing with its two wheels.\n\nThe robot's forward speed is simply the average of the two wheel speeds. How quickly it turns depends on the difference between them and on how far apart the wheels are. Wheels close together turn the robot quickly for a small speed difference; wheels far apart need a bigger difference for the same rate of turn.\n\nThere are three handy special cases. Equal speeds: straight line. Equal speeds in opposite directions: spin on the spot around the centre point between the wheels. One wheel stopped: pivot around that stopped wheel. Every other combination is a smooth arc somewhere in between.\n\nIn code, you usually think in terms of 'go forward this fast' and 'turn this much'. A tiny bit of arithmetic, called mixing, turns those two numbers into a left speed and a right speed. The catch is that motors have a maximum, so if you ask for more than full speed on one side, the turn gets weaker unless you reduce the forward part.",
+      "Imagine you are rowing a boat with two oars. Pull both oars equally and the boat goes straight. Pull the right oar harder and the boat turns left. Push one oar forward while pulling the other back and the boat spins in place. A differential-drive robot does exactly the same thing with its left and right wheels.\n\nThe robot's forward speed is simply the average of the left and right wheel speeds. How quickly it turns depends on the difference between them and on how far apart the wheels are. Wheels close together turn the robot quickly for a small speed difference; wheels far apart need a bigger difference for the same rate of turn.\n\nThere are three handy special cases. Equal speeds: straight line. Equal speeds in opposite directions: spin on the spot around the centre point between the wheels. One wheel stopped: pivot around that stopped wheel. Every other combination is a smooth arc somewhere in between.\n\nIn code, you usually think in terms of 'go forward this fast' and 'turn this much'. A tiny bit of arithmetic, called mixing, turns those two numbers into a left speed and a right speed. The catch is that motors have a maximum, so if you ask for more than full speed on one side, the turn gets weaker unless you reduce the forward part.",
     technical: [
       {
         heading: "Kinematic equations",
@@ -246,11 +246,11 @@ void loop() {}`,
       {
         heading: "Scrub and real-world effects",
         body:
-          "The equations assume wheels roll without slipping and the contact point is a single line. In reality, wide tyres and any extra driven wheels (4WD skid-steer) must slide sideways during a turn, called scrub. This adds friction torque, so the robot turns less than predicted and the motors draw more current. A front ball caster or omni-wheel lets a 2WD robot follow the kinematic equations much more closely."
+          "The equations assume wheels roll without slipping and the contact point is a single line. In reality, wide tyres and the extra driven wheels of a 4WD skid-steer car, like the club's standard robot, must slide sideways during a turn, called scrub. This adds friction torque, so the robot turns less than predicted and the motors draw more current. Treat b as an effective track width: measure how far the robot really turns for a known speed difference and use that value, which is usually a little larger than the measured track width. For comparison, a 2WD robot with a front ball caster or omni-wheel follows the ideal equations much more closely, which is why textbooks often draw that layout."
       }
     ],
     workingPrinciple:
-      "Each wheel pushes its side of the chassis forward at its own ground speed. If the speeds are equal, both sides advance equally and the robot moves straight. If they differ, one side advances further than the other in every instant, so the chassis rotates about a point on the line through the two wheel axles: the instantaneous centre of rotation. The rotation rate equals the speed difference divided by the track width, and the forward speed is the average.",
+      "Each wheel pushes its side of the chassis forward at its own ground speed. If the speeds are equal, both sides advance equally and the robot moves straight. If they differ, one side advances further than the other in every instant, so the chassis rotates about a point on the line through the left and right wheel axles (midway between the front and rear axles on a 4WD car): the instantaneous centre of rotation. The rotation rate equals the speed difference divided by the track width, and the forward speed is the average.",
     diagrams: [
       {
         kind: "formula",
@@ -315,7 +315,7 @@ void loop() {}`
       "Mixing base and turn must handle saturation or the robot under-steers at speed.",
       "Scrub from wide or extra driven wheels makes real turns weaker than the ideal equations."
     ],
-    relatedComponents: ["Arduino Uno R3", "L298N", "TB6612FNG", "BO Gear Motor", "Ball Caster Wheels"],
+    relatedComponents: ["Arduino Uno R3", "L298N", "TB6612FNG", "BO Gear Motor", "Rubber Robot Wheels"],
     youtubeSearch: "differential drive robot kinematics explained turning radius",
     quiz: [
       {
@@ -400,7 +400,7 @@ void loop() {}`,
       {
         heading: "Quadrature direction logic",
         body:
-          "Channels A and B are 90 electrical degrees apart. On a rising edge of A, read B: if B is LOW the shaft is turning one way, if B is HIGH the other way. Which one is 'forward' depends on mounting, so verify by pushing the robot forward by hand and checking the count increases.\n\nThe Uno has two external interrupt pins, 2 (INT0) and 3 (INT1), used with attachInterrupt(digitalPinToInterrupt(pin), isr, mode). For a two-wheel robot you can put channel A of each encoder on pins 2 and 3 and read channel B with digitalRead inside the ISR. (Pin-change interrupts on other pins exist but need register-level code.)"
+          "Channels A and B are 90 electrical degrees apart. On a rising edge of A, read B: if B is LOW the shaft is turning one way, if B is HIGH the other way. Which one is 'forward' depends on mounting, so verify by pushing the robot forward by hand and checking the count increases.\n\nThe Uno has two external interrupt pins, 2 (INT0) and 3 (INT1), used with attachInterrupt(digitalPinToInterrupt(pin), isr, mode). With one encoder per side (on a 4WD car, fit it to one motor of each pair) you can put channel A of each encoder on pins 2 and 3 and read channel B with digitalRead inside the ISR. (Pin-change interrupts on other pins exist but need register-level code.)"
       },
       {
         heading: "Interrupt-safe counting",

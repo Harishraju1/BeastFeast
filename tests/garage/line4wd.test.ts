@@ -21,7 +21,7 @@ describe("LF-01 / LF-02 / LF-03 are 4WD", () => {
   for (const id of LF) {
     it(`${id}: 4 wheels, 4 motors, no caster, each wheel on its own motor, symmetrical`, () => {
       const t = getTemplate(id)!;
-      expect(t.metadata.version).toBe("2.0.0");
+      expect(t.metadata.version).toMatch(/^2./);
       expect(t.metadata.drivetrain).toBe("4WD");
       expect(t.metadata.legacy).toBeFalsy();
       expect(t.metadata.description).toMatch(/4WD/);

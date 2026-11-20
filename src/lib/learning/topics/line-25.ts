@@ -455,7 +455,7 @@ void loop() {
       },
     ],
     workingPrinciple:
-      "Every loop the controller measures the error between where the line is and where it should be, computes a correction from the error (P), its accumulated history (I) and its rate of change (D), and applies the correction differentially to the two drive motors. This closes the loop: steering changes the error, which changes the next correction.",
+      "Every loop the controller measures the error between where the line is and where it should be, computes a correction from the error (P), its accumulated history (I) and its rate of change (D), and applies the correction differentially to the left and right drive motors (on a 4WD robot, the left pair and the right pair). This closes the loop: steering changes the error, which changes the next correction.",
     diagrams: [
       {
         kind: "formula",

@@ -17,7 +17,7 @@ export const SUMO_23: Topic[] = [
       {
         heading: "Support base and centre of gravity",
         body:
-          "The support polygon is the area enclosed by all ground contact points (wheel contact patches, wedge edge, skids or casters). The robot is statically stable when the vertical line through the CoG falls inside this polygon. Margin = horizontal distance from the CoG projection to the nearest edge of the polygon - more margin means more stability.\n\nMeasuring CoG along the robot: place the front support on one kitchen scale and the rear support on another. If the supports are L apart and the front scale reads W_front of a total W, the CoG is x = L x W_front / W from the rear support. Example: L = 8 cm, front 300 g, rear 200 g, total 500 g -> x = 8 x 300 / 500 = 4.8 cm in front of the rear support.",
+          "The support polygon is the area enclosed by all ground contact points: on the club's 4WD robots, the four wheel contact patches plus the wedge edge (other designs add skids or casters). The robot is statically stable when the vertical line through the CoG falls inside this polygon. Margin = horizontal distance from the CoG projection to the nearest edge of the polygon - more margin means more stability.\n\nMeasuring CoG along the robot: place the front support on one kitchen scale and the rear support on another. If the supports are L apart and the front scale reads W_front of a total W, the CoG is x = L x W_front / W from the rear support. Example: L = 8 cm, front 300 g, rear 200 g, total 500 g -> x = 8 x 300 / 500 = 4.8 cm in front of the rear support.",
       },
       {
         heading: "Tipping under a push",
@@ -113,7 +113,7 @@ void loop() {}`,
         fix: "Mount the battery as low as possible, ideally between or just ahead of the drive wheels.",
       },
       {
-        mistake: "CoG behind the drive axle on a rear-drive robot.",
+        mistake: "CoG behind the rear axle.",
         why: "With little or no weight in front of the pivot, even mild acceleration lifts the wedge off the ring.",
         fix: "Keep the CoG ahead of the rear support and check μ x h_cg < d.",
       },
@@ -130,7 +130,7 @@ void loop() {}`,
       "Measure your CoG with two scales rather than guessing.",
       "Heavy parts (battery, motors) belong as low as possible.",
     ],
-    relatedComponents: ["Ball Caster Wheels", "LiPo 2S Battery", "N20 Micro Metal Gear Motor"],
+    relatedComponents: ["Sumo Robot Wheels", "LiPo 2S Battery", "N20 Micro Metal Gear Motor"],
     youtubeSearch: "center of gravity tipping stability robot design explained",
     quiz: [
       {
@@ -770,7 +770,7 @@ void loop() {
       {
         heading: "Electrical efficiency: driver and battery",
         body:
-          "The L298N uses bipolar output transistors and typically drops about 2 V at 1 A per channel. From a 7.4 V 2S LiPo the motor then sees only about 5.4 V, and each channel wastes about 2 V x 1 A = 2 W as heat (4 W for two motors). MOSFET drivers such as the TB6612FNG (about 1.2 A continuous, 3.2 A peak per channel) or DRV8833 (about 1.5 A RMS per channel, 2.7-10.8 V supply) drop only a few hundred millivolts at similar currents, so the motors run faster and stronger on the same battery - but check their current ratings against your motors' stall current.\n\nBattery: LiPo cells are 3.7 V nominal (2S = 7.4 V) and can deliver high currents. Short, thick power wires and good connectors reduce voltage sag during pushes.",
+          "The L298N uses bipolar output transistors and typically drops about 2 V at 1 A per channel. From a 7.4 V 2S LiPo the motor then sees only about 5.4 V, and each channel wastes about 2 V x 1 A = 2 W as heat (4 W for both channels). On a 4WD robot each channel feeds a motor pair, so add both motors' currents when you check the rating. MOSFET drivers such as the TB6612FNG (about 1.2 A continuous, 3.2 A peak per channel) or DRV8833 (about 1.5 A RMS per channel, 2.7-10.8 V supply) drop only a few hundred millivolts at similar currents, so the motors run faster and stronger on the same battery - but check their current ratings against your motors' stall current.\n\nBattery: LiPo cells are 3.7 V nominal (2S = 7.4 V) and can deliver high currents. Short, thick power wires and good connectors reduce voltage sag during pushes.",
       },
       {
         heading: "Gearing: speed versus torque",
