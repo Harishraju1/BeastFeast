@@ -13,6 +13,7 @@ import { addPart, chassisFrom, uid } from "@/lib/robot/assembly";
 import { massSummary, partDims } from "@/lib/mech/geometry";
 import { validateMechanics } from "@/lib/mech/validate";
 import { ASSEMBLY_ORDER, ChassisMesh, PartMesh, explodeOffset, toThree } from "@/components/three/RobotParts";
+import { GENERIC_MODEL_NOTE, modelKeyFor } from "@/lib/models/modelKey";
 import { LibraryBrowser } from "@/components/library/LibraryBrowser";
 import { Button, Field, SimBadge, Tabs } from "@/components/ui";
 import { IssueCard } from "../Validation";
@@ -287,6 +288,10 @@ export default function Designer({ project }: { project: Project }) {
               <div className="bf-label">Selected part</div>
               <div className="font-display text-lg font-semibold">{selComp.name}</div>
               <SimBadge status={selComp.simStatus} full />
+              {(() => {
+                const m = modelKeyFor(selComp);
+                return <div className="mt-1 text-[11px] text-dim" data-testid="model-label">{m.exact ? `3D model: ${m.label}` : GENERIC_MODEL_NOTE}</div>;
+              })()}
             </div>
             <Field label="Label">
               <input className="bf-input" value={sel.label} onChange={(e) => patchPart(sel.uid, { label: e.target.value })} />
@@ -375,7 +380,7 @@ export default function Designer({ project }: { project: Project }) {
             <div className="border-t border-line pt-3">
               <div className="bf-label mb-1">Quick add</div>
               <div className="grid grid-cols-2 gap-1.5">
-                {[["Motor bracket", "motor-mounting-brackets"], ["Sensor bracket", "sensor-mounting-brackets"], ["Battery holder", "battery-mounting-holder"], ["Ball caster", "ball-caster-wheels"], ["Standoff", "aluminium-standoffs"], ["Front wedge", "front-wedge"]].map(([l, id]) => (
+                {[["Motor bracket", "motor-mounting-brackets"], ["Sensor bracket", "sensor-mounting-brackets"], ["Battery holder", "battery-mounting-holder"], ["Standoff", "aluminium-standoffs"], ["Front wedge", "front-wedge"]].map(([l, id]) => (
                   <Button key={id} size="sm" variant="ghost" className="justify-start border border-line" onClick={() => add(id)}>+ {l}</Button>
                 ))}
               </div>

@@ -1,16 +1,17 @@
 "use client";
 /**
  * Procedural 3D representation of a robot built from the project data and real part dimensions.
- * These are labelled as procedural representations — the catalogue has no accurate CAD models yet.
+ * Each component gets its own procedural model (./models, chosen by src/lib/models/modelKey.ts); models that
+ * are not specific to the part are labelled as generic in the designer. The catalogue has no CAD models yet.
  * Robot frame (mm): x forward, y left, z up  →  three.js (m): (x, z, -y).
  */
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import type { ThreeEvent } from "@react-three/fiber";
-import { CanvasTexture, SRGBColorSpace } from "three";
+import { modelKeyFor } from "@/lib/models/modelKey";
 import { getComponent } from "@/lib/catalogue";
 import type { ComponentRecord, PartInstance, Project } from "@/lib/types";
 import { partBox, partDims } from "@/lib/mech/geometry";
-import { batteryPack } from "@/lib/circuit/nets";
+import { EmissiveContext, PartModel } from "./models";
 import { CORNERS, type Drivetrain4WD, HUB_GAP_MM, find4WD } from "@/lib/robot/drivetrain4wd";
 
 const MM = 0.001;
@@ -155,40 +156,6 @@ function FourWDChassisDetails({ project, dt }: { project: Project; dt: Drivetrai
   return <group>{els}</group>;
 }
 
-/** Printed label on top of a battery pack (drawn into a canvas texture — no font download). */
-function BatteryLabel({ text, size, y }: { text: string; size: [number, number]; y: number }) {
-  const tex = useMemo(() => {
-    if (typeof document === "undefined") return null;
-    const c = document.createElement("canvas");
-    c.width = 512;
-    c.height = 160;
-    const g = c.getContext("2d");
-    if (!g) return null;
-    g.fillStyle = "#f2c230";
-    g.fillRect(0, 0, 512, 160);
-    g.fillStyle = "#111";
-    g.fillRect(0, 0, 512, 10);
-    g.fillRect(0, 150, 512, 10);
-    g.font = "bold 58px sans-serif";
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText(text, 256, 82, 490);
-    const t = new CanvasTexture(c);
-    t.colorSpace = SRGBColorSpace;
-    return t;
-  }, [text]);
-  useEffect(() => () => tex?.dispose(), [tex]);
-  if (!tex) return null;
-  return (
-    <mesh position={[0, y, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={size} />
-      <meshStandardMaterial map={tex} roughness={0.7} />
-    </mesh>
-  );
-}
-
-const fmtV = (v: number) => (Math.round(v * 10) / 10).toString();
-
 interface PartProps {
   part: PartInstance;
   comp: ComponentRecord;
@@ -199,163 +166,21 @@ interface PartProps {
   onSelect?: (uid: string, e: ThreeEvent<PointerEvent>) => void;
 }
 
-function Box({ size, color, pos = [0, 0, 0], metal = 0.1, rough = 0.6, emissive }: { size: [number, number, number]; color: string; pos?: [number, number, number]; metal?: number; rough?: number; emissive?: string }) {
-  return (
-    <mesh position={pos} castShadow>
-      <boxGeometry args={size} />
-      <meshStandardMaterial color={color} metalness={metal} roughness={rough} emissive={emissive ?? "#000"} emissiveIntensity={emissive ? 0.5 : 0} />
-    </mesh>
-  );
-}
-
+/**
+ * One placed part. The model is chosen per component by `modelKeyFor` (src/lib/models/modelKey.ts) and drawn
+ * by the registry in ./models from the part's real dimensions (`partDims`). Motors keep the designer
+ * convention: output shaft at the part centre towards local −z (robot +y before yaw), where the wheel sits.
+ * The selection / error highlight reaches every mesh through EmissiveContext.
+ */
 export function PartMesh({ part, comp, selected, error, offset = [0, 0, 0], wheelAngle = 0, onSelect }: PartProps) {
   const d = partDims(part, comp);
   const [x, y, z] = [d.x * MM, d.z * MM, d.y * MM]; // three: length, height, width
   const pos = toThree(part.position);
   const emissive = error ? "#F20B0B" : selected ? "#F1EEE3" : undefined;
-  const body = useMemo(() => {
-    switch (comp.kind) {
-      case "controller": {
-        const esp = /ESP|Pico|NodeMCU/.test(comp.name);
-        return (
-          <group>
-            <Box size={[x, 1.6 * MM, z]} color={esp ? "#16181d" : comp.name.includes("Nano") ? "#0b5c8c" : "#0e6f8f"} emissive={emissive} />
-            <Box size={[x * 0.85, 8 * MM, 2.5 * MM]} color="#111" pos={[0, 4.5 * MM, z / 2 - 2 * MM]} />
-            <Box size={[x * 0.6, 8 * MM, 2.5 * MM]} color="#111" pos={[0, 4.5 * MM, -z / 2 + 2 * MM]} />
-            <Box size={[10 * MM, 9 * MM, 12 * MM]} color="#c0c6cc" pos={[-x / 2 + 6 * MM, 5 * MM, z * 0.2]} metal={0.8} rough={0.3} />
-            <Box size={[10 * MM, 1.6 * MM, 10 * MM]} color="#222" pos={[0, 1.6 * MM, 0]} />
-          </group>
-        );
-      }
-      case "motor-driver":
-        return (
-          <group>
-            <Box size={[x, 1.6 * MM, z]} color={comp.id === "l298n" ? "#b01e24" : comp.id.includes("tb6612") || comp.id.includes("drv88") ? "#3b2a85" : "#204b8f"} emissive={emissive} />
-            {comp.id === "l298n" && <Box size={[x * 0.55, y * 0.8, 4 * MM]} color="#16181c" pos={[0, y * 0.4, 0]} metal={0.6} />}
-            <Box size={[x * 0.3, 8 * MM, 6 * MM]} color="#2a7fd4" pos={[-x * 0.3, 4 * MM, z * 0.35]} />
-            <Box size={[x * 0.3, 8 * MM, 6 * MM]} color="#2a7fd4" pos={[-x * 0.3, 4 * MM, -z * 0.35]} />
-          </group>
-        );
-      case "dc-motor": {
-        const tt = /TT|BO/.test(comp.name);
-        return (
-          <group>
-            <Box size={[x * 0.62, y, z * 0.95]} color={tt ? "#f2c230" : "#9aa3ad"} pos={[-x * 0.19, 0, 0]} metal={tt ? 0.1 : 0.7} emissive={emissive} />
-            <mesh position={[x * 0.31, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-              <cylinderGeometry args={[Math.min(y, z) * 0.45, Math.min(y, z) * 0.45, x * 0.38, 20]} />
-              <meshStandardMaterial color="#c9ced4" metalness={0.85} roughness={0.25} emissive={emissive ?? "#000"} emissiveIntensity={emissive ? 0.4 : 0} />
-            </mesh>
-            {/* output shaft points out of the robot side (local −z in three = robot +y before yaw) */}
-            <mesh position={[0, 0, -(z / 2 + 4 * MM)]} rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[1.5 * MM, 1.5 * MM, 10 * MM, 8]} />
-              <meshStandardMaterial color="#ddd" metalness={0.9} />
-            </mesh>
-          </group>
-        );
-      }
-      case "wheel":
-        return (
-          <group rotation={[Math.PI / 2, 0, 0]}>
-            <group rotation={[0, wheelAngle, 0]}>
-              <mesh castShadow>
-                <cylinderGeometry args={[x / 2, x / 2, z, 32]} />
-                <meshStandardMaterial color="#1a1c20" roughness={0.9} emissive={emissive ?? "#000"} emissiveIntensity={emissive ? 0.5 : 0} />
-              </mesh>
-              <mesh>
-                <cylinderGeometry args={[x * 0.32, x * 0.32, z * 1.04, 6]} />
-                <meshStandardMaterial color={comp.name.includes("Aluminium") || comp.name.includes("Metal") ? "#c5ccd3" : "#D91A14"} metalness={0.4} />
-              </mesh>
-            </group>
-          </group>
-        );
-      case "caster":
-        return (
-          <group>
-            <mesh castShadow>
-              <sphereGeometry args={[Math.min(x, y) * 0.35, 16, 16]} />
-              <meshStandardMaterial color="#d7dbe0" metalness={0.9} roughness={0.2} emissive={emissive ?? "#000"} emissiveIntensity={emissive ? 0.5 : 0} />
-            </mesh>
-            <Box size={[x, 3 * MM, z]} color="#333" pos={[0, y * 0.3, 0]} />
-          </group>
-        );
-      case "battery":
-        if (/18650|21700|26650/.test(comp.name)) {
-          const n = Number(part.config.series ?? 1);
-          const r = (/21700/.test(comp.name) ? 21 : /26650/.test(comp.name) ? 26 : 18) * MM * 0.5;
-          return (
-            <group>
-              <Box size={[x, 2 * MM, z]} color="#111" pos={[0, -y / 2 + 1 * MM, 0]} emissive={emissive} />
-              {Array.from({ length: n }, (_, i) => (
-                <mesh key={i} position={[0, 0, (i - (n - 1) / 2) * r * 2.1]} rotation={[0, 0, Math.PI / 2]} castShadow>
-                  <cylinderGeometry args={[r, r, x * 0.85, 20]} />
-                  <meshStandardMaterial color={["#2b7de9", "#21a366", "#e0413a", "#7a4ee0"][i % 4]} metalness={0.3} roughness={0.4} />
-                </mesh>
-              ))}
-            </group>
-          );
-        }
-        if (/LiPo/.test(comp.name) && comp.battery && !comp.battery.perCell) {
-          // LiPo pack: wrapped casing, red (+) and black (−) leads at the rear end, printed label on top
-          const pack = batteryPack(comp, part)!;
-          const label = `${fmtV(pack.nominal)}V ${pack.capacity}mAh ${pack.cells}S`;
-          return (
-            <group>
-              <Box size={[x, y, z]} color="#1f3f78" metal={0.15} rough={0.55} emissive={emissive} />
-              <Box size={[x * 0.06, y * 0.9, z * 1.002]} color="#151a22" pos={[-x / 2 + x * 0.03, 0, 0]} />
-              <BatteryLabel text={label} size={[x * 0.8, z * 0.72]} y={y / 2 + 0.25 * MM} />
-              {[{ c: "#d42a2a", off: z * 0.18 }, { c: "#151515", off: -z * 0.18 }].map((l) => (
-                <group key={l.c}>
-                  <mesh position={[-x / 2 - 9 * MM, y * 0.15, l.off]} rotation={[0, 0, Math.PI / 2]}>
-                    <cylinderGeometry args={[1.6 * MM, 1.6 * MM, 18 * MM, 8]} />
-                    <meshStandardMaterial color={l.c} roughness={0.6} />
-                  </mesh>
-                  <Box size={[6 * MM, 5 * MM, 5 * MM]} color={l.c} pos={[-x / 2 - 20 * MM, y * 0.15, l.off]} />
-                </group>
-              ))}
-            </group>
-          );
-        }
-        return <Box size={[x, y, z]} color={/LiPo/.test(comp.name) ? "#2c3440" : "#3b3f46"} emissive={emissive} />;
-      case "sensor": {
-        const k = comp.sensor?.kind ?? "";
-        if (k === "ultrasonic")
-          return (
-            <group>
-              <Box size={[1.6 * MM, y, z]} color="#1c5fa8" emissive={emissive} />
-              {[-1, 1].map((s) => (
-                <mesh key={s} position={[6 * MM, 0, s * z * 0.28]} rotation={[0, 0, Math.PI / 2]}>
-                  <cylinderGeometry args={[8 * MM, 8 * MM, 12 * MM, 20]} />
-                  <meshStandardMaterial color="#c7ccd2" metalness={0.8} roughness={0.3} />
-                </mesh>
-              ))}
-            </group>
-          );
-        if (k.startsWith("reflectance")) {
-          const n = comp.sensor?.channels ?? 1;
-          return (
-            <group>
-              <Box size={[x, 1.6 * MM, z]} color="#174f2a" emissive={emissive} />
-              {Array.from({ length: n }, (_, i) => (
-                <Box key={i} size={[3 * MM, 3 * MM, 3 * MM]} color={i % 2 ? "#111" : "#3a49d9"} pos={[(i - (n - 1) / 2) * (x / Math.max(n, 1)) * 0.9, -2 * MM, 0]} />
-              ))}
-            </group>
-          );
-        }
-        return <Box size={[x, y, z]} color="#222a35" emissive={emissive} />;
-      }
-      default: {
-        const palette: Partial<Record<ComponentRecord["kind"], string>> = { regulator: "#1a5fb4", wireless: "#1c7a5a", switch: "#222", display: "#0a0a0a", servo: "#1f4fbf", mechanical: "#8b95a3", "rc-input": "#333" };
-        if (/Wedge|Blade/.test(comp.name))
-          return (
-            <mesh rotation={[0, 0, -0.35]} castShadow>
-              <boxGeometry args={[30 * MM, 2 * MM, ((part.config.width as number) ?? 100) * MM]} />
-              <meshStandardMaterial color="#aeb6bf" metalness={0.9} roughness={0.25} emissive={emissive ?? "#000"} emissiveIntensity={emissive ? 0.5 : 0} />
-            </mesh>
-          );
-        return <Box size={[x, y, z]} color={palette[comp.kind] ?? "#555c66"} emissive={emissive} />;
-      }
-    }
-  }, [comp, x, y, z, emissive, part.config, part.rotation.z, wheelAngle]);
+  const info = useMemo(() => modelKeyFor(comp), [comp]);
+  const isWheel = comp.kind === "wheel";
+  // wheels re-render every frame while spinning (they memoise their own geometry); everything else is memoised here
+  const body = useMemo(() => (isWheel ? null : <PartModel part={part} comp={comp} d={{ x: d.x, y: d.y, z: d.z }} info={info} />), [isWheel, part, comp, d.x, d.y, d.z, info]);
   return (
     <group
       position={[pos[0] + offset[0], pos[1] + offset[1], pos[2] + offset[2]]}
@@ -365,7 +190,7 @@ export function PartMesh({ part, comp, selected, error, offset = [0, 0, 0], whee
         onSelect(part.uid, e);
       } : undefined}
     >
-      {body}
+      <EmissiveContext.Provider value={emissive}>{isWheel ? <PartModel part={part} comp={comp} d={{ x: d.x, y: d.y, z: d.z }} info={info} wheelAngle={wheelAngle} /> : body}</EmissiveContext.Provider>
       {error && (
         <mesh>
           <sphereGeometry args={[Math.max(x, y, z) * 0.8, 16, 16]} />
