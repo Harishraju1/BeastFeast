@@ -99,7 +99,7 @@ Local mode (no Supabase) applies the same rules in the browser, and the first ac
 ## 4WD robots and off-road racing
 
 ### 4WD is the standard
-- New Robo Race and Sumo projects start with a 4WD skid-steer drivetrain: four DC geared motors (FL, FR, RL, RR), one wheel on each, no caster.
+- New Robo Race, Sumo and Line Following projects start with a 4WD skid-steer drivetrain: four DC geared motors (FL, FR, RL, RR), one wheel on each, no caster.
 - The Robot Designer's **4WD drivetrain** panel sets wheel diameter and width, wheelbase, track width, chassis length and width, and ground clearance. It moves the same eight parts, so the wiring is kept.
 - "Convert to 4WD…" upgrades an existing 2WD robot. It asks first and can be undone.
 - Code: `src/lib/robot/drivetrain4wd.ts`.
@@ -121,7 +121,7 @@ Local mode (no Supabase) applies the same rules in the browser, and the first ac
 
 - RR-02 was already 4WD.
 - The earlier 2WD race and sumo robots are kept as "Legacy 2WD", because students' copies reference them.
-- The line followers stay 2WD.
+- The line followers LF-01..03 are 4WD too (v2.0.0): the left and right motor pairs share a driver channel, so the pins and code are unchanged.
 
 ### Off-road terrain (`src/lib/track/terrain.ts`)
 **Pieces:** rock, rock field, mud, uneven ground (bumps), zigzag raised path, hill, raised platform, block / step, and hurdle row. Every piece has real height and is drawn from the same height map the physics uses.

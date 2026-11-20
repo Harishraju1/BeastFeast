@@ -124,10 +124,20 @@ describe("new projects", () => {
     expect(p.chassis!.width_mm).toBeLessThanOrEqual(100);
     expect(validateMechanics(p, "x").issues.map((i) => i.code)).not.toContain("M_SUMO_SIZE");
   });
-  it("line following keeps its empty 2WD-style default", () => {
+  it("line following starts with a light 4WD drivetrain (4 motors + 4 wheels, no caster) on the line chassis", () => {
     const p = newProject("line", "x", "me");
-    expect(p.parts).toEqual([]);
+    expect(find4WD(p)).not.toBeNull();
+    expect(kinds(p, "dc-motor")).toHaveLength(4);
+    expect(kinds(p, "wheel")).toHaveLength(4);
+    expect(kinds(p, "caster")).toHaveLength(0);
     expect(p.chassis!.componentId).toBe("line-follower-chassis");
+    const d = Number(find4WD(p)!.wheels.FL.config.diameter);
+    expect(d).toBeGreaterThanOrEqual(42);
+    expect(d).toBeLessThanOrEqual(65);
+    expect(validateMechanics(p, "x").issues.filter((i) => i.severity === "critical")).toEqual([]);
+  });
+  it("drivetrain: none still gives an empty line project", () => {
+    expect(newProject("line", "x", "me", { drivetrain: "none" }).parts).toEqual([]);
   });
 });
 

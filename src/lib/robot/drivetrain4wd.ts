@@ -80,7 +80,7 @@ export const DEFAULT_4WD_PARAMS: Drivetrain4WDParams = {
   groundClearance_mm: 20, // motors hang under the plate: lowest point = motor housing, 32.5 − 12.5 = 20 mm
 };
 
-/** Project defaults by competition (line following keeps its 2WD default). */
+/** Project defaults by competition (all competitions start as 4WD; line following uses LINE_4WD_SETUP in assembly.ts). */
 export const DEFAULT_4WD_SETUP: Record<"race" | "sumo", Required<Omit<Drivetrain4WDOptions, "params">> & { params: Drivetrain4WDParams }> = {
   race: { motorId: DEFAULT_4WD_MOTOR, wheelId: DEFAULT_4WD_WHEEL, chassisId: DEFAULT_4WD_CHASSIS, params: DEFAULT_4WD_PARAMS },
   // Mini-sumo: the 10 × 10 cm / 500 g class used by the arena. Four N20 micro gearmotors fit at the corners;

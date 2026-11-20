@@ -1,44 +1,92 @@
 /**
  * Line-following reference projects. Every robot follows the line ONLY through its simulated
  * reflectance sensors and its own firmware — there is no path-following shortcut anywhere.
+ *
+ * Since v2.0.0 all three are 4WD skid-steer robots (the club standard): four DC gearmotors, one per wheel,
+ * at the corners of the chassis (FL / FR / RL / RR, same geometry as the Robot Designer's 4WD drivetrain
+ * helper), no caster. Each robot keeps its dual-channel driver and its firmware pins: the left pair
+ * (FL + RL) is wired in parallel to channel A and the right pair (FR + RR) to channel B — the usual 4WD
+ * line-follower build. Two motors in parallel draw twice the current of one, so every driver channel is
+ * checked against the sum of its motors' stall currents.
  */
-import type { ProjectTemplate } from "../types";
+import { getComponent } from "@/lib/catalogue";
+import { CORNERS, type Drivetrain4WDParams, TYRE_GAP_MM, layout4WD } from "@/lib/robot/drivetrain4wd";
+import type { WireColor } from "@/lib/types";
+import type { ProjectTemplate, TemplatePart } from "../types";
+
+// ───────────────────────────── 4WD drivetrain ─────────────────────────────
+
+interface LineDrivetrain {
+  motorId: string;
+  wheelId: string;
+  /** chassis plate thickness (mm) */
+  plateT: number;
+  params: Drivetrain4WDParams;
+}
+
+/** Four motors + four wheels at the corners, labelled "FL Motor" / "FL Wheel" … (left motors yaw 0, right motors mirrored). */
+function drivetrainParts(d: LineDrivetrain): TemplatePart[] {
+  const { corners } = layout4WD(d.params, getComponent(d.motorId)!.specs.dimensions!, d.plateT);
+  return CORNERS.flatMap((c): TemplatePart[] => [
+    { componentId: d.motorId, label: `${c.key} Motor`, role: c.role, position: corners[c.key].motor.position, yawDeg: c.sy > 0 ? 0 : 180 },
+    { componentId: d.wheelId, label: `${c.key} Wheel`, role: c.role, position: corners[c.key].wheel.position, yawDeg: 0, attachedTo: `${c.key} Motor`, config: { diameter: d.params.wheelDiameter_mm, width: d.params.wheelWidth_mm } },
+  ]);
+}
+
+const mountingOf = (d: LineDrivetrain) => layout4WD(d.params, getComponent(d.motorId)!.specs.dimensions!, d.plateT).mounting;
 
 /** Height (mm, chassis frame) for a downward-facing sensor whose bottom sits `gap` mm above the floor. */
-const sensorZ = (plateT: number, motorH: number, wheelD: number, sensorH: number, gap = 4) => {
-  const motorZ = -plateT - motorH / 2 - 1;
-  const ground = motorZ - wheelD / 2;
-  return ground + gap + sensorH / 2;
-};
+const sensorZ = (d: LineDrivetrain, sensorH: number, gap = 4) => -d.plateT - mountingOf(d).plateBottom_mm + gap + sensorH / 2;
+
+/**
+ * Left pair in parallel on channel A (outA = [+, −]), right pair in parallel on channel B. The right motors are
+ * mounted mirrored, so their leads are swapped: the same "forward" command turns all four wheels forward.
+ */
+function parallelMotorWiring(outA: [string, string], outB: [string, string]): [string, string, WireColor][] {
+  return [
+    [outA[0], "FL Motor.M+", "orange"], [outA[1], "FL Motor.M-", "orange"],
+    [outA[0], "RL Motor.M+", "orange"], [outA[1], "RL Motor.M-", "orange"],
+    [outB[0], "FR Motor.M-", "orange"], [outB[1], "FR Motor.M+", "orange"],
+    [outB[0], "RR Motor.M-", "orange"], [outB[1], "RR Motor.M+", "orange"],
+  ];
+}
 
 // ───────────────────────────── LF-01 ─────────────────────────────
 const LF01_CODE = `// =============================================================
 // LF-01 BASIC LINE FOLLOWER — BEAST PROJECT GARAGE
-// Arduino Uno R3 + L298N + 2x TT gear motor + 3-channel IR array
+// Arduino Uno R3 + L298N + 4x TT gear motor (4WD) + 3-channel IR array
+// 4WD skid steering: the two left motors share channel A (OUT1/OUT2),
+// the two right motors channel B (OUT3/OUT4), so drive(left, right)
+// still sets one speed per side.
 // Sensor outputs are HIGH over the black line, LOW over white.
 // =============================================================
 
 // ---- pin map (matches Circuit Studio) ----
-#define ENA 5        // left motor speed  (PWM)
-#define IN1 7        // left motor direction
+#define ENA 5        // left motors speed  (PWM)
+#define IN1 7        // left motors direction
 #define IN2 8
-#define IN3 9        // right motor direction
+#define IN3 9        // right motors direction
 #define IN4 10
-#define ENB 6        // right motor speed (PWM)
+#define ENB 6        // right motors speed (PWM)
 #define S_LEFT   2   // IR array S1
 #define S_CENTER 3   // IR array S2
 #define S_RIGHT  4   // IR array S3
 
 // ---- adjustable parameters ----
 int baseSpeed = 150;   // straight-line speed (0-255)
-int turnSpeed = 150;   // outer wheel speed while correcting
-int innerSpeed = 0;    // inner wheel speed while correcting
+int turnSpeed = 150;   // outer wheels speed while correcting
+int innerSpeed = -60;  // inner wheels speed while correcting. A 4WD robot turns by scrubbing its
+                       // tyres sideways: stopped (let alone coasting) inner wheels hardly turn it,
+                       // turning them slowly backwards does.
 
 // ---- lost-line recovery ----
-int searchSpeed = 110; // slow pivot while the line is lost (about 195 deg/s on this robot)
-int sweepTime = 700;   // ms of pivoting = about 135 deg. The search never turns further than this
+int searchSpeed = 150; // pivot while the line is lost (about 145 deg/s on this 4WD robot; a pivot
+                       // needs more power than on a 2WD robot because all four tyres scrub)
+int sweepTime = 850;   // ms of pivoting = about 135 deg. The search never turns further than this
                        // either way, so it cannot swing round onto the line behind it and drive back.
 int gapTime = 150;     // ms to roll straight on when the line vanishes while centred (gap / line end)
+int alignTime = 800;   // ms at 2/3 speed after the line was found again: a 4WD robot turns more
+                       // slowly, so it needs a moment to line up before the next corner
 
 int lastSeen = 0;      // -1 = line was last on the left, +1 = right, 0 = centred
 int rawSeen = 0;       // side of the very latest off-centre reading (unfiltered)
@@ -47,8 +95,17 @@ unsigned long cornerTime = 0;  // when a sharp-corner point decided the side (lo
 int pattern = 2;       // the sensors as one number: L*4 + C*2 + R (2 = only the centre is black)
 int before1 = 2;       // the previous pattern ...
 int before2 = 2;       // ... and the one before that
+unsigned long patternStart = 0;  // when the current pattern began
+unsigned long held1 = 0;         // how long the previous pattern lasted (ms) ...
+unsigned long held2 = 0;         // ... and the one before that
+bool weakCorner = false;         // corner side decided while wobbling along the old line (provisional)
+bool sawTwoLines = false;        // two separate lines (pattern 5) seen at the current corner
+unsigned long blackMs = 0;       // how long the whole bar was black at the current corner (ms)
+int blackMin = 15;               // all black for blackMin..blackMax ms = crossing a 90 deg corner's new leg
+int blackMax = 40;
 bool lost = false;
 unsigned long lostAt = 0;
+unsigned long foundAt = 0;    // when the line was found again after a search
 int searchDir = -1;
 
 void drive(int left, int right) {
@@ -95,6 +152,16 @@ void searchLine() {
   if (!lost) {
     lost = true;
     lostAt = millis();
+    // Provisional corner (decided while wobbling along the old line): use what the sensors saw while
+    // running over the corner point. At a 90 deg corner the new leg crosses under the whole bar (all
+    // black for blackMin..blackMax ms) and stays under its side sensor last. At an acute corner the
+    // bar sees two separate lines (pattern 5) or only a short / long all-black blur, and the last line
+    // seen is the end of the old leg: the new leg is on the other side.
+    if (weakCorner && millis() - cornerTime < 300 && rawSeen != 0) {
+      bool rightAngle = !sawTwoLines && blackMs >= blackMin && blackMs <= blackMax;
+      lastSeen = rightAngle ? rawSeen : -rawSeen;
+    }
+    weakCorner = false;
     searchDir = lastSeen != 0 ? lastSeen : -1;
   }
   long t = millis() - lostAt;
@@ -140,16 +207,27 @@ void loop() {
   int p = L * 4 + C * 2 + R;
   bool changed = p != pattern;
   if (changed) {
+    unsigned long now = millis();
+    held2 = held1;
+    held1 = now - patternStart;
+    patternStart = now;
     before2 = before1;
     before1 = pattern;
     pattern = p;
+    if (before1 == 7) blackMs = held1;   // the bar has just been all black for this long
+    if (p == 5) sawTwoLines = true;
   }
 
   if (p == 0) {                         // all white: line lost -> bounded search
     searchLine();
     return;
   }
-  lost = false;
+  if (lost) {                           // just found the line again
+    lost = false;
+    foundAt = millis();
+  }
+  // A 4WD robot needs a moment to line up with a new leg: crawl for alignTime ms after a search.
+  int cruise = millis() - foundAt < alignTime ? baseSpeed * 2 / 3 : baseSpeed;
 
   if (L == HIGH && R == HIGH) {         // crossing, or the corner point of a sharp turn -> straight.
     // Which way does the corner go?
@@ -166,6 +244,11 @@ void loop() {
       else if (before2 == 2 && before1 == 3) corner = 1;
       else if (before2 == 2 && before1 == 6) corner = -1;
       else if (!(before2 == 1 && before1 == 3) && !(before2 == 4 && before1 == 6)) corner = rawSeen;
+      // A 4WD robot that is still turning onto a leg wobbles along it (2 <-> 3 or 2 <-> 6 every few
+      // ms): then the side touch was the old line, so the decision is only provisional (see searchLine).
+      weakCorner = held2 < 30 && ((before2 == 2 && (before1 == 3 || before1 == 6)) || (before1 == 2 && (before2 == 3 || before2 == 6)));
+      sawTwoLines = (p == 5);
+      blackMs = 0;
       cornerTime = 0;
       if (corner != 0) {
         lastSeen = corner;
@@ -173,7 +256,7 @@ void loop() {
         cornerTime = millis();
       }
     }
-    drive(baseSpeed, baseSpeed);
+    drive(cruise, cruise);
     return;
   }
   if (L == HIGH) {                      // line drifting to the left -> steer left
@@ -184,55 +267,70 @@ void loop() {
     drive(turnSpeed, innerSpeed);
   } else {                              // centred -> straight
     if (millis() - seenTime > 300) lastSeen = 0;   // centred for a while: forget the old side
-    drive(baseSpeed, baseSpeed);
+    drive(cruise, cruise);
   }
 }
 `;
+
+/**
+ * LF-01: TT gearmotors hang under a 190 × 130 mm acrylic 4WD plate on brackets (the plate sits at the same
+ * height as on the old 2WD robot, so the sensor bracket is unchanged); Ø65 mm rubber wheels. The short
+ * 90 mm wheelbase against the 164 mm track keeps skid-steer turning easy (wheelbase/track ≈ 0.55).
+ */
+const LF01_DT: LineDrivetrain = {
+  motorId: "tt-yellow-gear-motor",
+  wheelId: "rubber-robot-wheels",
+  plateT: 3,
+  params: { wheelDiameter_mm: 65, wheelWidth_mm: 26, wheelbase_mm: 90, trackWidth_mm: 130 + 26 + 2 * TYRE_GAP_MM, chassisLength_mm: 190, chassisWidth_mm: 130, groundClearance_mm: 20 },
+};
 
 export const LF01: ProjectTemplate = {
   metadata: {
     id: "LF-01",
     name: "Basic Line Follower",
-    version: "1.1.0",
+    version: "2.0.0",
     competition: "line",
     difficulty: "beginner",
     learningLevel: "First robot — digital sensors and if/else steering",
-    description: "A classic 2WD line follower: three digital IR sensors tell an Arduino Uno whether the black line is left, centre or right, and an L298N steers the robot back over it.",
+    description: "A classic 4WD line follower: three digital IR sensors tell an Arduino Uno whether the black line is left, centre or right, and an L298N steers the robot back over it — the two left TT motors share channel A, the two right ones channel B.",
     workingPrinciple:
-      "Each IR sensor shines infrared light at the floor. White reflects it (output LOW), black absorbs it (output HIGH). The sketch reads the three outputs every loop: centre only → drive straight; left sensor black → slow the left wheel to turn left; right sensor black → turn right. The sketch remembers which side the line went to (at a sharp corner the new leg touches one side sensor first). When nothing is black it searches with a slow, bounded pivot: towards the remembered side, then back the other way, never more than about 135° from where the line was lost, so it cannot swing round and follow the track backwards. If the line is not found it stops.",
-    learningObjectives: ["Wire an L298N with PWM speed control", "Read digital IR sensors", "Write bang-bang (if/else) steering", "Recover a lost line"],
-    limitations: ["Bang-bang steering wobbles on straights and is slow on tight curves", "Three sensors give only coarse position information", "Speed is limited by the L298N voltage drop (≈2 V)"],
+      "Each IR sensor shines infrared light at the floor. White reflects it (output LOW), black absorbs it (output HIGH). The sketch reads the three outputs every loop: centre only → drive straight; left sensor black → slow the left wheels to turn left; right sensor black → turn right. Like a tank, the 4WD robot turns by driving its left and right wheel pairs at different speeds while the tyres scrub sideways, so it turns a little more slowly than a 2WD robot on a caster and needs more power to pivot. The sketch remembers which side the line went to (at a sharp corner the new leg touches one side sensor first). When nothing is black it searches with a bounded pivot: towards the remembered side, then back the other way, never more than about 135° from where the line was lost, so it cannot swing round and follow the track backwards. If the line is not found it stops.",
+    learningObjectives: ["Wire an L298N with PWM speed control", "Drive two motors in parallel from one driver channel", "Read digital IR sensors", "Write bang-bang (if/else) steering", "Recover a lost line"],
+    limitations: [
+      "Bang-bang steering wobbles on straights and is slow on tight curves",
+      "Three sensors give only coarse position information",
+      "Speed is limited by the L298N voltage drop (≈2 V)",
+      "Skid steering scrubs the tyres: pivots need more PWM than on a 2WD robot with a caster",
+      "Two TT motors per L298N channel can together draw its 3 A peak when both stall — do not hold the robot against a wall at full power",
+    ],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "3-channel digital IR array",
+    drivetrain: "4WD",
   },
-  chassis: { componentId: "2wd-robot-chassis" },
+  chassis: { componentId: "4wd-robot-chassis", length_mm: LF01_DT.params.chassisLength_mm, width_mm: LF01_DT.params.chassisWidth_mm, thickness_mm: LF01_DT.plateT, groundClearance_mm: mountingOf(LF01_DT).clearance_mm },
   parts: [
-    { componentId: "tt-yellow-gear-motor", label: "Left Motor" },
-    { componentId: "tt-yellow-gear-motor", label: "Right Motor" },
-    { componentId: "rubber-robot-wheels", label: "Left Wheel", attachedTo: "Left Motor" },
-    { componentId: "rubber-robot-wheels", label: "Right Wheel", attachedTo: "Right Motor" },
-    { componentId: "ball-caster-wheels", label: "CASTER1" },
-    { componentId: "arduino-uno-r3", label: "U1" },
-    { componentId: "l298n", label: "DRV1" },
-    { componentId: "18650-li-ion-cell", label: "BAT1", config: { series: 2, capacity: 2500 } },
+    ...drivetrainParts(LF01_DT),
+    // battery on standoffs above the Uno, set back so the centre of mass sits over the middle of the four wheels
+    { componentId: "arduino-uno-r3", label: "U1", position: { x: 5, y: 0, z: 8 } },
+    { componentId: "l298n", label: "DRV1", position: { x: 62, y: 0, z: 14 } },
+    { componentId: "18650-li-ion-cell", label: "BAT1", config: { series: 2, capacity: 2500 }, position: { x: -33, y: 0, z: 47.5 } },
     { componentId: "toggle-switch", label: "SW1" },
-    { componentId: "3-channel-ir-sensor-array", label: "IR1", position: { x: 115, y: 0, z: sensorZ(3, 18.8, 65, 10) }, yawDeg: 90 },
+    { componentId: "3-channel-ir-sensor-array", label: "IR1", position: { x: 115, y: 0, z: sensorZ(LF01_DT, 10) }, yawDeg: 90 },
   ],
   wiring: [
     ["BAT1.+", "SW1.1", "red"], ["SW1.2", "DRV1.VS", "red"], ["SW1.2", "U1.VIN", "red"],
     ["BAT1.-", "DRV1.GND", "black"], ["DRV1.GND", "U1.GND1", "black"],
     ["U1.D5", "DRV1.ENA", "yellow"], ["U1.D7", "DRV1.IN1", "yellow"], ["U1.D8", "DRV1.IN2", "yellow"],
     ["U1.D9", "DRV1.IN3", "yellow"], ["U1.D10", "DRV1.IN4", "yellow"], ["U1.D6", "DRV1.ENB", "yellow"],
-    ["DRV1.OUT1", "Left Motor.M+", "orange"], ["DRV1.OUT2", "Left Motor.M-", "orange"],
-    ["DRV1.OUT3", "Right Motor.M-", "orange"], ["DRV1.OUT4", "Right Motor.M+", "orange"],
+    ...parallelMotorWiring(["DRV1.OUT1", "DRV1.OUT2"], ["DRV1.OUT3", "DRV1.OUT4"]),
     ["U1.5V", "IR1.VCC", "red"], ["U1.GND2", "IR1.GND", "black"],
     ["IR1.S1", "U1.D2", "green"], ["IR1.S2", "U1.D3", "green"], ["IR1.S3", "U1.D4", "green"],
   ],
   pinMap: [
-    { pin: "D5 (PWM)", connectedTo: "DRV1 ENA", purpose: "Left motor speed" },
-    { pin: "D7 / D8", connectedTo: "DRV1 IN1 / IN2", purpose: "Left motor direction" },
-    { pin: "D9 / D10", connectedTo: "DRV1 IN3 / IN4", purpose: "Right motor direction" },
-    { pin: "D6 (PWM)", connectedTo: "DRV1 ENB", purpose: "Right motor speed" },
+    { pin: "D5 (PWM)", connectedTo: "DRV1 ENA", purpose: "Left motors speed (FL + RL in parallel on OUT1/OUT2)" },
+    { pin: "D7 / D8", connectedTo: "DRV1 IN1 / IN2", purpose: "Left motors direction" },
+    { pin: "D9 / D10", connectedTo: "DRV1 IN3 / IN4", purpose: "Right motors direction" },
+    { pin: "D6 (PWM)", connectedTo: "DRV1 ENB", purpose: "Right motors speed (FR + RR in parallel on OUT3/OUT4)" },
     { pin: "D2 / D3 / D4", connectedTo: "IR1 S1 / S2 / S3", purpose: "Left / centre / right line sensors" },
     { pin: "VIN", connectedTo: "Battery + (via SW1)", purpose: "7.4 V supply to the on-board regulator" },
   ],
@@ -242,7 +340,8 @@ export const LF01: ProjectTemplate = {
     libraries: [],
     adjustable: [
       { name: "baseSpeed", meaning: "Straight-line speed (0–255). Live: send B<value> on Serial." },
-      { name: "turnSpeed / innerSpeed", meaning: "Outer / inner wheel speed while correcting. Live: T<value>." },
+      { name: "turnSpeed / innerSpeed", meaning: "Outer / inner wheel pair speed while correcting (the inner pair turns slowly backwards: a 4WD robot hardly turns with stopped inner wheels). Live: T<value>." },
+      { name: "alignTime", meaning: "Time at 2/3 speed after a lost line was found again, so the 4WD robot lines up with the new leg before the next corner." },
       { name: "searchSpeed / sweepTime", meaning: "Pivot speed and duration (≈135°) of the bounded search for a lost line." },
     ],
   },
@@ -262,7 +361,9 @@ export const LF01: ProjectTemplate = {
 // ───────────────────────────── LF-02 ─────────────────────────────
 const LF02_CODE = `// =============================================================
 // LF-02 ADVANCED FIVE-SENSOR LINE FOLLOWER — BEAST PROJECT GARAGE
-// Arduino Uno R3 + TB6612FNG + 2x TT motor + 5x TCRT5000 (analog A0-A4)
+// Arduino Uno R3 + TB6612FNG + 4x TT motor (4WD) + 5x TCRT5000 (A0-A4)
+// 4WD skid steering: the left motor pair is on channel A, the right pair
+// on channel B, so drive(left, right) still sets one speed per side.
 // Calibrates every sensor, computes a weighted line position,
 // steers with proportional control and slows down in sharp turns.
 // =============================================================
@@ -286,8 +387,9 @@ float Kp = 0.07;         // steering gain (position range is -2000 .. +2000)
 int lineThreshold = 300; // sum of calibrated values below this = line lost
 
 // ---- lost-line recovery ----
-int searchSpeed = 110;   // slow pivot while the line is lost (about 270 deg/s on this robot)
-int sweepTime = 500;     // ms of pivoting = about 135 deg. The search never turns further than this
+int searchSpeed = 150;   // pivot while the line is lost (about 190 deg/s on this 4WD robot; all four
+                         // tyres scrub, so a pivot needs more power than on a 2WD robot)
+int sweepTime = 680;     // ms of pivoting = about 135 deg. The search never turns further than this
                          // either way, so it cannot swing round onto the line behind it and drive back.
 int gapTime = 150;       // ms to roll straight on when the line vanishes while centred (gap / line end)
 
@@ -436,34 +538,47 @@ void loop() {
 }
 `;
 
-const LF02_X = 102;
-const lf02Z = sensorZ(2, 18.8, 65, 10);
+/**
+ * LF-02: TT gearmotors under the light 2 mm FR4 line-follower plate (170 × 120 mm), Ø65 mm rubber wheels,
+ * 90 mm wheelbase / 154 mm track, sensor bar on the front boom.
+ */
+const LF02_DT: LineDrivetrain = {
+  motorId: "tt-yellow-gear-motor",
+  wheelId: "rubber-robot-wheels",
+  plateT: 2,
+  params: { wheelDiameter_mm: 65, wheelWidth_mm: 26, wheelbase_mm: 90, trackWidth_mm: 120 + 26 + 2 * TYRE_GAP_MM, chassisLength_mm: 170, chassisWidth_mm: 120, groundClearance_mm: 20 },
+};
+const LF02_X = 107;
+const lf02Z = sensorZ(LF02_DT, 10);
 export const LF02: ProjectTemplate = {
   metadata: {
     id: "LF-02",
     name: "Advanced Five-Sensor Line Follower",
-    version: "1.1.0",
+    version: "2.0.0",
     competition: "line",
     difficulty: "intermediate",
     learningLevel: "Analog sensors, calibration and proportional control",
-    description: "Five analog TCRT5000 sensors and a TB6612FNG driver. The robot calibrates itself, computes a weighted line position and steers smoothly in proportion to the error.",
+    description: "Five analog TCRT5000 sensors and a TB6612FNG driver on a 4WD chassis (left motors in parallel on channel A, right motors on channel B). The robot calibrates itself, computes a weighted line position and steers smoothly in proportion to the error.",
     workingPrinciple:
-      "During the first 2.4 s the robot sweeps left and right across the line and records each sensor's darkest and brightest reading. Afterwards each reading is scaled to 0–1000 and a weighted average gives the line position (−2000 … +2000). The correction Kp × position is added to one wheel and subtracted from the other, and the robot slows down as the line moves towards the edge of the array. It remembers which edge the line was last seen at; if every sensor sees white it searches with a slow, bounded pivot towards that side, then back the other way (never more than about 135°), and stops if the line is not within reach.",
-    learningObjectives: ["Calibrate analog sensors", "Compute a weighted average line position", "Tune a proportional controller (Kp)", "Use a MOSFET driver (TB6612FNG) with standby"],
-    limitations: ["Proportional-only control can oscillate at high speed", "Must start with the sensor bar over the line so calibration sees black and white", "Five sensors span only 56 mm — very sharp turns rely on lost-line recovery"],
+      "During the first 2.4 s the robot sweeps left and right across the line and records each sensor's darkest and brightest reading. Afterwards each reading is scaled to 0–1000 and a weighted average gives the line position (−2000 … +2000). The correction Kp × position is added to the left wheel pair and subtracted from the right pair, and the robot slows down as the line moves towards the edge of the array. The 4WD robot steers like a tank: the tyres scrub sideways in every turn, so it needs a larger correction and more pivot power than a 2WD robot on a caster. It remembers which edge the line was last seen at; if every sensor sees white it searches with a bounded pivot towards that side, then back the other way (never more than about 135°), and stops if the line is not within reach.",
+    learningObjectives: ["Calibrate analog sensors", "Compute a weighted average line position", "Tune a proportional controller (Kp)", "Use a MOSFET driver (TB6612FNG) with standby", "Drive a 4WD robot with one driver channel per side"],
+    limitations: [
+      "Proportional-only control can oscillate at high speed",
+      "Must start with the sensor bar over the line so calibration sees black and white",
+      "Five sensors span only 56 mm — very sharp turns rely on lost-line recovery",
+      "Skid steering scrubs the tyres: turns are slower than on a 2WD robot with a caster",
+    ],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "5× TCRT5000 analog (calibrated)",
+    drivetrain: "4WD",
   },
-  chassis: { componentId: "line-follower-chassis" },
+  chassis: { componentId: "line-follower-chassis", length_mm: LF02_DT.params.chassisLength_mm, width_mm: LF02_DT.params.chassisWidth_mm, thickness_mm: LF02_DT.plateT, groundClearance_mm: mountingOf(LF02_DT).clearance_mm },
   parts: [
-    { componentId: "tt-yellow-gear-motor", label: "Left Motor" },
-    { componentId: "tt-yellow-gear-motor", label: "Right Motor" },
-    { componentId: "rubber-robot-wheels", label: "Left Wheel", attachedTo: "Left Motor" },
-    { componentId: "rubber-robot-wheels", label: "Right Wheel", attachedTo: "Right Motor" },
-    { componentId: "ball-caster-wheels", label: "CASTER1" },
-    { componentId: "arduino-uno-r3", label: "U1" },
+    ...drivetrainParts(LF02_DT),
+    // battery on standoffs above the Uno, set back so the centre of mass sits over the middle of the four wheels
+    { componentId: "arduino-uno-r3", label: "U1", position: { x: 10, y: 0, z: 8 } },
     { componentId: "tb6612fng", label: "DRV1" },
-    { componentId: "18650-li-ion-cell", label: "BAT1", config: { series: 2, capacity: 2500 } },
+    { componentId: "18650-li-ion-cell", label: "BAT1", config: { series: 2, capacity: 2500 }, position: { x: -38, y: 0, z: 39.9 } },
     { componentId: "toggle-switch", label: "SW1" },
     // five modules side by side, long axis pointing forward (14 mm wide boards at 15 mm pitch)
     ...[30, 15, 0, -15, -30].map((y, i) => ({ componentId: "tcrt5000", label: `S${i + 1}`, position: { x: LF02_X, y, z: lf02Z }, yawDeg: 0 })),
@@ -474,16 +589,15 @@ export const LF02: ProjectTemplate = {
     ["U1.5V", "DRV1.VCC", "red"], ["U1.5V", "DRV1.STBY", "red"],
     ["U1.D5", "DRV1.PWMA", "yellow"], ["U1.D7", "DRV1.AIN1", "yellow"], ["U1.D8", "DRV1.AIN2", "yellow"],
     ["U1.D6", "DRV1.PWMB", "yellow"], ["U1.D9", "DRV1.BIN1", "yellow"], ["U1.D10", "DRV1.BIN2", "yellow"],
-    ["DRV1.AO1", "Left Motor.M+", "orange"], ["DRV1.AO2", "Left Motor.M-", "orange"],
-    ["DRV1.BO1", "Right Motor.M-", "orange"], ["DRV1.BO2", "Right Motor.M+", "orange"],
+    ...parallelMotorWiring(["DRV1.AO1", "DRV1.AO2"], ["DRV1.BO1", "DRV1.BO2"]),
     ...[1, 2, 3, 4, 5].flatMap((n): [string, string, "red" | "black" | "green"][] => [
       ["U1.5V", `S${n}.VCC`, "red"], ["U1.GND2", `S${n}.GND`, "black"], [`S${n}.A0`, `U1.A${n - 1}`, "green"],
     ]),
   ],
   pinMap: [
-    { pin: "D5 / D6 (PWM)", connectedTo: "DRV1 PWMA / PWMB", purpose: "Left / right motor speed" },
-    { pin: "D7 / D8", connectedTo: "DRV1 AIN1 / AIN2", purpose: "Left motor direction" },
-    { pin: "D9 / D10", connectedTo: "DRV1 BIN1 / BIN2", purpose: "Right motor direction" },
+    { pin: "D5 / D6 (PWM)", connectedTo: "DRV1 PWMA / PWMB", purpose: "Left / right motor pair speed (FL + RL on AO1/AO2, FR + RR on BO1/BO2)" },
+    { pin: "D7 / D8", connectedTo: "DRV1 AIN1 / AIN2", purpose: "Left motors direction" },
+    { pin: "D9 / D10", connectedTo: "DRV1 BIN1 / BIN2", purpose: "Right motors direction" },
     { pin: "A0 … A4", connectedTo: "S1 … S5 A0", purpose: "Analog reflectance, left → right" },
     { pin: "5V", connectedTo: "DRV1 VCC + STBY, sensors", purpose: "Logic supply; STBY tied high (driver always enabled)" },
   ],
@@ -514,8 +628,9 @@ export const LF02: ProjectTemplate = {
 // ───────────────────────────── LF-03 ─────────────────────────────
 const LF03_CODE = `// =============================================================
 // LF-03 PID LINE FOLLOWER — BEAST PROJECT GARAGE
-// Arduino Nano + TB6612FNG + 2x N20 micro gearmotor with Hall
-// encoders + Pololu QTR-8A reflectance array on A0-A7.
+// Arduino Nano + TB6612FNG + 4x N20 micro gearmotor (4WD; Hall
+// encoders on the two rear motors) + Pololu QTR-8A array on A0-A7.
+// 4WD skid steering: left pair on channel A, right pair on channel B.
 // Full PID with live tuning over Serial:
 //   P<value>  Kp     I<value>  Ki     D<value>  Kd     B<value> base speed
 // Telemetry every 100 ms:  PID,error,prevError,integral,derivative,output,left,right
@@ -547,8 +662,9 @@ int minSpeed = 60;       // speed in the sharpest turns
 long integralLimit = 20000;
 
 // ---- lost-line recovery ----
-int searchSpeed = 110;   // slow pivot while the line is lost (about 235 deg/s on this robot)
-int sweepTime = 570;     // ms of pivoting = about 135 deg. The search never turns further than this
+int searchSpeed = 150;   // pivot while the line is lost (about 180 deg/s on this 4WD robot; all four
+                         // tyres scrub, so a pivot needs more power than on a 2WD robot)
+int sweepTime = 750;     // ms of pivoting = about 135 deg. The search never turns further than this
                          // either way, so it cannot swing round onto the line behind it and drive back.
 int gapTime = 120;       // ms to roll straight on when the line vanishes while centred (gap / line end)
 
@@ -749,37 +865,49 @@ void loop() {
 }
 `;
 
-const lf03Z = sensorZ(2, 10, 34, 3.2, 3);
+/**
+ * LF-03: four N20 micro gearmotors under the 2 mm FR4 plate (160 × 120 mm), Ø34 × 12 mm silicone wheels,
+ * 80 mm wheelbase / 140 mm track. The encoders sit on the rear motors (one per side).
+ */
+const LF03_DT: LineDrivetrain = {
+  motorId: "n20-micro-metal-gear-motor",
+  wheelId: "silicone-robot-wheels",
+  plateT: 2,
+  params: { wheelDiameter_mm: 34, wheelWidth_mm: 12, wheelbase_mm: 80, trackWidth_mm: 120 + 12 + 2 * TYRE_GAP_MM, chassisLength_mm: 160, chassisWidth_mm: 120, groundClearance_mm: 12 },
+};
+const lf03Z = sensorZ(LF03_DT, 3.2, 3);
 export const LF03: ProjectTemplate = {
   metadata: {
     id: "LF-03",
     name: "PID Line Follower",
-    version: "1.1.0",
+    version: "2.0.0",
     competition: "line",
     difficulty: "advanced",
     learningLevel: "PID control, 8-sensor arrays, encoders and live tuning",
-    description: "A fast competition-style follower: Pololu QTR-8A array, N20 gearmotors with Hall encoders, TB6612FNG and full PID control that you can tune while the robot runs.",
+    description: "A fast competition-style 4WD follower: Pololu QTR-8A array, four N20 gearmotors (two with Hall encoders), a TB6612FNG with one channel per side and full PID control that you can tune while the robot runs.",
     workingPrinciple:
-      "Eight calibrated analog sensors give a line position from −3500 to +3500. The PID controller adds a proportional term (how far off the line), an integral term (persistent offset) and a derivative term (how fast the error changes, which damps oscillation). The robot also slows down automatically when the error is large so it can take sharp corners. When the array loses the line, PID is paused (no derivative kick, integral reset) and the robot searches with a slow, bounded pivot towards the edge where the line was last seen, never more than about 135°, so it cannot turn round onto the track behind it. Encoders count wheel pulses for speed telemetry.",
-    learningObjectives: ["Implement and tune PID (Kp, Ki, Kd)", "Use an 8-channel analog array", "Count encoder pulses with interrupts", "Tune a robot live over Serial while watching telemetry"],
-    limitations: ["The Nano has exactly 8 analog inputs — all are used by the array", "The integral is clamped, frozen while the motors are saturated and reset when the line is lost; very high Ki still destabilises the robot", "Encoders are used for telemetry, not closed-loop speed control"],
+      "Eight calibrated analog sensors give a line position from −3500 to +3500. The PID controller adds a proportional term (how far off the line), an integral term (persistent offset) and a derivative term (how fast the error changes, which damps oscillation). Its output speeds up one wheel pair and slows the other; because the four tyres scrub sideways when a 4WD robot turns, the gains are higher than on a 2WD robot with a caster. The robot also slows down automatically when the error is large so it can take sharp corners. When the array loses the line, PID is paused (no derivative kick, integral reset) and the robot searches with a bounded pivot towards the edge where the line was last seen, never more than about 135°, so it cannot turn round onto the track behind it. Encoders on the two rear motors count wheel pulses for speed telemetry.",
+    learningObjectives: ["Implement and tune PID (Kp, Ki, Kd)", "Use an 8-channel analog array", "Count encoder pulses with interrupts", "Tune a robot live over Serial while watching telemetry", "Skid-steer (tank) turning with four driven wheels"],
+    limitations: [
+      "The Nano has exactly 8 analog inputs — all are used by the array",
+      "The integral is clamped, frozen while the motors are saturated and reset when the line is lost; very high Ki still destabilises the robot",
+      "Encoders are used for telemetry, not closed-loop speed control; they measure the rear wheels, which slip a little when the robot turns",
+      "Skid steering scrubs the tyres: tight turns are slower than on a 2WD robot with a caster",
+    ],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "QTR-8A 8-channel analog array + 2 Hall encoders",
+    drivetrain: "4WD",
   },
-  chassis: { componentId: "line-follower-chassis" },
+  chassis: { componentId: "line-follower-chassis", length_mm: LF03_DT.params.chassisLength_mm, width_mm: LF03_DT.params.chassisWidth_mm, thickness_mm: LF03_DT.plateT, groundClearance_mm: mountingOf(LF03_DT).clearance_mm },
   parts: [
-    { componentId: "n20-micro-metal-gear-motor", label: "Left Motor" },
-    { componentId: "n20-micro-metal-gear-motor", label: "Right Motor" },
-    { componentId: "silicone-robot-wheels", label: "Left Wheel", attachedTo: "Left Motor", config: { diameter: 34, width: 12 } },
-    { componentId: "silicone-robot-wheels", label: "Right Wheel", attachedTo: "Right Motor", config: { diameter: 34, width: 12 } },
-    { componentId: "ball-caster-wheels", label: "CASTER1" },
+    ...drivetrainParts(LF03_DT),
     { componentId: "arduino-nano", label: "U1" },
     { componentId: "tb6612fng", label: "DRV1" },
     { componentId: "lipo-2s-battery", label: "BAT1", config: { capacity: 450 } },
     { componentId: "toggle-switch", label: "SW1" },
     { componentId: "qtr-8a", label: "QTR1", position: { x: 92, y: 0, z: lf03Z }, yawDeg: 90 },
-    { componentId: "hall-effect-encoder", label: "ENC1", attachedTo: "Left Motor" },
-    { componentId: "hall-effect-encoder", label: "ENC2", attachedTo: "Right Motor" },
+    { componentId: "hall-effect-encoder", label: "ENC1", attachedTo: "RL Motor" },
+    { componentId: "hall-effect-encoder", label: "ENC2", attachedTo: "RR Motor" },
   ],
   wiring: [
     ["BAT1.+", "SW1.1", "red"], ["SW1.2", "DRV1.VM", "red"], ["SW1.2", "U1.VIN", "red"],
@@ -787,8 +915,7 @@ export const LF03: ProjectTemplate = {
     ["U1.5V", "DRV1.VCC", "red"], ["U1.5V", "DRV1.STBY", "red"],
     ["U1.D5", "DRV1.PWMA", "yellow"], ["U1.D7", "DRV1.AIN1", "yellow"], ["U1.D8", "DRV1.AIN2", "yellow"],
     ["U1.D6", "DRV1.PWMB", "yellow"], ["U1.D9", "DRV1.BIN1", "yellow"], ["U1.D10", "DRV1.BIN2", "yellow"],
-    ["DRV1.AO1", "Left Motor.M+", "orange"], ["DRV1.AO2", "Left Motor.M-", "orange"],
-    ["DRV1.BO1", "Right Motor.M-", "orange"], ["DRV1.BO2", "Right Motor.M+", "orange"],
+    ...parallelMotorWiring(["DRV1.AO1", "DRV1.AO2"], ["DRV1.BO1", "DRV1.BO2"]),
     ["U1.5V", "QTR1.VCC", "red"], ["U1.GND2", "QTR1.GND", "black"],
     ...[1, 2, 3, 4, 5, 6, 7, 8].map((n): [string, string, "green"] => [`QTR1.${n}`, `U1.A${n - 1}`, "green"]),
     ["U1.5V", "ENC1.VCC", "red"], ["U1.GND2", "ENC1.GND", "black"], ["ENC1.A", "U1.D2", "blue"], ["ENC1.B", "U1.D11", "blue"],
@@ -796,9 +923,9 @@ export const LF03: ProjectTemplate = {
   ],
   pinMap: [
     { pin: "A0 … A7", connectedTo: "QTR1 OUT1 … OUT8", purpose: "8 analog reflectance channels, left → right (A6/A7 are analog-only on the Nano — fine for analogRead)" },
-    { pin: "D5 / D6 (PWM)", connectedTo: "DRV1 PWMA / PWMB", purpose: "Motor speed" },
-    { pin: "D7 / D8 · D9 / D10", connectedTo: "DRV1 AIN1/AIN2 · BIN1/BIN2", purpose: "Motor direction" },
-    { pin: "D2 / D3 (interrupts)", connectedTo: "ENC1 A / ENC2 A", purpose: "Encoder pulse counting" },
+    { pin: "D5 / D6 (PWM)", connectedTo: "DRV1 PWMA / PWMB", purpose: "Left / right motor pair speed (FL + RL on AO1/AO2, FR + RR on BO1/BO2)" },
+    { pin: "D7 / D8 · D9 / D10", connectedTo: "DRV1 AIN1/AIN2 · BIN1/BIN2", purpose: "Left / right motor pair direction" },
+    { pin: "D2 / D3 (interrupts)", connectedTo: "ENC1 A / ENC2 A", purpose: "Encoder pulse counting (rear-left / rear-right motor)" },
     { pin: "D11 / D12", connectedTo: "ENC1 B / ENC2 B", purpose: "Encoder channel B (direction)" },
   ],
   firmware: {

@@ -55,7 +55,7 @@ describe("4WD Garage reference robots", () => {
     expect(p.parts.some((x) => x.componentId === "front-wedge")).toBe(true);
   });
 
-  it("keeps the legacy 2WD robots (marked) and leaves the line followers untouched", () => {
+  it("keeps the legacy 2WD robots (marked); the line followers are 4WD (v2.0.0) and not legacy", () => {
     for (const id of ["RR-01", "RR-03", "RW-01", "RW-02", "RW-03"]) {
       const t = getTemplate(id)!;
       expect(t, id).toBeTruthy();
@@ -66,7 +66,8 @@ describe("4WD Garage reference robots", () => {
     expect(getTemplate("RR-02")!.metadata.legacy).toBeFalsy();
     for (const id of ["LF-01", "LF-02", "LF-03"]) {
       expect(getTemplate(id)!.metadata.legacy).toBeUndefined();
-      expect(getTemplate(id)!.metadata.drivetrain).toBeUndefined();
+      expect(getTemplate(id)!.metadata.drivetrain).toBe("4WD");
+      expect(getTemplate(id)!.metadata.version).toBe("2.0.0");
     }
   });
 

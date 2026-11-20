@@ -422,6 +422,8 @@ function ruleBuses(g: CircuitGraph, add: (i: Issue) => void): number {
 
 function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
   let n = 0;
+  // motors in parallel on one driver channel (e.g. the left pair of a 4WD robot): their stall currents add up
+  const perChannel = new Map<string, { driver: PartInstance; comp: ComponentRecord; channel: string; motors: { label: string; stall: number }[] }>();
   // motor stall vs driver peak
   for (const m of partsOf(g, (c) => c.kind === "dc-motor" && !!c.motor)) {
     n++;
@@ -429,6 +431,13 @@ function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
     const stall = Boolean(m.config.customParams) ? Number(m.config.stallCurrentA) : c.motor!.stallCurrentA;
     const out = c.pins.map((t) => g.netOf.get(key(m, t.id))?.members.find((x) => x.pin.fn === "motor-out")).find(Boolean);
     if (!out?.comp.driver) continue;
+    const ch = DRIVER_WIRING[out.comp.id]?.channels.find((x) => x.outs.includes(out.pin.id));
+    if (ch) {
+      const k = `${out.part.uid}.${ch.name}`;
+      const e = perChannel.get(k) ?? { driver: out.part, comp: out.comp, channel: ch.name, motors: [] };
+      e.motors.push({ label: m.label, stall });
+      perChannel.set(k, e);
+    }
     if (stall > out.comp.driver.peakCurrentA)
       add({ severity: "warning", area: "compatibility", code: "W_DRIVER_CURRENT", title: "MOTOR CAN DRAW MORE THAN THE DRIVER ALLOWS", partUid: out.part.uid, incorrect: `${m.label} stall ≈${stall} A > ${out.comp.name} peak ${out.comp.driver.peakCurrentA} A.`, explanation: "At start-up, when stalled or when pushing (sumo!) the motor draws its stall current. The driver may overheat or shut down.", fix: "Choose a driver with a higher current rating or a smaller motor." });
     const supplyNet = g.netOf.get(key(out.part, DRIVER_WIRING[out.comp.id]?.motorSupply ?? ""));
@@ -437,6 +446,15 @@ function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
     const nominal = Boolean(m.config.customParams) ? Number(m.config.nominalVoltage) : c.motor!.nominalVoltage;
     if (vm && vm - (out.comp.driver.dropV ?? 0) > nominal * 1.5)
       add({ severity: "warning", area: "compatibility", code: "W_MOTOR_OVERVOLT", title: "MOTOR VOLTAGE TOO HIGH", partUid: m.uid, incorrect: `${m.label} is rated ${nominal} V but can receive ≈${(vm - out.comp.driver.dropV).toFixed(1)} V (${vm.toFixed(1)} V fully charged supply − ${out.comp.driver.dropV} V driver loss).`, explanation: "Over-volting a motor makes it faster but shortens its life dramatically and raises the stall current.", fix: `Use motors rated for this battery (e.g. 12 V gearmotors on a 3S pack), limit the PWM duty in code, or use a lower-voltage supply.` });
+  }
+  for (const e of perChannel.values()) {
+    if (e.motors.length < 2) continue;
+    n++;
+    const total = e.motors.reduce((a, x) => a + x.stall, 0);
+    const peak = e.comp.driver!.peakCurrentA;
+    // a single motor above the peak is already reported above
+    if (total > peak + 1e-9 && e.motors.every((x) => x.stall <= peak))
+      add({ severity: "warning", area: "compatibility", code: "W_DRIVER_CURRENT", title: "MOTORS IN PARALLEL CAN DRAW MORE THAN THE DRIVER CHANNEL ALLOWS", partUid: e.driver.uid, incorrect: `${e.motors.map((x) => x.label).join(" + ")} share ${e.driver.label} channel ${e.channel}: stall ≈${total.toFixed(1)} A together > ${e.comp.name} peak ${peak} A.`, explanation: "Motors wired in parallel to one channel share its H-bridge, so their currents add up. When they start or stall together the channel must deliver the sum.", fix: "Use a driver with a higher current rating, smaller motors, or give each motor its own channel (a second driver)." });
   }
   // servo on controller 5V, battery capability
   for (const s of partsOf(g, (c) => c.kind === "servo")) {

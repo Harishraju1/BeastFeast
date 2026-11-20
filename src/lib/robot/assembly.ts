@@ -2,7 +2,21 @@
 import { getComponent } from "@/lib/catalogue";
 import type { ChassisConfig, CompetitionId, ComponentRecord, PartInstance, Project, Vec3 } from "@/lib/types";
 import { partBox, partDims } from "@/lib/mech/geometry";
-import { DEFAULT_4WD_SETUP, setup4WD } from "./drivetrain4wd";
+import { DEFAULT_4WD_SETUP, type Drivetrain4WDOptions, setup4WD } from "./drivetrain4wd";
+
+/**
+ * Default 4WD drivetrain of a new line-following project: the light 2 mm FR4 line-follower plate
+ * (170 × 120 mm), four TT gearmotors hanging under it and Ø65 mm rubber wheels. The short 90 mm wheelbase
+ * against the 154 mm track keeps skid-steer turning easy; the front of the plate is free for a sensor boom.
+ */
+export const LINE_4WD_SETUP: Required<Drivetrain4WDOptions> = {
+  motorId: "tt-yellow-gear-motor",
+  wheelId: "rubber-robot-wheels",
+  chassisId: "line-follower-chassis",
+  params: { wheelDiameter_mm: 65, wheelWidth_mm: 26, wheelbase_mm: 90,
+    // 120 mm plate + 26 mm tyre + 2 × 4 mm tyre gap (TYRE_GAP_MM; written out because drivetrain4wd imports this module)
+    trackWidth_mm: 154, chassisLength_mm: 170, chassisWidth_mm: 120, groundClearance_mm: 20 },
+};
 
 export const uid = (prefix = "p") => `${prefix}_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`;
 
@@ -16,8 +30,9 @@ export function chassisFrom(componentId: string): ChassisConfig {
 }
 
 /**
- * A new project. Robo Race and Sumo projects start with the club-standard 4WD drivetrain already placed
- * (4WD chassis, four motors, four wheels, no caster); line-following projects start empty on the line chassis.
+ * A new project. Every competition starts with the club-standard 4WD drivetrain already placed (four motors,
+ * four wheels, no caster): Robo Race on the 4WD chassis, Sumo on the mini-sumo plate, line following on the
+ * light line-follower plate (`LINE_4WD_SETUP`).
  * `drivetrain: "none"` gives an empty project (used by the Garage templates and the reference robots, which
  * place their own parts).
  */
@@ -28,8 +43,8 @@ export function newProject(competition: CompetitionId, name: string, ownerId: st
     chassis: chassisFrom(DEFAULT_CHASSIS[competition]), parts: [], wires: [], code: "", codeVersions: [], trackId: null,
     validation: null, codeCheck: null, simulations: [], versions: [], thumbnail: null,
   };
-  if (opts.drivetrain === "none" || competition === "line") return empty;
-  return setup4WD(empty, DEFAULT_4WD_SETUP[competition]);
+  if (opts.drivetrain === "none") return empty;
+  return setup4WD(empty, competition === "line" ? LINE_4WD_SETUP : DEFAULT_4WD_SETUP[competition]);
 }
 
 function defaultConfig(c: ComponentRecord): PartInstance["config"] {

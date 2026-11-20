@@ -21,7 +21,7 @@ export function buildFromTemplate(t: ProjectTemplate, ownerId: string, mode: "or
   for (const tp of t.parts) {
     const overrides: Record<string, unknown> = { label: tp.label };
     if (tp.config) overrides.config = tp.config;
-    if (tp.position) overrides.position = tp.position;
+    if (tp.position) overrides.position = { ...tp.position }; // copy: a student editing their copy must never move the template's part
     if (tp.yawDeg !== undefined) overrides.rotation = { x: 0, y: 0, z: (tp.yawDeg * Math.PI) / 180 };
     if (tp.role) overrides.role = tp.role;
     const r = addPart(p, tp.componentId, overrides as never);

@@ -110,14 +110,18 @@ ${PINS}
 #define RIGHT_SENSOR  A3
 
 int baseSpeed = 140;     // straight-line speed
-int turnFast = 170;      // outer wheel in a turn
-int turnSlow = -60;      // inner wheel in a turn (negative = backwards → tight pivot for sharp corners)
+int turnFast = 170;      // outer wheels in a turn
+int turnSlow = -60;      // inner wheels in a turn (negative = backwards → tight pivot for sharp corners;
+                         // a 4WD robot hardly turns at all with stopped inner wheels)
 
 // ---- lost-line recovery ----
-int searchSpeed = 110;   // slow pivot while the line is lost (about 195 deg/s on the reference robot)
-int sweepTime = 700;     // ms of pivoting = about 135 deg. The search never turns further than this either
-                         // way, so it can never swing round onto the line behind it and drive back.
+// Works on a 4WD robot (the default) and on a 2WD robot with a caster. A 4WD robot pivots more slowly
+// because all four tyres scrub sideways (about 155 deg/s at this speed, a 2WD robot about 250 deg/s).
+int searchSpeed = 140;   // pivot speed while the line is lost
+int sweepTime = 700;     // ms of pivoting. The search never turns further than this either way, so it
+                         // can never swing round onto the line behind it and drive back.
 int gapTime = 150;       // ms to roll straight on when the line vanishes while centred (a gap or line end)
+int alignTime = 800;     // ms at 2/3 speed after the line was found again, to line up with the new leg
 
 int lastSide = 0;        // -1 = line last seen on the left, +1 = right, 0 = centred
 int rawSide = 0;         // side of the very latest off-centre reading (unfiltered)
@@ -126,8 +130,17 @@ unsigned long cornerTime = 0;    // when a sharp-corner point decided the side (
 int pattern = 2;         // the sensors as one number: left*4 + centre*2 + right (2 = only centre black)
 int before1 = 2;         // the previous pattern ...
 int before2 = 2;         // ... and the one before that
+unsigned long patternStart = 0;  // when the current pattern began
+unsigned long held1 = 0;         // how long the previous pattern lasted (ms) ...
+unsigned long held2 = 0;         // ... and the one before that
+bool weakCorner = false; // corner side decided while wobbling along the old line (provisional)
+bool sawTwoLines = false;        // two separate lines (pattern 5) seen at the current corner
+unsigned long blackMs = 0;       // how long the whole bar was black at the current corner (ms)
+int blackMin = 15;               // all black for blackMin..blackMax ms = crossing a 90 deg corner's new leg
+int blackMax = 40;
 bool lost = false;
 unsigned long lostAt = 0;
+unsigned long foundAt = 0;       // when the line was found again after a search
 int searchDir = -1;
 
 ${DRIVE_FUNCS}
@@ -165,10 +178,26 @@ void searchLine() {
   if (!lost) {
     lost = true;
     lostAt = millis();
+    // Provisional corner (decided while wobbling along the old line): use what the sensors saw while
+    // running over the corner point. At a 90 deg corner the new leg crosses under the whole bar (all
+    // black for blackMin..blackMax ms) and stays under its side sensor last. At an acute corner the
+    // bar sees two separate lines (pattern 5) or only a short / long all-black blur, and the last line
+    // seen is the end of the old leg: the new leg is on the other side.
+    if (weakCorner && millis() - cornerTime < 300 && rawSide != 0) {
+      bool rightAngle = !sawTwoLines && blackMs >= blackMin && blackMs <= blackMax;
+      lastSide = rightAngle ? rawSide : -rawSide;
+    }
+    weakCorner = false;
     searchDir = lastSide != 0 ? lastSide : -1;
   }
   long t = millis() - lostAt;
-  if (lastSide == 0) {
+  if (lastSide != 0) {
+    // The first part of the turn also has to stop the forward run, so it lasts a little longer
+    // the faster we were going (it does not count towards the sweep angle).
+    int brake = baseSpeed / 2;
+    if (t < brake) { pivot(searchDir); return; }
+    t -= brake;
+  } else {
     // No idea where it went (a gap, the end of the line, or we started beside it): roll on a
     // little, then try a narrow sweep (about 45 deg each way) before the wide one.
     if (t < gapTime) { setMotors(90, 90); return; }
@@ -199,16 +228,26 @@ void loop() {
   int p = left * 4 + centre * 2 + right;
   bool changed = p != pattern;
   if (changed) {
+    unsigned long now = millis();
+    held2 = held1;
+    held1 = now - patternStart;
+    patternStart = now;
     before2 = before1;
     before1 = pattern;
     pattern = p;
+    if (before1 == 7) blackMs = held1;   // the bar has just been all black for this long
+    if (p == 5) sawTwoLines = true;
   }
 
   if (p == 0) {
     searchLine();                         // all white: the line is lost
     return;
   }
-  lost = false;
+  if (lost) {                             // just found the line again
+    lost = false;
+    foundAt = millis();
+  }
+  int cruise = millis() - foundAt < alignTime ? baseSpeed * 2 / 3 : baseSpeed;
 
   if (left == HIGH && right == HIGH) {
     // A crossing, or the corner point of a sharp turn. Which way does the corner go?
@@ -225,6 +264,11 @@ void loop() {
       else if (before2 == 2 && before1 == 3) corner = 1;
       else if (before2 == 2 && before1 == 6) corner = -1;
       else if (!(before2 == 1 && before1 == 3) && !(before2 == 4 && before1 == 6)) corner = rawSide;
+      // A robot that is still turning onto a leg wobbles along it (2 <-> 3 or 2 <-> 6 every few ms):
+      // then the side touch was the old line, so the decision is only provisional (see searchLine).
+      weakCorner = held2 < 30 && ((before2 == 2 && (before1 == 3 || before1 == 6)) || (before1 == 2 && (before2 == 3 || before2 == 6)));
+      sawTwoLines = (p == 5);
+      blackMs = 0;
       cornerTime = 0;
       if (corner != 0) {
         lastSide = corner;
@@ -232,7 +276,7 @@ void loop() {
         cornerTime = millis();
       }
     }
-    setMotors(baseSpeed, baseSpeed);      // keep going straight over a crossing
+    setMotors(cruise, cruise);            // keep going straight over a crossing
     return;
   }
   if (left == HIGH) {
@@ -243,7 +287,7 @@ void loop() {
     setMotors(turnFast, turnSlow);        // line is on the right → turn right
   } else {
     if (millis() - sideTime > 300) lastSide = 0;   // centred for a while: forget the old side
-    setMotors(baseSpeed, baseSpeed);      // centred → straight ahead
+    setMotors(cruise, cruise);            // centred → straight ahead
   }
 }
 `,
@@ -265,9 +309,11 @@ float Kd = 40.0;
 int integralLimit = 40;  // anti-windup: the I term can never add more than Ki * 40 = 20
 
 // ---- lost-line recovery ----
-int searchSpeed = 110;   // slow pivot while the line is lost (about 195 deg/s on the reference robot)
-int sweepTime = 700;     // ms of pivoting = about 135 deg. The search never turns further than this either
-                         // way, so it can never swing round onto the line behind it and drive back.
+// Works on a 4WD robot (the default) and on a 2WD robot with a caster. A 4WD robot pivots more slowly
+// because all four tyres scrub sideways (about 170 deg/s at this speed, a 2WD robot about 265 deg/s).
+int searchSpeed = 150;   // pivot speed while the line is lost
+int sweepTime = 650;     // ms of pivoting. The search never turns further than this either way, so it
+                         // can never swing round onto the line behind it and drive back.
 int gapTime = 150;       // ms to roll straight on when the line vanishes while centred (a gap or line end)
 
 int lastError = 0;
