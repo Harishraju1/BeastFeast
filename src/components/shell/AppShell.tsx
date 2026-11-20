@@ -111,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         { href: workspaceHref(lastProjectId, "code"), label: "Code Studio", icon: Code2, match: "/code", hint: "Write the Arduino program" },
         { href: workspaceHref(lastProjectId, "arena"), label: "Simulation Arena", icon: Gauge, match: "/arena", hint: "Run your robot on a track" },
         { href: "/tracks", label: "Track Designer", icon: Map, hint: "Design your own tracks" },
-        { href: "/library", label: "Component Library", icon: Cpu, hint: "All 552 parts with pinouts" },
+        { href: "/library", label: "Component Library", icon: Cpu, hint: "553 parts with pinouts (incl. club additions)" },
       ],
     },
     {

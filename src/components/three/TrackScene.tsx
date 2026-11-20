@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import * as THREE from "three";
 import type { CompiledTrack, Vec2 } from "@/lib/sim/types";
 import { THEME } from "@/lib/theme";
+import { TerrainMeshes } from "./TerrainMeshes";
 
 /** Ribbon mesh along a polyline (world x,y → three x,-z), lying on the floor at height h. */
 export function ribbonGeometry(points: Vec2[], width: number, h = 0.0005): THREE.BufferGeometry {
@@ -54,10 +55,12 @@ export function TrackScene({ track }: { track: CompiledTrack }) {
   const floorColor = def.kind === "line" ? "#f2f2ee" : THEME.sageDeeper;
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0, -cy]} receiveShadow>
+      {/* with terrain, the floor doesn't write depth so dips (below 0) stay visible */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0, -cy]} receiveShadow renderOrder={track.terrain?.active ? -1 : 0}>
         <planeGeometry args={[w, h]} />
-        <meshStandardMaterial color={def.kind === "race" ? THEME.sageDeeper : floorColor} roughness={1} />
+        <meshStandardMaterial color={def.kind === "race" ? THEME.sageDeeper : floorColor} roughness={1} depthWrite={!track.terrain?.active} />
       </mesh>
+      {track.terrain && <TerrainMeshes terrain={track.terrain} />}
       {track.roads.map((r, i) => (
         <Ribbon key={`r${i}`} points={r.points} width={r.width} color={def.surface.color || "#2b2f36"} h={0.0004} />
       ))}

@@ -27,6 +27,11 @@ export interface ManualInput {
   boost: boolean;
   speed: number; // 0.2..1
   estop: boolean;
+  /**
+   * Motor test (manual mode): when set, each listed motor gets its own command (−1…1 of the available
+   * voltage) and the forward/turn keys are ignored — for checking one wheel or one side at a time.
+   */
+  motorTest?: Record<string, number> | null;
 }
 
 export interface SessionOptions {
@@ -137,6 +142,16 @@ export class SimSession {
   private manualCommands(): MotorCommands {
     if (this.manual.estop) return Object.fromEntries(this.spec.motors.map((m) => [m.id, 0]));
     const drivable = this.bridge.drivableMotors();
+    if (this.manual.motorTest) {
+      const out: MotorCommands = {};
+      for (const motor of this.spec.motors) {
+        const d = drivable[motor.id];
+        if (!d) continue; // not electrically reachable → no power
+        const v = Math.max(-1, Math.min(1, this.manual.motorTest[motor.id] ?? 0));
+        out[motor.id] = v * d.maxV * (motor.invert ? -1 : 1);
+      }
+      return out;
+    }
     const s = this.manual.boost ? 1 : this.manual.speed;
     const f = this.manual.forward,
       t = this.manual.turn;

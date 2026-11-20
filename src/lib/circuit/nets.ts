@@ -4,6 +4,7 @@
  * The validation engine, code checker and simulator all read this graph.
  */
 import { getComponent } from "@/lib/catalogue";
+import { seriesCellsOf } from "@/lib/catalogue/platform";
 import type { ComponentRecord, PartInstance, PinDef, Project, Wire } from "@/lib/types";
 
 export interface PinRef {
@@ -47,7 +48,9 @@ export function batteryPack(comp: ComponentRecord, part: PartInstance) {
   if (!b) return null;
   const n = b.perCell ? Number(part.config.series ?? comp.options.find((o) => o.key === "series")?.default ?? 1) : 1;
   const cap = Number(part.config.capacity ?? b.capacity_mAh);
-  return { nominal: b.nominalVoltage * n, max: b.maxVoltage * n, min: b.minVoltage * n, capacity: cap, rint: b.internalResistance_ohm * n, maxA: b.maxContinuousA, cells: n };
+  // fixed packs (e.g. "LiPo 3S") report their own series cell count; cell-based parts use the instance option
+  const cells = b.perCell ? n : (seriesCellsOf(comp) ?? 1);
+  return { nominal: b.nominalVoltage * n, max: b.maxVoltage * n, min: b.minVoltage * n, capacity: cap, rint: b.internalResistance_ohm * n, maxA: b.maxContinuousA, cells };
 }
 
 export function optionValue(comp: ComponentRecord, part: PartInstance, key: string) {

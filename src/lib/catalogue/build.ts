@@ -88,7 +88,7 @@ function genericPins(kind: ComponentKind, name: string): { pins: PinDef[]; statu
   }
 }
 
-function competitionNeeds(rec: { kind: ComponentKind; name: string; sensorKind?: string }, table: ParsedMasterList["competitionTable"]): Record<CompetitionId, CompetitionNeed> {
+export function competitionNeeds(rec: { kind: ComponentKind; name: string; sensorKind?: string }, table: ParsedMasterList["competitionTable"]): Record<CompetitionId, CompetitionNeed> {
   const row = (cat: string) => table.find((r) => r.category.toLowerCase() === cat.toLowerCase());
   const conv = (v: string): CompetitionNeed => (/✓|✔|yes/i.test(v) ? "required" : /optional/i.test(v) ? "optional" : /rule/i.test(v) ? "rule-dependent" : "not-listed");
   let cat: string | null = null;

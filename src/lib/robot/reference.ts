@@ -21,7 +21,7 @@ function add(p: Project, id: string, label?: string, config?: Record<string, num
 
 /** TEST 1: 2WD robot — Arduino Uno, L298N, two TT motors, wheels, caster, 2S 18650 pack, power switch. */
 export function reference2WD(competition: CompetitionId = "race", ownerId = "local"): Project {
-  let p = newProject(competition, "Reference 2WD", ownerId);
+  let p = newProject(competition, "Reference 2WD", ownerId, { drivetrain: "none" });
   p = add(p, "2wd-robot-chassis");
   p = add(p, "tt-yellow-gear-motor");
   p = add(p, "tt-yellow-gear-motor");

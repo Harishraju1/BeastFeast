@@ -12,6 +12,9 @@ import { TrackChain } from "@/lib/track/builder";
 import { compileTrack } from "@/lib/track/compile";
 import { getTemplate } from "./index";
 import { buildFromTemplate } from "./build";
+import { buildRobotSpec } from "@/lib/robot/model";
+import { check4WD, find4WD } from "@/lib/robot/drivetrain4wd";
+import { getComponent } from "@/lib/catalogue";
 
 export interface ScenarioResult {
   id: string;
@@ -474,8 +477,277 @@ function sumoScenarios(): Scenario[] {
   return out;
 }
 
+
+// ───────────────────────────── 4WD (club standard) ─────────────────────────────
+
+/** Flat open area (one wide road piece) for drivetrain tests; optional obstacle on the centre-line. */
+function flatArea(obstacleX?: number): TrackDef {
+  const pieces: TrackPiece[] = [{ id: "r", type: "straight", x: -2.2, y: 0, rotation: 0, params: { length: 4.4, width: 2.4 } }];
+  if (obstacleX !== undefined) pieces.push({ id: "o", type: "obstacle", x: obstacleX, y: 0, rotation: 0, params: { width: 0.25, depth: 0.2 } });
+  return { id: obstacleX === undefined ? "custom-flat-area" : "custom-flat-obstacle", name: "Flat test area", kind: "race", difficulty: "beginner", ownerId: "student", size: { w: 5, h: 3 }, surface: RACE_SURFACE, pieces, start: { x: -1.4, y: 0, heading: 0 }, laps: 1 };
+}
+
+const FOUR = ["FL", "FR", "RL", "RR"] as const;
+
+/** Per-corner helpers for a 4WD reference robot: motor voltages and "wheel turns forward" rpm (mirrored right motors normalised). */
+function fourWdProbe(id: string, track: TrackDef, extra: Partial<ConstructorParameters<typeof SimSession>[0]> = {}) {
+  const project = buildFromTemplate(getTemplate(id)!, "test", "original");
+  const s = new SimSession({ project, track, mode: "code", ...extra });
+  const { notes } = buildRobotSpec(project);
+  const uidOf = (c: string) => project.parts.find((p) => p.label === `${c} Motor`)!.uid;
+  const wheelRpm = (c: string) => (s.telemetry().motorRpm[uidOf(c)] ?? 0) * (notes.motorMirrored[uidOf(c)] ? -1 : 1);
+  const volts = (c: string) => s.telemetry().motorVoltage[uidOf(c)] ?? 0;
+  return { s, project, wheelRpm, volts };
+}
+
+const deg = (r: number) => `${(r * 57.3).toFixed(0)}°`;
+
+function fourWdScenarios(): Scenario[] {
+  const out: Scenario[] = [];
+  for (const id of ["RR-04", "RR-05", "RR-06"]) {
+    out.push({
+      id: `${id}-4wd-forward-reverse`, project: id, category: "race", name: "4WD: all four motors forward / reverse", mustPass: true,
+      run() {
+        const { s, wheelRpm } = fourWdProbe(id, flatArea());
+        const h0 = s.telemetry().pose.heading;
+        s.sendSerial("F");
+        s.advance(1.5, 3000);
+        const vF = s.telemetry().speed;
+        const rpmF = FOUR.map(wheelRpm);
+        const drift = s.telemetry().pose.heading - h0;
+        s.sendSerial("S");
+        s.advance(0.6, 1000);
+        s.sendSerial("B");
+        s.advance(1.2, 2500);
+        const vB = s.telemetry().speed;
+        const rpmB = FOUR.map(wheelRpm);
+        s.sendSerial("S");
+        s.advance(0.5, 1000);
+        const pass = vF > 0.3 && Math.abs(drift) < 0.1 && rpmF.every((r) => r > 20) && vB < -0.15 && rpmB.every((r) => r < -20);
+        return {
+          config: "Flat test area; F for 1.5 s, stop, B for 1.2 s (Bluetooth commands)",
+          expected: "F turns all four wheels forward and the robot drives straight ahead; B turns all four backwards and it reverses",
+          actual: `F: ${vF.toFixed(2)} m/s, heading drift ${deg(drift)}, wheel rpm FL/FR/RL/RR ${rpmF.map((r) => r.toFixed(0)).join("/")}; B: ${vB.toFixed(2)} m/s, rpm ${rpmB.map((r) => r.toFixed(0)).join("/")}`,
+          pass,
+        };
+      },
+    });
+    out.push({
+      id: `${id}-4wd-turns`, project: id, category: "race", name: "4WD: left / right turns", mustPass: true,
+      run() {
+        const { s } = fourWdProbe(id, flatArea());
+        const turn = (cmd: string) => {
+          const p0 = { ...s.telemetry().pose };
+          s.sendSerial(cmd);
+          s.advance(1.0, 2000);
+          const p1 = s.telemetry().pose;
+          const ahead = (p1.x - p0.x) * Math.cos(p0.heading) + (p1.y - p0.y) * Math.sin(p0.heading);
+          s.sendSerial("S");
+          s.advance(0.6, 1000);
+          return { dh: p1.heading - p0.heading, ahead };
+        };
+        const q = turn("Q");
+        const e = turn("E");
+        const pass = q.dh > 0.2 && q.ahead > 0.1 && e.dh < -0.2 && e.ahead > 0.1;
+        return {
+          config: "Flat test area; Q (forward-left) for 1 s, stop, E (forward-right) for 1 s",
+          expected: "Q curves left (heading increases) while moving forward; E curves right (heading decreases)",
+          actual: `Q: ${deg(q.dh)} while moving ${(q.ahead * 100).toFixed(0)} cm forward; E: ${deg(e.dh)} while moving ${(e.ahead * 100).toFixed(0)} cm forward`,
+          pass,
+        };
+      },
+    });
+    out.push({
+      id: `${id}-4wd-pivot`, project: id, category: "race", name: "4WD: pivot turn in place", mustPass: true,
+      run() {
+        const { s, wheelRpm } = fourWdProbe(id, flatArea());
+        const pivot = (cmd: string) => {
+          const p0 = { ...s.telemetry().pose };
+          s.sendSerial(cmd);
+          s.advance(0.8, 1600);
+          const rpm = FOUR.map(wheelRpm);
+          const p1 = s.telemetry().pose;
+          s.sendSerial("S");
+          s.advance(0.6, 1000);
+          return { dh: p1.heading - p0.heading, moved: Math.hypot(p1.x - p0.x, p1.y - p0.y), rpm };
+        };
+        const l = pivot("L");
+        const r = pivot("R");
+        // rpm order FL, FR, RL, RR: a left pivot runs the left wheels backwards and the right wheels forwards
+        const sidesOk = (x: typeof l, leftSign: number) => x.rpm[0] * leftSign < 0 && x.rpm[2] * leftSign < 0 && x.rpm[1] * leftSign > 0 && x.rpm[3] * leftSign > 0;
+        const pass = l.dh > 0.8 && r.dh < -0.8 && l.moved < 0.06 && r.moved < 0.06 && sidesOk(l, 1) && sidesOk(r, -1);
+        return {
+          config: "Flat test area; L for 0.8 s, stop, R for 0.8 s",
+          expected: "Left pair backwards + right pair forwards spins the robot left on the spot (and the reverse for R)",
+          actual: `L: ${deg(l.dh)}, centre moved ${(l.moved * 100).toFixed(1)} cm, rpm FL/FR/RL/RR ${l.rpm.map((x) => x.toFixed(0)).join("/")}; R: ${deg(r.dh)}, moved ${(r.moved * 100).toFixed(1)} cm`,
+          pass,
+        };
+      },
+    });
+    out.push({
+      id: `${id}-4wd-single-motor`, project: id, category: "race", name: "4WD: individual motor test", mustPass: true,
+      run() {
+        const { s, wheelRpm, volts } = fourWdProbe(id, flatArea());
+        const rows: string[] = [];
+        let ok = true;
+        FOUR.forEach((c, i) => {
+          s.sendSerial(String(i + 1));
+          s.advance(0.4, 800);
+          const v = FOUR.map((k) => Math.abs(volts(k)));
+          const rpm = FOUR.map(wheelRpm);
+          const others = [0, 1, 2, 3].filter((k) => k !== i);
+          ok &&= v[i] > 3 && others.every((k) => v[k] < 0.3) && rpm[i] > 40 && others.every((k) => Math.abs(rpm[k]) < rpm[i] / 3);
+          rows.push(`${c}: ${v.map((x) => x.toFixed(1)).join("/")} V, rpm ${rpm.map((x) => x.toFixed(0)).join("/")}`);
+          s.sendSerial("0");
+          s.advance(0.4, 800);
+        });
+        return {
+          config: "Commands 1, 2, 3, 4 (FL, FR, RL, RR) one after another, 0 between them",
+          expected: "Only the selected motor receives voltage and only its wheel is driven (turning forward); the others are braked",
+          actual: `motor voltages FL/FR/RL/RR and wheel rpm — ${rows.join("; ")}`,
+          pass: ok,
+        };
+      },
+    });
+    out.push({ id: `${id}-4wd-geometry`, project: id, category: "race", name: "4WD: four driven wheels, no caster, symmetrical", mustPass: true, run: () => fourWdGeometry(id) });
+  }
+  out.push({
+    id: "RR-04-custom-track", project: "RR-04", category: "race", name: "Custom track (keyboard driver)", mustPass: true,
+    run() {
+      const track = customRaceLoop();
+      const s = session("RR-04", track);
+      const roads = compileTrack(track).roads;
+      let last = "";
+      for (let t = 0; t < 60; t += 0.05) {
+        const p = s.telemetry().pose;
+        const aim = lookAhead(roads, p.x, p.y, 0.3);
+        let err = Math.atan2(aim.y - p.y, aim.x - p.x) - p.heading;
+        err = Math.atan2(Math.sin(err), Math.cos(err));
+        const key = err > 0.45 ? "L" : err < -0.45 ? "R" : err > 0.1 ? "Q" : err < -0.1 ? "E" : "F";
+        if (key !== last) {
+          s.sendSerial(key);
+          last = key;
+        }
+        s.advance(0.05, 100);
+        if (s.events.some((e) => e.type === "lap")) break;
+      }
+      const lap = s.events.find((e) => e.type === "lap");
+      return { config: "Student-built rounded-rectangle road; keys chosen by a scripted driver (Q/E/F, L/R)", expected: "The 4WD car responds to the keys and completes a lap", actual: lap ? `Lap in ${lap.t.toFixed(1)} s; ${s.events.filter((e) => e.type === "off-track").length} off-track event(s)` : `No lap; progress ${(((s.telemetry().race?.progress ?? 0) * 100) | 0)}%`, pass: !!lap };
+    },
+  });
+  out.push({
+    id: "RR-05-obstacle-avoidance", project: "RR-05", category: "race", name: "Autopilot obstacle avoidance", mustPass: true,
+    run() {
+      const obstacleX = 0.2;
+      const { s } = fourWdProbe("RR-05", flatArea(obstacleX));
+      let turnedAt: number | null = null;
+      for (let t = 0; t < 8; t += 0.1) {
+        s.advance(0.1, 200);
+        const p = s.telemetry().pose;
+        if (turnedAt === null && Math.abs(p.heading) > 0.35) turnedAt = obstacleX - p.x;
+      }
+      const hits = s.events.filter((e) => e.type === "collision" && e.robot === 0).length;
+      return {
+        config: "Flat area, 25 × 20 cm obstacle 1.6 m straight ahead; no keys pressed (autopilot)",
+        expected: "Drives forward, sees the obstacle with its ultrasonic sensor and turns away before touching it",
+        actual: `${turnedAt === null ? "never turned" : `turned away ${(turnedAt * 100).toFixed(0)} cm before the obstacle centre`}; ${hits} collision(s) in 8 s`,
+        pass: turnedAt !== null && turnedAt > 0.25 && hits === 0,
+      };
+    },
+  });
+
+  // ── RW-04 4WD sumo ──
+  const dohyo = () => getExampleTrack("example-sumo-standard-dohyo")!;
+  out.push({ id: "RW-04-4wd-geometry", project: "RW-04", category: "sumo", name: "4WD: four driven wheels, no caster, symmetrical", mustPass: true, run: () => fourWdGeometry("RW-04") });
+  out.push({
+    id: "RW-04-edge", project: "RW-04", category: "sumo", name: "Edge detection (alone for 40 s)", mustPass: true,
+    run() {
+      const s = session("RW-04", dohyo());
+      s.advance(40, 50000);
+      const out0 = s.world.getSnapshot().robots[0].out;
+      return { config: "Standard dohyo, no opponent", expected: "Searches for 40 s without ever leaving the ring", actual: out0 ? "Left the ring" : `Stayed inside; drove ${s.telemetry().distance.toFixed(1)} m`, pass: !out0 };
+    },
+  });
+  out.push({
+    id: "RW-04-recovery", project: "RW-04", category: "sumo", name: "Boundary recovery", mustPass: true,
+    run() {
+      const s = session("RW-04", { ...dohyo(), start: { x: 0.2, y: 0, heading: 0 } });
+      s.advance(14, 16000);
+      const out0 = s.world.getSnapshot().robots[0].out;
+      return { config: "Starts 20 cm from the centre facing straight at the border", expected: "Edge sensors see the white border; it reverses, turns away and stays in", actual: out0 ? "Left the ring" : `Stayed inside (final distance from centre ${Math.hypot(s.telemetry().pose.x, s.telemetry().pose.y).toFixed(2)} m)`, pass: !out0 };
+    },
+  });
+  out.push({
+    id: "RW-04-push", project: "RW-04", category: "sumo", name: "Pushes the opponent out (four-wheel traction)", mustPass: true,
+    run() {
+      const s = session("RW-04", dohyo(), { opponent: "beginner", opponentStartDelayS: 1e6 });
+      s.advance(4.9, 6000);
+      let won = -1;
+      let firstContact = -1;
+      for (let t = 0; t < 15 && won < 0; t += 0.1) {
+        s.advance(0.1, 200);
+        if (firstContact < 0 && s.events.some((e) => e.type === "collision")) firstContact = s.time;
+        if (s.world.getSnapshot().robots[1].out) won = s.time;
+      }
+      return { config: "Opponent placed opposite and left passive", expected: "Finds the opponent with the ultrasonic sensor, charges with all four wheels and pushes it out of the ring", actual: `first contact ${firstContact < 0 ? "none" : firstContact.toFixed(2) + " s"}; opponent out ${won < 0 ? "no" : "at " + won.toFixed(2) + " s"}`, pass: firstContact > 0 && won > 0 };
+    },
+  });
+  for (const level of ["beginner", "intermediate", "advanced", "beast"] as const) {
+    out.push({
+      id: `RW-04-match-${level}`, project: "RW-04", category: "sumo", name: `Match vs ${level === "beast" ? "Beast Mode" : level} AI`, mustPass: level === "beginner",
+      run() {
+        const s = session("RW-04", dohyo(), { opponent: level, opponentStartDelayS: 5 });
+        let res = "draw (time limit)";
+        let win = false;
+        for (let t = 0; t < 180; t += 0.1) {
+          s.advance(0.1, 200);
+          const sn = s.world.getSnapshot();
+          if (sn.robots[1].out) {
+            res = `WIN at ${s.time.toFixed(1)} s`;
+            win = true;
+            break;
+          }
+          if (sn.robots[0].out) {
+            res = `loss at ${s.time.toFixed(1)} s`;
+            break;
+          }
+        }
+        const contacts = s.events.filter((e) => e.type === "collision").length;
+        return {
+          config: `Standard dohyo, ${level} opponent, 5 s start delay for both`,
+          expected: level === "beginner" ? "Wins against the built-in beginner AI by a ring-out" : "Match ends by a ring-out or the time limit, decided by physics",
+          actual: `${res}; ${contacts} collision event(s)`,
+          pass: level === "beginner" ? win : contacts > 0,
+        };
+      },
+    });
+  }
+  return out;
+}
+
+/** No casters; four motors each carrying its own wheel; wheels mirror-symmetric left/right; identical wheels. */
+function fourWdGeometry(id: string): Omit<ScenarioResult, "id" | "project" | "category" | "name" | "mustPass"> {
+  const p = buildFromTemplate(getTemplate(id)!, "test", "original");
+  const dt = find4WD(p);
+  const { spec } = buildRobotSpec(p);
+  const casters = p.parts.filter((x) => getComponent(x.componentId)?.kind === "caster").length;
+  if (!dt) return { config: "Built project", expected: "A 4WD drivetrain", actual: "No 4WD drivetrain found", pass: false };
+  const w = dt.wheels;
+  const ownMotor = FOUR.every((c) => w[c].attachedTo === dt.motors[c].uid) && new Set(FOUR.map((c) => dt.motors[c].uid)).size === 4;
+  const asym = Math.max(Math.abs(w.FL.position.y + w.FR.position.y), Math.abs(w.RL.position.y + w.RR.position.y), Math.abs(w.FL.position.x - w.FR.position.x), Math.abs(w.RL.position.x - w.RR.position.x));
+  const sizes = new Set(FOUR.map((c) => `${w[c].config.diameter}×${w[c].config.width} mm`));
+  const drivenInSim = spec.wheels.filter((x) => x.motorId).length;
+  const pass = casters === 0 && spec.casters.length === 0 && ownMotor && asym < 1 && sizes.size === 1 && drivenInSim === 4 && check4WD(p).length === 0;
+  return {
+    config: "Built project and its physics model",
+    expected: "No caster; four motors, each wheel on its own motor; FL/FR and RL/RR mirror-symmetric; identical wheels; four driven wheels in the physics model",
+    actual: `${casters} caster(s); wheels FL (${w.FL.position.x}, ${w.FL.position.y}) FR (${w.FR.position.x}, ${w.FR.position.y}) RL (${w.RL.position.x}, ${w.RL.position.y}) RR (${w.RR.position.x}, ${w.RR.position.y}) mm; asymmetry ${asym.toFixed(1)} mm; wheels ${[...sizes].join(", ")}; ${drivenInSim} driven wheels in the model`,
+    pass,
+  };
+}
+
 export function allScenarios(): Scenario[] {
-  return [...lineScenarios(), ...raceScenarios(), ...sumoScenarios()];
+  return [...lineScenarios(), ...raceScenarios(), ...sumoScenarios(), ...fourWdScenarios()];
 }
 
 export function runScenario(s: Scenario): ScenarioResult {

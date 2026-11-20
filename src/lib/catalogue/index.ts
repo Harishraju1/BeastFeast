@@ -2,13 +2,19 @@ import type { ComponentRecord } from "@/lib/types";
 import { MASTER_LIST_MD, MASTER_LIST_SHA256 } from "@/data/master-list.generated";
 import { buildCatalogue } from "./build";
 import { parseMasterList } from "./parse";
+import { buildPlatformAdditions } from "./platform";
 
 export const MASTER_LIST = parseMasterList(MASTER_LIST_MD);
 export { MASTER_LIST_MD, MASTER_LIST_SHA256 };
 
-/** Base catalogue built from the bundled master list + curated specs. */
+/** Base catalogue built from the bundled master list + curated specs (exactly one record per master-list entry). */
 export const CATALOGUE: ComponentRecord[] = buildCatalogue(MASTER_LIST);
-const byId = new Map(CATALOGUE.map((r) => [r.id, r]));
+/**
+ * Components the platform adds on top of the master list (see ./platform.ts). They are part of the
+ * library and the designer, but are counted separately: "552 master-list entries + N platform additions".
+ */
+export const PLATFORM_COMPONENTS: ComponentRecord[] = buildPlatformAdditions(MASTER_LIST);
+const byId = new Map([...CATALOGUE, ...PLATFORM_COMPONENTS].map((r) => [r.id, r]));
 
 /** Admin overrides (images, verified specs, new pinouts) are layered on top at runtime. */
 let overrides: Record<string, Partial<ComponentRecord>> = {};
@@ -26,9 +32,9 @@ export function getComponent(id: string): ComponentRecord | undefined {
 }
 
 export function allComponents(): ComponentRecord[] {
-  return [...CATALOGUE, ...extra].map((r) => (overrides[r.id] ? { ...r, ...overrides[r.id] } : r));
+  return [...CATALOGUE, ...PLATFORM_COMPONENTS, ...extra].map((r) => (overrides[r.id] ? { ...r, ...overrides[r.id] } : r));
 }
 
 export function findByName(name: string): ComponentRecord | undefined {
-  return CATALOGUE.find((r) => r.name === name);
+  return CATALOGUE.find((r) => r.name === name) ?? PLATFORM_COMPONENTS.find((r) => r.name === name);
 }

@@ -2,9 +2,11 @@
 import { getComponent } from "@/lib/catalogue";
 import type { ChassisConfig, CompetitionId, ComponentRecord, PartInstance, Project, Vec3 } from "@/lib/types";
 import { partBox, partDims } from "@/lib/mech/geometry";
+import { DEFAULT_4WD_SETUP, setup4WD } from "./drivetrain4wd";
 
 export const uid = (prefix = "p") => `${prefix}_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`;
 
+/** Chassis of an empty project (no drivetrain). */
 const DEFAULT_CHASSIS: Record<CompetitionId, string> = { race: "racing-robot-chassis", line: "line-follower-chassis", sumo: "mini-sumo-robot-chassis" };
 
 export function chassisFrom(componentId: string): ChassisConfig {
@@ -13,13 +15,21 @@ export function chassisFrom(componentId: string): ChassisConfig {
   return { componentId, length_mm: ch.length_mm, width_mm: ch.width_mm, thickness_mm: ch.thickness_mm, material: ch.material, groundClearance_mm: 10, mountingHoles: [] };
 }
 
-export function newProject(competition: CompetitionId, name: string, ownerId: string): Project {
+/**
+ * A new project. Robo Race and Sumo projects start with the club-standard 4WD drivetrain already placed
+ * (4WD chassis, four motors, four wheels, no caster); line-following projects start empty on the line chassis.
+ * `drivetrain: "none"` gives an empty project (used by the Garage templates and the reference robots, which
+ * place their own parts).
+ */
+export function newProject(competition: CompetitionId, name: string, ownerId: string, opts: { drivetrain?: "default" | "none" } = {}): Project {
   const now = new Date().toISOString();
-  return {
+  const empty: Project = {
     id: uid("prj"), ownerId, name, competition, createdAt: now, updatedAt: now,
     chassis: chassisFrom(DEFAULT_CHASSIS[competition]), parts: [], wires: [], code: "", codeVersions: [], trackId: null,
     validation: null, codeCheck: null, simulations: [], versions: [], thumbnail: null,
   };
+  if (opts.drivetrain === "none" || competition === "line") return empty;
+  return setup4WD(empty, DEFAULT_4WD_SETUP[competition]);
 }
 
 function defaultConfig(c: ComponentRecord): PartInstance["config"] {
@@ -101,7 +111,8 @@ export function suggestPlacement(project: Project, c: ComponentRecord, cfg: Part
     if (k === "bumper") return { position: { x: L / 2 - 5, y: 0, z: 6 }, rotation: zero, role: "front" };
   }
   // generic: first free spot on the top plate
-  const solids = parts.filter((x) => !["wheel", "caster", "dc-motor"].includes(x.c.kind) && x.c.functionalityClass !== "C").map((x) => partBox(x.p, x.c));
+  // motors count too: on a low-plate 4WD they sit on top of the plate (motors under the plate have maxZ < 0 and are ignored)
+  const solids = parts.filter((x) => !["wheel", "caster"].includes(x.c.kind) && x.c.functionalityClass !== "C").map((x) => partBox(x.p, x.c));
   const step = 8;
   for (let gx = 0; gx <= L / 2; gx += step)
     for (const sx of [1, -1])

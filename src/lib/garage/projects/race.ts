@@ -114,7 +114,7 @@ export const RR01: ProjectTemplate = {
   metadata: {
     id: "RR-01",
     name: "Basic 2WD Robo Racer",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "race",
     difficulty: "beginner",
     learningLevel: "Motor control, PWM speed, acceleration and braking",
@@ -125,6 +125,8 @@ export const RR01: ProjectTemplate = {
     limitations: ["Manual control only — the robot does not steer itself", "HC-05 RXD is not wired (the robot only receives), so no data is sent back to the controller", "Upload with the HC-05 disconnected from D0 on a real robot"],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "None (driver-controlled via Bluetooth)",
+    drivetrain: "2WD",
+    legacy: true,
   },
   chassis: { componentId: "2wd-robot-chassis" },
   parts: [
@@ -231,7 +233,7 @@ export const RR02: ProjectTemplate = {
   metadata: {
     id: "RR-02",
     name: "Four-Wheel Drive Racer",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "race",
     difficulty: "intermediate",
     learningLevel: "4WD skid steering, multiple drivers, motor synchronisation",
@@ -242,6 +244,7 @@ export const RR02: ProjectTemplate = {
     limitations: ["Skid steering scrubs the tyres: turning in place is slower than a 2WD robot", "Uses analog pins A1/A2 as digital outputs because the Uno runs out of digital pins"],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "None (driver-controlled via Bluetooth)",
+    drivetrain: "4WD",
   },
   chassis: { componentId: "4wd-robot-chassis" },
   parts: [
@@ -436,7 +439,7 @@ export const RR03: ProjectTemplate = {
   metadata: {
     id: "RR-03",
     name: "Encoder-Based Smart Racer",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "race",
     difficulty: "advanced",
     learningLevel: "Closed-loop speed control, encoders and autonomous road keeping",
@@ -447,6 +450,8 @@ export const RR03: ProjectTemplate = {
     limitations: ["Road keeping relies on the contrast between road and surrounding floor", "Very tight hairpins need a lower target speed (send V12)", "Encoder counts per revolution must match the encoder setting (341 by default)"],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "2 road-edge reflectance sensors + 2 Hall encoders",
+    drivetrain: "2WD",
+    legacy: true,
   },
   chassis: { componentId: "racing-robot-chassis" },
   parts: [

@@ -153,7 +153,18 @@ export function staticContacts(i: number, A: OBB, track: CompiledTrack, out: Con
       out.push({ a: i, b: -1, kind: "wall", px: c.x, py: c.y, nx: c.nx, ny: c.ny, depth: c.depth, ref: wi });
     }
   });
-  track.obstacles.forEach((o, oi) => {
+  obstacleContacts(i, A, track.obstacles, 0, out);
+}
+
+/**
+ * Contacts between robot `i` (shape A) and a list of static obstacles. `refOffset` is added to the
+ * obstacle index in `Contact.ref` (terrain solids use track.obstacles.length + k so they never share a
+ * positional-correction key with a track obstacle).
+ */
+export function obstacleContacts(i: number, A: OBB, obstacles: Obstacle[], refOffset: number, out: Contact[]): void {
+  const rA = hyp(A.hx, A.hy);
+  obstacles.forEach((o, k) => {
+    const oi = refOffset + k;
     if (o.kind === "circle") {
       if (hyp(o.cx - A.cx, o.cy - A.cy) > rA + o.r) return;
       const c = boxCircleContact(A, o.cx, o.cy, o.r);

@@ -16,6 +16,7 @@ import { ASSEMBLY_ORDER, ChassisMesh, PartMesh, explodeOffset, toThree } from "@
 import { LibraryBrowser } from "@/components/library/LibraryBrowser";
 import { Button, Field, SimBadge, Tabs } from "@/components/ui";
 import { IssueCard } from "../Validation";
+import { DrivetrainPanel, PowerPanel } from "./DrivetrainPanel";
 import { isTypingTarget } from "@/lib/keyboard";
 import { THEME } from "@/lib/theme";
 
@@ -369,6 +370,8 @@ export default function Designer({ project }: { project: Project }) {
                 })}>Add M3 corner mounting holes</Button>
               </>
             )}
+            <DrivetrainPanel project={project} />
+            <PowerPanel project={project} />
             <div className="border-t border-line pt-3">
               <div className="bf-label mb-1">Quick add</div>
               <div className="grid grid-cols-2 gap-1.5">

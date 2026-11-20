@@ -308,3 +308,26 @@ export function arcPoints(r: number, angle: number, maxStep = 0.01): Vec2[] {
   }
   return pts;
 }
+
+/** Inverse of a 3×3 matrix given row-major as 9 numbers, or null if (near-)singular. */
+export function invert3(m: ArrayLike<number>): number[] | null {
+  const [a, b, c, d, e, f, g, h, i] = [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]];
+  const A = e * i - f * h;
+  const B = -(d * i - f * g);
+  const C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  const scale = Math.abs(a) + Math.abs(e) + Math.abs(i);
+  if (!isFinite(det) || Math.abs(det) < 1e-12 * Math.max(1e-30, scale * scale * scale)) return null;
+  const k = 1 / det;
+  return [
+    A * k,
+    -(b * i - c * h) * k,
+    (b * f - c * e) * k,
+    B * k,
+    (a * i - c * g) * k,
+    -(a * f - c * d) * k,
+    C * k,
+    -(a * h - b * g) * k,
+    (a * e - b * d) * k,
+  ];
+}

@@ -47,6 +47,15 @@
  *
  * Ramps: inside a ramp polygon a force m·g·sin(slope) acts downhill and loads scale by cos(slope).
  *
+ * Off-road terrain (optional DriveEnv fields, filled by the world only when the track has terrain):
+ *   wheelLoad[i]  N_i ← N_i · cos θ_i   (θ_i = local ground slope under wheel i)
+ *   wheelMu[i]    μ_i ← μ_i · grip      (mud)
+ *   wheelCrr[i]   F_rr = −(0.01 + drag)·N_i·tanh(v_long/0.01)   (mud sinkage)
+ *   casterLoad / casterCrr likewise for casters; extraForce/extraTorque carry the slope (gravity)
+ *   forces N_i·sin θ_i acting downhill at each contact. All absent ⇒ arithmetic identical to before.
+ *   The traction limit on a slope therefore emerges from the friction circle: the tyres can push at
+ *   most Σ μ·N_i·cos θ while gravity pulls with Σ N_i·sin θ (climbable ⇔ tan θ < μ, and motor torque).
+ *
  * Integration: fixed dt (default 1 ms), semi-implicit (symplectic) Euler: forces → velocities →
  *   (collision impulses, done by the world) → positions. Fully deterministic (no randomness, fixed
  *   iteration order).
@@ -240,6 +249,18 @@ export interface DriveEnv {
   loadFactor: number;
   /** additional normal load (N) pressed onto this robot (opponent lifted onto our wedge) */
   extraLoad: number;
+  /** extra yaw torque about the COM (N·m), e.g. terrain slope forces acting at the wheel contacts */
+  extraTorque?: number;
+  /** terrain, per wheel (index = spec.wheels): multiplier on μ (mud grip) */
+  wheelMu?: ArrayLike<number>;
+  /** terrain, per wheel: extra rolling-resistance coefficient (mud sinkage drag), added to PHYS.wheelCrr */
+  wheelCrr?: ArrayLike<number>;
+  /** terrain, per wheel: multiplier on the normal load (cos of the local ground slope) */
+  wheelLoad?: ArrayLike<number>;
+  /** terrain, per caster (index = spec.casters): multiplier on the normal load */
+  casterLoad?: ArrayLike<number>;
+  /** terrain, per caster: extra rolling-resistance coefficient, added to the caster's crr */
+  casterCrr?: ArrayLike<number>;
 }
 
 export class RobotDynamics {
@@ -268,7 +289,9 @@ export class RobotDynamics {
   motorI: number[];
   motorOmega: number[];
   wheelLoad: number[];
-  battery = { used_mAh: 0, current: 0, terminalV: 0, openV: 0 };
+  /** longitudinal speed of each wheel's contact point over the ground (m/s), last step */
+  wheelVLong: number[];
+  battery ={ used_mAh: 0, current: 0, terminalV: 0, openV: 0 };
   distance = 0;
   /** body-frame acceleration (m/s²) from the last step */
   ax = 0;
@@ -302,6 +325,7 @@ export class RobotDynamics {
     this.wheelOmega = spec.wheels.map(() => 0);
     this.wheelAngle = spec.wheels.map(() => 0);
     this.wheelLoad = [...loads.wheels];
+    this.wheelVLong = spec.wheels.map(() => 0);
     this.motorV = this.motors.map(() => 0);
     this.motorI = this.motors.map(() => 0);
     this.motorOmega = this.motors.map(() => 0);
@@ -412,14 +436,18 @@ export class RobotDynamics {
 
     let fx = env.extraForce.x;
     let fy = env.extraForce.y;
-    let tz = 0;
+    let tz = env.extraTorque ?? 0;
     const m = this.mass;
     const totalLoadNow = staticTotal * lf + env.extraLoad || 1;
+    const tLoad = env.wheelLoad;
+    const tMu = env.wheelMu;
+    const tCrr = env.wheelCrr;
 
     // ── wheels ──
     for (let i = 0; i < nW; i++) {
       const w = spec.wheels[i];
-      const N = this.staticWheelLoad[i] * (lf + extraPerN);
+      let N = this.staticWheelLoad[i] * (lf + extraPerN);
+      if (tLoad) N *= tLoad[i];
       this.wheelLoad[i] = N;
       const rbx = w.x - comx;
       const rby = w.y - comy;
@@ -429,6 +457,7 @@ export class RobotDynamics {
       const pvy = this.vy + this.omega * rx;
       const vLong = pvx * c + pvy * s;
       const vLat = -pvx * s + pvy * c;
+      this.wheelVLong[i] = vLong;
       const r = Math.max(1e-3, w.radius);
       const J = this.wheelJ[i];
       const mi = this.wheelMotor[i];
@@ -441,7 +470,8 @@ export class RobotDynamics {
         tK = motorK[mi] * share;
       }
       const om0 = this.wheelOmega[i];
-      const mu = Math.max(0, w.mu * mu0);
+      let mu = Math.max(0, w.mu * mu0);
+      if (tMu) mu *= Math.max(0, tMu[i]);
       const Fmax = mu * N;
       const Cs = PHYS.tyreCsPerN * N;
       const Ca = PHYS.tyreCaPerN * N;
@@ -460,7 +490,8 @@ export class RobotDynamics {
         om = (J * om0 + dt * (tA - r * FL)) / (J + dt * tK);
       }
       // rolling resistance (on body)
-      const Frr = -PHYS.wheelCrr * N * Math.tanh(vLong / PHYS.rrSmoothing);
+      const crr = tCrr ? PHYS.wheelCrr + tCrr[i] : PHYS.wheelCrr;
+      const Frr = -crr * N * Math.tanh(vLong / PHYS.rrSmoothing);
       this.wheelOmega[i] = om;
       this.wheelAngle[i] += om * dt;
       const fl = FL + Frr;
@@ -474,7 +505,9 @@ export class RobotDynamics {
     // ── casters ──
     for (let i = 0; i < nC; i++) {
       const cs = spec.casters[i];
-      const N = this.staticCasterLoad[i] * (lf + extraPerN);
+      let N = this.staticCasterLoad[i] * (lf + extraPerN);
+      if (env.casterLoad) N *= env.casterLoad[i];
+      const ccrr = env.casterCrr ? Math.max(0, cs.crr) + env.casterCrr[i] : Math.max(0, cs.crr);
       const rbx = cs.x - comx;
       const rby = cs.y - comy;
       const rx = rbx * c - rby * s;
@@ -482,7 +515,7 @@ export class RobotDynamics {
       const pvx = this.vx - this.omega * ry;
       const pvy = this.vy + this.omega * rx;
       const sp = Math.sqrt(pvx * pvx + pvy * pvy);
-      const f = (Math.max(0, cs.crr) * N) / Math.max(sp, PHYS.casterSmoothing);
+      const f = (ccrr * N) / Math.max(sp, PHYS.casterSmoothing);
       const cfx = -f * pvx;
       const cfy = -f * pvy;
       fx += cfx;

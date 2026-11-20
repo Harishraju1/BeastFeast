@@ -105,6 +105,12 @@ export interface SimRobotSpec {
   sensors: SimSensorSpec[];
   /** front wedge: fraction (0..1) of opponent normal load transferred to our wedge on frontal contact */
   wedge?: number;
+  /**
+   * Gap between the floor and the underside of the chassis (m) when standing on flat ground.
+   * Used by the terrain model: obstacles taller than this (or than a wheel can climb) are solid.
+   * Defaults to 0.01 when omitted.
+   */
+  groundClearance?: number;
   color?: string;
 }
 
@@ -132,6 +138,20 @@ export interface RobotTelemetry {
   onTrack: boolean;
   /** true when the robot has fallen out of a sumo ring / off the table */
   out: boolean;
+  /** wheel speed (rpm, signed, + = rolling forward), keyed by wheel id */
+  wheelRpm?: Record<string, number>;
+  /**
+   * Longitudinal slip per wheel: (ω·r − v)/max(|ω·r|, |v|, 0.05) in −1…1. 0 = full grip, ±1 = spinning
+   * in place / locked and sliding. Keyed by wheel id.
+   */
+  wheelSlip?: Record<string, number>;
+  /** what is under the robot's centre (terrain model); "ground" on a flat floor */
+  surface?: TerrainSurfaceKind;
+  /** body attitude from the terrain under the wheels (rad): pitch + = nose up, roll + = left side up */
+  pitch?: number;
+  roll?: number;
+  /** height of the chassis reference above the flat floor (m) */
+  z?: number;
 }
 
 // ───────────────────────────── Track ─────────────────────────────
@@ -139,6 +159,17 @@ export interface RobotTelemetry {
 export type TrackKind = "race" | "line" | "sumo";
 
 export type TrackPieceType =
+  // ── off-road terrain (race tracks; real height + collision, see TerrainModel) ──
+  | "rock" // one irregular rock
+  | "rock-field" // scattered rocks inside an area
+  | "mud" // low-grip, high-drag patch (flat)
+  | "bumps" // uneven ground: smooth bumps and dips inside an area
+  | "zigzag" // raised zigzag pathway that rises and falls along its length
+  | "hill" // up-slope, flat top, down-slope
+  | "block" // small rectangular hurdle / block / step
+  | "hurdles" // a row of low hurdles across the path
+  | "platform" // raised flat platform with sloped or stepped edges
+  // ── classic pieces ──
   | "straight"
   | "curve"
   | "s-curve"
@@ -174,6 +205,26 @@ export interface TrackPiece {
     points?: Vec2[]; // free-drawn line, piece-local
     color?: string;
     shape?: "box" | "cylinder";
+    // ── off-road terrain parameters (all metres / degrees) ──
+    /** peak height (rock, block, platform, hill, zigzag max height) */
+    height?: number;
+    /** deterministic shape seed for rocks / bumps (same seed = same terrain) */
+    seed?: number;
+    /** rock-field: number of rocks; hurdles: number of hurdles */
+    count?: number;
+    /** hurdles: gap between hurdles (m) */
+    spacing?: number;
+    /** bumps: amplitude (m) of the bumps; negative parts make dips */
+    amplitude?: number;
+    /** mud: friction multiplier on tyre grip (0.2–0.9) */
+    grip?: number;
+    /** mud: extra rolling resistance coefficient (sinkage drag) */
+    drag?: number;
+    /** zigzag: number of straight legs; hill/platform: width of the sloped edge (m) */
+    segments?: number;
+    edge?: number;
+    /** zigzag: lowest height along the path (m) */
+    minHeight?: number;
   };
 }
 
@@ -199,6 +250,43 @@ export interface Segment {
   b: Vec2;
 }
 
+// ───────────────────────────── Terrain ─────────────────────────────
+
+export type TerrainSurfaceKind = "ground" | "mud" | "rock" | "bumps" | "slope" | "zigzag" | "block" | "platform";
+
+/** One compiled terrain feature (built from an off-road TrackPiece). */
+export interface TerrainFeature {
+  pieceId: string;
+  kind: "rock" | "mud" | "bumps" | "zigzag" | "hill" | "block" | "platform";
+  /** world-space bounding box of the footprint (m) */
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  /** highest point of the feature above the floor (m) */
+  maxHeight: number;
+  /**
+   * Collision outline used when the feature is too tall for a robot to drive over
+   * (rocks, blocks, hurdles, platform faces). Undefined = always drivable (mud, gentle slopes, bumps).
+   */
+  solid?: Obstacle;
+  /** mud: grip multiplier and extra rolling resistance */
+  surface?: { mu: number; crr: number };
+}
+
+/**
+ * Terrain of a compiled track. The SAME functions drive the physics and the 3D renderer, so what the
+ * student sees is what the robot drives on.
+ */
+export interface TerrainModel {
+  /** false for flat tracks (fast path: physics behaves exactly as before) */
+  active: boolean;
+  features: TerrainFeature[];
+  /** ground height (m) at a world point; 0 = flat floor; negative inside dips */
+  height(x: number, y: number): number;
+  /** height of a single feature at a world point (renderer builds one mesh per feature from this) */
+  featureHeight(index: number, x: number, y: number): number;
+  /** surface under a world point: grip multiplier, extra rolling resistance, label for telemetry */
+  surface(x: number, y: number): { kind: TerrainSurfaceKind; mu: number; crr: number };
+}
+
 export type Obstacle =
   | { kind: "box"; cx: number; cy: number; w: number; h: number; rotation: number }
   | { kind: "circle"; cx: number; cy: number; r: number };
@@ -217,6 +305,8 @@ export interface CompiledTrack {
   startLine: Segment | null;
   finishLine: Segment | null;
   ramps: { polygon: Vec2[]; slopeDeg: number; uphill: Vec2 }[];
+  /** off-road terrain (height map, mud, solid rocks) — inactive on flat tracks */
+  terrain: TerrainModel;
   arena: TrackDef["arena"] | null;
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 }

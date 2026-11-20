@@ -2,6 +2,7 @@
 import { getComponent } from "@/lib/catalogue";
 import type { PartInstance, Project, ValidationIssue } from "@/lib/types";
 import { chassisGeom, massSummary, partBox, partDims } from "./geometry";
+import { check4WD, find4WD } from "@/lib/robot/drivetrain4wd";
 
 type Issue = Omit<ValidationIssue, "id">;
 
@@ -49,6 +50,18 @@ export function validateMechanics(project: Project, NAME: string, limits: SumoLi
   checks++;
   if (driven.length >= 2 && (!left.length || !right.length))
     add({ severity: "critical", code: "M_ONE_SIDED", title: "MECHANICAL ASSEMBLY ERROR! ALL DRIVE WHEELS ARE ON ONE SIDE!", partUid: driven[0].p.uid, explanation: "Differential steering needs driven wheels on both the left and right side.", fix: "Move one motor/wheel pair to the other side of the chassis." });
+  // 4WD skid-steer: four driven wheels (no caster needed) — two per side, each side with a front and a rear wheel
+  if (driven.length === 4 && motors.length === 4) {
+    checks++;
+    const dt = find4WD(project);
+    if (!dt)
+      add({ severity: "critical", code: "M_4WD_SIDES", title: "MECHANICAL ASSEMBLY ERROR! A 4WD ROBOT NEEDS TWO WHEELS ON EACH SIDE!", partUid: driven[0].p.uid, incorrect: `${left.length} driven wheel(s) on the left, ${right.length} on the right.`, explanation: "Skid steering turns by driving the left pair and the right pair at different speeds, so each side needs two driven wheels.", fix: "Use 'Set up 4WD drivetrain' in the 4WD panel, or move the wheels so there are two on each side." });
+    else
+      for (const pr of check4WD(project)) {
+        const crit = pr.code !== "SYMMETRY";
+        add({ severity: crit ? "critical" : "warning", code: `M_4WD_${pr.code}`, title: crit ? `MECHANICAL ASSEMBLY ERROR! 4WD LAYOUT: ${pr.code === "AXLES" ? "FRONT AND REAR WHEELS ARE ON THE SAME AXLE" : "WHEELS ON THE WRONG SIDE"}!` : "4WD WHEELS ARE NOT SYMMETRICAL", partUid: dt.wheels.FL.uid, explanation: pr.message, fix: "Open the 4WD drivetrain panel and set the wheelbase and track width — it places all four corners symmetrically." });
+      }
+  }
   for (const l of left) {
     const r = right.slice().sort((a, b) => Math.abs(a.p.position.x - l.p.position.x) - Math.abs(b.p.position.x - l.p.position.x))[0];
     if (!r) continue;

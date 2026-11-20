@@ -25,9 +25,16 @@
  * checkpoint / start / finish → segment across the local y axis at the origin, width default 0.4.
  * ramp → rectangle length × width (default 0.5 × 0.3) with slopeDeg (default 10°), uphill = local +x.
  * Walls = the 4 edges of the floor (centred at the origin), bounds from size, arena copied.
+ *
+ * Off-road terrain pieces (rock, rock-field, mud, bumps, zigzag, hill, block, hurdles, platform) are
+ * compiled by terrain.ts (buildTerrain) into `terrain.features` – a height map, mud surfaces and
+ * per-robot solid outlines. They are deliberately NOT added to `obstacles`: whether a rock or block is
+ * solid depends on the robot (ground clearance, wheel size), so the world decides per robot. Tracks
+ * without terrain pieces get an inactive terrain and behave exactly as before.
  */
 import type { CompiledTrack, Obstacle, Pose, Segment, TrackDef, TrackPiece, TrackPieceType, Vec2 } from "../sim/types";
 import { arcPoints } from "../sim/geom";
+import { buildTerrain } from "./terrain";
 
 export const DEFAULT_ROAD_WIDTH = 0.3;
 export const DEFAULT_LINE_WIDTH = 0.019;
@@ -264,6 +271,7 @@ export function compileTrack(def: TrackDef): CompiledTrack {
     startLine,
     finishLine,
     ramps,
+    terrain: buildTerrain(def),
     arena: def.arena ?? null,
     bounds: { minX: -hw, minY: -hh, maxX: hw, maxY: hh },
   };

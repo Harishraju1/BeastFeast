@@ -55,6 +55,7 @@ export default function GarageProjectPage() {
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Badge tone={t.metadata.difficulty === "beginner" ? "ok" : t.metadata.difficulty === "intermediate" ? "warn" : "bad"}>{t.metadata.difficulty}</Badge>
             <Badge tone="brand">{t.metadata.competition === "line" ? "Line Following" : t.metadata.competition === "race" ? "Robo Race" : "Robo War / Sumo"}</Badge>
+            {t.metadata.drivetrain && <Badge tone={t.metadata.legacy ? "dim" : t.metadata.drivetrain === "4WD" ? "accent" : "dim"}>{t.metadata.legacy ? "Legacy 2WD — 4WD is the club standard" : t.metadata.drivetrain}</Badge>}
             {report ? <Badge tone={report.status === "READY TO SIMULATE" ? "ok" : report.status === "READY WITH WARNINGS" ? "warn" : "bad"}>{report.status}</Badge> : <Badge>readiness test running…</Badge>}
           </div>
         </div>
@@ -157,7 +158,7 @@ export default function GarageProjectPage() {
             <Panel title="Board & libraries">
               <div className="text-sm">Board profile: <span className="font-mono text-brand">{t.firmware.board}</span></div>
               <div className="text-sm">Libraries: {t.firmware.libraries.length ? t.firmware.libraries.join(", ") : "none (core Arduino API only)"}</div>
-              {t.simulation.keyboardViaSerial && <div className="mt-2 text-xs text-muted">Bluetooth commands: {BT_PROTOCOL_DOC}</div>}
+              {t.simulation.keyboardViaSerial && <div className="mt-2 text-xs text-muted">Bluetooth commands: {t.metadata.controlProtocol ?? BT_PROTOCOL_DOC}</div>}
             </Panel>
             <Panel title="Adjustable parameters">
               <ul className="space-y-2 text-sm">{t.firmware.adjustable.map((a) => <li key={a.name}><span className="font-mono text-accent-ink">{a.name}</span><div className="text-xs text-muted">{a.meaning}</div></li>)}</ul>

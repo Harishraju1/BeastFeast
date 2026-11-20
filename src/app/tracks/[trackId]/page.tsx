@@ -3,18 +3,23 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Download, FileUp, Minus, Plus, Redo2, RotateCw, Save, Trash2, Undo2 } from "lucide-react";
+import { Copy, Download, FileUp, Minus, Mountain, Plus, Redo2, RotateCw, Save, Shuffle, Trash2, Undo2 } from "lucide-react";
 import { RequireAuth } from "@/components/shell/AppShell";
 import { Badge, Button, Field, Tabs } from "@/components/ui";
 import { useApp } from "@/lib/store/app";
 import type { TrackDef, TrackPiece, TrackPieceType, Vec2 } from "@/lib/sim/types";
 import { compileTrack, pieceEndpoints, pieceWorldPolylines } from "@/lib/track/compile";
 import { uid } from "@/lib/robot/assembly";
+import { DEFAULT_GEN, GEN_PREFIX, generateTerrain, removeGeneratedTerrain, type TerrainGenSettings } from "@/lib/track/generate";
 import { THEME } from "@/lib/theme";
 
 const Preview3D = dynamic(() => import("@/components/three/TrackPreview3D"), { ssr: false });
 
-const TOOLS: Record<TrackDef["kind"], { type: TrackPieceType; label: string; params: TrackPiece["params"] }[]> = {
+/** Off-road terrain pieces: real height + collision in the simulator (see src/lib/track/terrain.ts). */
+const TERRAIN_TYPES: TrackPieceType[] = ["rock", "rock-field", "mud", "bumps", "zigzag", "hill", "block", "hurdles", "platform"];
+const deg = (d: number) => (d * Math.PI) / 180;
+
+const TOOLS: Record<TrackDef["kind"], { type: TrackPieceType; label: string; params: TrackPiece["params"]; group?: string }[]> = {
   race: [
     { type: "straight", label: "Straight", params: { length: 0.8, width: 0.35 } },
     { type: "curve", label: "Curve", params: { radius: 0.6, angle: Math.PI / 2, width: 0.35 } },
@@ -25,6 +30,15 @@ const TOOLS: Record<TrackDef["kind"], { type: TrackPieceType; label: string; par
     { type: "checkpoint", label: "Checkpoint", params: { width: 0.45 } },
     { type: "start", label: "Start line", params: { width: 0.45 } },
     { type: "finish", label: "Finish line", params: { width: 0.45 } },
+    { group: "Off-road obstacles", type: "rock", label: "Rock", params: { width: 0.08, depth: 0.07, height: 0.03, seed: 11 } },
+    { type: "rock-field", label: "Rock field", params: { length: 0.6, width: 0.4, count: 8, height: 0.025, seed: 7 } },
+    { type: "mud", label: "Mud patch", params: { length: 0.5, width: 0.35, grip: 0.45, drag: 0.12 } },
+    { type: "bumps", label: "Uneven ground", params: { length: 0.6, width: 0.4, amplitude: 0.012, seed: 5 } },
+    { type: "zigzag", label: "Zigzag raised path", params: { length: 1.2, width: 0.24, height: 0.04, minHeight: 0.01, segments: 4, angle: deg(30), edge: 0.06 } },
+    { type: "hill", label: "Hill (up & down)", params: { length: 1.0, width: 0.45, height: 0.05, slopeDeg: 12, edge: 0.05 } },
+    { type: "platform", label: "Raised platform", params: { length: 0.5, width: 0.35, height: 0.03, edge: 0.06 } },
+    { type: "block", label: "Block / step", params: { width: 0.2, depth: 0.06, height: 0.015, edge: 0.008 } },
+    { type: "hurdles", label: "Hurdle row", params: { width: 0.3, depth: 0.025, height: 0.012, count: 3, spacing: 0.2, edge: 0.008 } },
   ],
   line: [
     { type: "line-straight", label: "Straight line", params: { length: 0.6, lineWidth: 0.019 } },
@@ -55,6 +69,7 @@ function Editor() {
   const [freePts, setFreePts] = useState<Vec2[] | null>(null);
   const [mode, setMode] = useState<"2d" | "3d">("2d");
   const [dirty, setDirty] = useState(false);
+  const [gen, setGen] = useState<TerrainGenSettings>(DEFAULT_GEN);
   const svg = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -102,7 +117,7 @@ function Editor() {
       const d = Math.hypot(ep.end.x - w.x, ep.end.y - w.y);
       if (d < 0.15 && (!best || d < best.d)) best = { ...ep.end, d };
     }
-    const pathy = !["obstacle", "checkpoint", "start", "finish"].includes(type);
+    const pathy = !["obstacle", "checkpoint", "start", "finish", ...TERRAIN_TYPES].includes(type);
     return best && pathy ? { x: best.x, y: best.y, rotation: best.heading } : { x: round(w.x), y: round(w.y), rotation: 0 };
   };
 
@@ -136,7 +151,10 @@ function Editor() {
         <aside className="space-y-1 overflow-auto border-r border-line bg-bg2 p-2">
           <div className="bf-label mb-1">{def.kind} tools</div>
           {tools.map((t, i) => (
-            <button key={t.type + i} onClick={() => { setTool(tool === i ? null : i); setFreePts(t.type === "line-free" ? [] : null); }} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${tool === i ? "bg-accent text-black" : "text-muted hover:bg-panel hover:text-text"}`}>{t.label}</button>
+            <div key={t.type + i}>
+            {t.group && <div className="bf-label mb-1 mt-3 flex items-center gap-1.5"><Mountain size={11} /> {t.group}</div>}
+            <button onClick={() => { setTool(tool === i ? null : i); setFreePts(t.type === "line-free" ? [] : null); }} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${tool === i ? "bg-accent text-black" : "text-muted hover:bg-panel hover:text-text"}`}>{t.label}</button>
+            </div>
           ))}
           <button onClick={() => setTool(-1)} className={`block w-full rounded px-2 py-1.5 text-left text-sm ${tool === -1 ? "bg-ok text-white" : "text-muted hover:bg-panel"}`}>Set start position</button>
           <p className="pt-2 text-[11px] text-dim">Pick a tool, then click on the plan. Path pieces snap to the end of the nearest piece. Drag to move, R to rotate 15°, Del to delete. Free draw: click points, double-click to finish.</p>
@@ -189,6 +207,21 @@ function Editor() {
               {compiled?.arena?.shape === "circle" && <><circle cx={sx(0)} cy={sy(0)} r={compiled.arena.radius! * view.k} fill="#f4f4f4" /><circle cx={sx(0)} cy={sy(0)} r={(compiled.arena.radius! - compiled.arena.border) * view.k} fill="#0b0b0b" /></>}
               {compiled?.roads.map((r, i) => <polyline key={`r${i}`} points={pts(r.points)} fill="none" stroke={def.surface.color} strokeWidth={r.width * view.k} strokeLinejoin="round" />)}
               {compiled?.lines.map((l, i) => <polyline key={`l${i}`} points={pts(l.points)} fill="none" stroke="#111" strokeWidth={Math.max(1.5, l.width * view.k)} strokeLinejoin="round" />)}
+              {compiled?.terrain?.active && compiled.terrain.features.map((ft, fi) => {
+                const N = 18;
+                const cw = (ft.bounds.maxX - ft.bounds.minX) / N, chh = (ft.bounds.maxY - ft.bounds.minY) / N;
+                const cells: React.ReactNode[] = [];
+                for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+                  const x = ft.bounds.minX + (i + 0.5) * cw, y = ft.bounds.minY + (j + 0.5) * chh;
+                  const mud = ft.kind === "mud";
+                  const z = mud ? (compiled.terrain.surface(x, y).kind === "mud" ? 1 : 0) : compiled.terrain.featureHeight(fi, x, y);
+                  if (Math.abs(z) < 0.0006) continue;
+                  const a = mud ? 0.8 : Math.min(0.9, 0.25 + Math.abs(z) / Math.max(0.01, ft.maxHeight) * 0.6);
+                  const fill = mud ? "#3b2a17" : ft.kind === "rock" ? "#9a948a" : z < 0 ? "#2e2618" : "#a08660";
+                  cells.push(<rect key={`${i}-${j}`} x={sx(x - cw / 2)} y={sy(y + chh / 2)} width={cw * view.k + 0.5} height={chh * view.k + 0.5} fill={fill} fillOpacity={a} />);
+                }
+                return <g key={`tf${fi}`} pointerEvents="none">{cells}{ft.solid && <rect x={sx(ft.bounds.minX)} y={sy(ft.bounds.maxY)} width={(ft.bounds.maxX - ft.bounds.minX) * view.k} height={(ft.bounds.maxY - ft.bounds.minY) * view.k} fill="none" stroke={THEME.accent} strokeOpacity={0.5} strokeDasharray="3 3" />}</g>;
+              })}
               {compiled?.ramps.map((r, i) => <polygon key={`ra${i}`} points={pts(r.polygon)} fill="#8E9A9088" stroke="#B9BEB2" />)}
               {compiled?.obstacles.map((o, i) => o.kind === "box" ? <rect key={`o${i}`} x={sx(o.cx) - (o.w * view.k) / 2} y={sy(o.cy) - (o.h * view.k) / 2} width={o.w * view.k} height={o.h * view.k} fill={THEME.accent} transform={`rotate(${(-o.rotation * 180) / Math.PI} ${sx(o.cx)} ${sy(o.cy)})`} /> : <circle key={`o${i}`} cx={sx(o.cx)} cy={sy(o.cy)} r={o.r * view.k} fill={THEME.accent} />)}
               {compiled?.checkpoints.map((c) => <line key={`c${c.index}`} x1={sx(c.seg.a.x)} y1={sy(c.seg.a.y)} x2={sx(c.seg.b.x)} y2={sy(c.seg.b.y)} stroke={THEME.warn} strokeWidth={3} strokeDasharray="6 4" />)}
@@ -196,7 +229,8 @@ function Editor() {
               {compiled?.finishLine && <line x1={sx(compiled.finishLine.a.x)} y1={sy(compiled.finishLine.a.y)} x2={sx(compiled.finishLine.b.x)} y2={sy(compiled.finishLine.b.y)} stroke="#fff" strokeWidth={4} strokeDasharray="4 4" />}
               {/* hit areas */}
               {def.pieces.map((p) => {
-                const polys = pieceWorldPolylines(p);
+                const fb = compiled?.terrain?.features.filter((ft) => ft.pieceId === p.id).map((ft) => ft.bounds) ?? [];
+                const polys = fb.length ? fb.map((b) => [{ x: b.minX, y: b.minY }, { x: b.maxX, y: b.minY }, { x: b.maxX, y: b.maxY }, { x: b.minX, y: b.maxY }, { x: b.minX, y: b.minY }]) : pieceWorldPolylines(p);
                 const isSel = sel === p.id;
                 const hit = polys.length ? polys : [[{ x: p.x - 0.05, y: p.y }, { x: p.x + 0.05, y: p.y }]];
                 return (
@@ -226,11 +260,26 @@ function Editor() {
                 <Field label="y (m)"><input className="bf-input" type="number" step={0.01} value={selPiece.y} onChange={(e) => change((d) => ({ ...d, pieces: d.pieces.map((p) => (p.id === sel ? { ...p, y: Number(e.target.value) } : p)) }))} /></Field>
               </div>
               <Field label="Rotation (°)"><input className="bf-input" type="number" step={15} value={Math.round((selPiece.rotation * 180) / Math.PI)} onChange={(e) => change((d) => ({ ...d, pieces: d.pieces.map((p) => (p.id === sel ? { ...p, rotation: (Number(e.target.value) * Math.PI) / 180 } : p)) }))} /></Field>
-              {(["length", "radius", "width", "depth", "lineWidth", "slopeDeg"] as const).filter((k) => selPiece.params[k] !== undefined).map((k) => (
-                <Field key={k} label={k === "lineWidth" ? "Line thickness (m)" : k === "slopeDeg" ? "Slope (°)" : `${k} (m)`}>
-                  <input className="bf-input" type="number" step={k === "slopeDeg" ? 1 : k === "lineWidth" ? 0.001 : 0.01} min={0} value={selPiece.params[k] as number} onChange={(e) => setParam(k, Number(e.target.value))} />
-                </Field>
-              ))}
+              {(Object.keys(PARAM_META) as (keyof TrackPiece["params"])[]).filter((k) => selPiece.params[k] !== undefined).map((k) => {
+                const m = PARAM_META[k]!;
+                const raw = selPiece.params[k] as number;
+                return (
+                  <Field key={k} label={m.label} hint={m.hint}>
+                    <input className="bf-input" type="number" step={m.step} min={m.min} max={m.max} value={m.mm ? Math.round(raw * 1000) : raw} onChange={(e) => setParam(k, m.mm ? Number(e.target.value) / 1000 : Number(e.target.value))} />
+                  </Field>
+                );
+              })}
+              {selPiece.params.seed !== undefined && <Button size="sm" onClick={() => setParam("seed", Math.floor(Math.random() * 100000))}><Shuffle size={13} /> New random shape</Button>}
+              {TERRAIN_TYPES.includes(selPiece.type) && compiled?.terrain && (() => {
+                const fts = compiled.terrain.features.filter((ft) => ft.pieceId === selPiece.id);
+                if (!fts.length) return null;
+                const top = Math.max(...fts.map((ft) => ft.maxHeight));
+                return (
+                  <p className="rounded border border-line bg-panel px-2 py-1.5 text-[11px] text-muted">
+                    Highest point {(top * 1000).toFixed(0)} mm. A robot drives over parts lower than its ground clearance and what its wheels can climb; taller parts are solid and must be driven around.
+                  </p>
+                );
+              })()}
               {selPiece.params.angle !== undefined && <Field label="Angle (°, + = left)"><input className="bf-input" type="number" step={15} value={Math.round((selPiece.params.angle * 180) / Math.PI)} onChange={(e) => setParam("angle", (Number(e.target.value) * Math.PI) / 180)} /></Field>}
               <div className="flex gap-1.5">
                 <Button size="sm" onClick={() => change((d) => ({ ...d, pieces: d.pieces.map((p) => (p.id === sel ? { ...p, rotation: p.rotation + Math.PI / 12 } : p)) }))}><RotateCw size={13} /> 15°</Button>
@@ -262,6 +311,30 @@ function Editor() {
                   <Field label="Match time (s)"><input className="bf-input" type="number" step={10} value={def.arena.timeLimitS} onChange={(e) => change((d) => ({ ...d, arena: { ...d.arena!, timeLimitS: Number(e.target.value) } }))} /></Field>
                 </>
               )}
+              {def.kind === "race" && (
+                <div className="space-y-2 rounded-md border border-line p-2.5">
+                  <div className="bf-label flex items-center gap-1.5"><Mountain size={12} /> Off-road terrain generator</div>
+                  <p className="text-[11px] text-dim">Scatters obstacles along the road. Regenerating replaces only generated pieces; your own pieces stay.</p>
+                  {([
+                    ["difficulty", "Terrain difficulty", 0, 1, 0.05, (v: number) => `${Math.round(v * 100)}%`],
+                    ["rockDensity", "Rock density (per m)", 0, 6, 0.5, (v: number) => v.toFixed(1)],
+                    ["mudCoverage", "Mud coverage", 0, 0.6, 0.05, (v: number) => `${Math.round(v * 100)}%`],
+                    ["hurdles", "Hurdle rows", 0, 6, 1, (v: number) => String(v)],
+                    ["zigzagHeight", "Zigzag height", 0, 0.1, 0.005, (v: number) => (v ? `${Math.round(v * 1000)} mm` : "none")],
+                    ["slopeDeg", "Hill slope", 0, 30, 1, (v: number) => (v ? `${v}°` : "none")],
+                  ] as const).map(([k, label, min, max, step, fmt]) => (
+                    <label key={k} className="block text-xs">
+                      <span className="flex justify-between text-muted"><span>{label}</span><span className="font-mono text-text">{fmt(gen[k] as number)}</span></span>
+                      <input type="range" className="w-full accent-[var(--accent)]" min={min} max={max} step={step} value={gen[k] as number} onChange={(e) => setGen({ ...gen, [k]: Number(e.target.value) })} />
+                    </label>
+                  ))}
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button size="sm" variant="primary" onClick={() => { change((d) => generateTerrain(d, gen)); toast("success", "Off-road terrain generated"); }}><Mountain size={13} /> Generate</Button>
+                    <Button size="sm" onClick={() => { setGen({ ...gen, seed: gen.seed + 1 }); change((d) => generateTerrain(d, { ...gen, seed: gen.seed + 1 })); }}><Shuffle size={13} /> Reshuffle</Button>
+                    {def.pieces.some((p) => p.id.startsWith(GEN_PREFIX)) && <Button size="sm" variant="ghost" onClick={() => change((d) => removeGeneratedTerrain(d))}>Clear generated</Button>}
+                  </div>
+                </div>
+              )}
               <div className="text-xs text-muted">{def.pieces.length} pieces · {compiled ? `${compiled.roads.length} roads, ${compiled.lines.length} lines, ${compiled.checkpoints.length} checkpoints` : "invalid"}</div>
             </>
           )}
@@ -279,6 +352,26 @@ function safeCompile(def: TrackDef) {
   }
 }
 const round = (v: number) => Math.round(v * 1000) / 1000;
+
+/** Inspector fields. Heights are edited in millimetres (mm: true) because obstacles are small. */
+type ParamMeta = { label: string; step: number; min: number; max: number; hint?: string; mm?: boolean };
+const PARAM_META: Partial<Record<keyof TrackPiece["params"], ParamMeta>> = {
+  length: { label: "Length (m)", step: 0.01, min: 0.05, max: 6 },
+  radius: { label: "Radius (m)", step: 0.01, min: 0.05, max: 3 },
+  width: { label: "Width (m)", step: 0.01, min: 0.01, max: 4 },
+  depth: { label: "Depth (m)", step: 0.005, min: 0.005, max: 4 },
+  lineWidth: { label: "Line thickness (m)", step: 0.001, min: 0.005, max: 0.05 },
+  slopeDeg: { label: "Slope (°)", step: 1, min: 1, max: 45, hint: "Steeper than the tyre grip allows can't be climbed." },
+  height: { label: "Height (mm)", step: 1, min: 1, max: 300, mm: true },
+  minHeight: { label: "Lowest height (mm)", step: 1, min: 0, max: 300, mm: true },
+  amplitude: { label: "Bump size (mm)", step: 1, min: 1, max: 60, mm: true },
+  count: { label: "How many", step: 1, min: 1, max: 40 },
+  spacing: { label: "Spacing (m)", step: 0.01, min: 0.03, max: 1 },
+  segments: { label: "Zigzag legs", step: 1, min: 2, max: 12 },
+  edge: { label: "Edge slope width (m)", step: 0.01, min: 0.01, max: 1 },
+  grip: { label: "Grip in mud (×)", step: 0.05, min: 0.1, max: 1, hint: "1 = like dry ground; 0.4 = slippery." },
+  drag: { label: "Mud drag", step: 0.01, min: 0, max: 0.5, hint: "Extra rolling resistance from sinking in." },
+};
 
 export default function TrackEditorPage() {
   return (

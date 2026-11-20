@@ -121,6 +121,7 @@ export function buildRobotSpec(project: Project, name = project.name): { spec: S
       : { nominalVoltage: 0, maxVoltage: 0, minVoltage: 0, capacity_mAh: 1, internalResistance: 1 },
     sensors,
     wedge,
+    groundClearance: Math.max(0.002, (ch?.groundClearance_mm ?? 10) / 1000),
   };
   if (!wheels.some((w) => w.motorId)) notes.problems.push("No wheel is attached to a motor — the robot cannot move.");
   return { spec, notes };

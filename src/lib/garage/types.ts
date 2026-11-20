@@ -20,6 +20,8 @@ export interface TemplatePart {
   config?: Record<string, number | boolean | string>;
   /** label of the motor whose shaft this wheel / encoder is mounted on */
   attachedTo?: string;
+  /** mounting role, e.g. "front-left" for the FL corner of a 4WD drivetrain */
+  role?: string;
 }
 
 export interface ProjectTemplate {
@@ -36,8 +38,17 @@ export interface ProjectTemplate {
     limitations: string[];
     author: string;
     sensorSummary: string;
+    /** "4WD" skid-steer (four driven wheels, no caster) or "2WD" differential drive with a caster */
+    drivetrain?: "2WD" | "4WD";
+    /**
+     * Legacy reference robot, kept so student copies that reference its template id keep working.
+     * Shown in a secondary "Legacy 2WD" group in the Garage.
+     */
+    legacy?: boolean;
+    /** command protocol shown for keyboard/Bluetooth-controlled robots (defaults to the RR protocol) */
+    controlProtocol?: string;
   };
-  chassis: { componentId: string; length_mm?: number; width_mm?: number; thickness_mm?: number; material?: string };
+  chassis: { componentId: string; length_mm?: number; width_mm?: number; thickness_mm?: number; material?: string; groundClearance_mm?: number };
   parts: TemplatePart[];
   /** "LABEL.PIN" → "LABEL.PIN" with wire colour */
   wiring: [string, string, WireColor][];

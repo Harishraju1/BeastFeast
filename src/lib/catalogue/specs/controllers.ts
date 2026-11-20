@@ -42,7 +42,7 @@ function unoHeader(opts: { r4?: boolean }): PinDef[] {
   pins.push(
     io("SDA", 18, ["i2c-sda", "analog"], "R", { label: "SDA", note: "Same signal as A4", logicV: 5 }),
     io("SCL", 19, ["i2c-scl", "analog"], "R", { label: "SCL", note: "Same signal as A5", logicV: 5 }),
-    vin("VIN", opts.r4 ? [6, 24] : [7, 12], "L", { note: opts.r4 ? "6–24 V input" : "7–12 V recommended (6–20 V limits)" }),
+    vin("VIN", opts.r4 ? [6, 24] : LINEAR_VIN_RANGE, "L", { note: opts.r4 ? "6–24 V input" : LINEAR_VIN_NOTE }),
     vout("5V", 5, "L", { vRange: [4.8, 5.25], iMax_mA: opts.r4 ? 1200 : 800, note: "Regulated 5 V output when powered from VIN/USB. Feeding 5 V in here bypasses the regulator and its protection." }),
     vout("3V3", 3.3, "L", { iMax_mA: opts.r4 ? 100 : 50 }),
     vout("IOREF", 5, "L", { iMax_mA: 0, note: "Reference only – do not power loads from IOREF" }),
@@ -93,7 +93,7 @@ function nanoHeader(opts: { every?: boolean; proMini?: boolean }): PinDef[] {
     );
   } else {
     pins.push(
-      vin("VIN", opts.every ? [7, 21] : [7, 12], "L"),
+      vin("VIN", opts.every ? [7, 21] : LINEAR_VIN_RANGE, "L", opts.every ? {} : { note: LINEAR_VIN_NOTE }),
       vout("5V", 5, "L", { vRange: [4.8, 5.25], iMax_mA: 500 }),
       vout("3V3", 3.3, "L", { iMax_mA: opts.every ? 200 : 50 }),
       gnd("GND1", "L"),
@@ -119,7 +119,7 @@ function megaHeader(): PinDef[] {
   }
   for (let a = 0; a <= 15; a++) pins.push(io(`A${a}`, 54 + a, ["analog"], "L", { codeNames: [`A${a}`], logicV: 5 }));
   pins.push(
-    vin("VIN", [7, 12], "L"),
+    vin("VIN", LINEAR_VIN_RANGE, "L", { note: LINEAR_VIN_NOTE }),
     vout("5V", 5, "L", { vRange: [4.8, 5.25], iMax_mA: 800 }),
     vout("3V3", 3.3, "L", { iMax_mA: 50 }),
     gnd("GND1", "L"),
@@ -145,7 +145,7 @@ function leonardoHeader(): PinDef[] {
   }
   for (let a = 0; a <= 5; a++) pins.push(io(`A${a}`, 18 + a, ["analog"], "L", { codeNames: [`A${a}`], logicV: 5 }));
   pins.push(
-    vin("VIN", [7, 12], "L"),
+    vin("VIN", LINEAR_VIN_RANGE, "L", { note: LINEAR_VIN_NOTE }),
     vout("5V", 5, "L", { vRange: [4.8, 5.25], iMax_mA: 500 }),
     vout("3V3", 3.3, "L", { iMax_mA: 50 }),
     gnd("GND1", "L"),
@@ -280,6 +280,18 @@ function attiny85(): PinDef[] {
     gnd("GND", "L", "GND (pin 4)"),
   ];
 }
+
+/**
+ * VIN of ATmega boards with an on-board linear 5 V regulator (Uno R3, Nano, Mega, Leonardo, Micro).
+ * Arduino: 7–12 V recommended, 6–20 V limits. The accepted range reaches 13 V so a fully charged 3S LiPo
+ * (12.6 V, the club's standard 4WD battery) is accepted — validation adds a suggestion above 12 V because the
+ * regulator runs warm. Higher voltages (e.g. 4S, 16.8 V) overheat the linear regulator under robot loads and
+ * stay flagged as over-voltage.
+ */
+export const LINEAR_VIN_RANGE: [number, number] = [7, 13];
+export const LINEAR_VIN_NOTE = "7–12 V recommended (6–20 V absolute limits). A fully charged 3S LiPo (12.6 V) is accepted; above ≈13 V the on-board linear regulator overheats.";
+/** Boards whose VIN feeds a linear regulator: VIN above this is accepted but flagged as a suggestion. */
+export const LINEAR_VIN_RECOMMENDED_MAX: Record<string, number> = { uno: 12, nano: 12, mega: 12, leonardo: 12, micro: 12 };
 
 const docs = (s: string) => `https://docs.arduino.cc/hardware/${s}/`;
 

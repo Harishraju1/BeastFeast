@@ -77,6 +77,7 @@ function ProjectCard({ t, project, report, onAction }: { t: ProjectTemplate; pro
         <div className="flex flex-wrap gap-1.5">
           <Badge tone={diffTone}>{t.metadata.difficulty}</Badge>
           <Badge tone="brand">{t.metadata.competition === "line" ? "Line Following" : t.metadata.competition === "race" ? "Robo Race" : "Robo War"}</Badge>
+          {t.metadata.drivetrain && <Badge tone={t.metadata.legacy ? "dim" : t.metadata.drivetrain === "4WD" ? "accent" : "dim"}>{t.metadata.legacy ? "Legacy 2WD" : t.metadata.drivetrain}</Badge>}
           <StatusBadge r={report} />
         </div>
         <dl className="grid grid-cols-[92px_1fr] gap-x-2 gap-y-0.5 text-xs">
@@ -135,8 +136,12 @@ export default function GaragePage() {
               <div className="bf-label">{lab.kicker}</div>
               <h2 className={`font-display text-2xl font-bold tracking-wide ${lab.accent}`}><span className="mr-2 inline-block h-5 w-1.5 translate-y-0.5 rounded-sm bg-accent" />{lab.title}</h2>
             </div>
-            <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {GARAGE_TEMPLATES.filter((t) => t.metadata.competition === lab.competition).map((t) => (
+            {(() => {
+              const inLab = GARAGE_TEMPLATES.filter((t) => t.metadata.competition === lab.competition);
+              // 4WD robots (the club standard) first, then the rest; legacy 2WD robots in a collapsed group
+              const current = [...inLab.filter((t) => !t.metadata.legacy && t.metadata.drivetrain === "4WD"), ...inLab.filter((t) => !t.metadata.legacy && t.metadata.drivetrain !== "4WD")];
+              const legacy = inLab.filter((t) => t.metadata.legacy);
+              const card = (t: ProjectTemplate) => (
                 <ProjectCard
                   key={t.metadata.id}
                   t={t}
@@ -144,8 +149,21 @@ export default function GaragePage() {
                   report={reports[t.metadata.id]}
                   onAction={(intent) => (ready && !user ? (location.href = `/login?next=/garage`) : setFlow({ id: t.metadata.id, intent }))}
                 />
-              ))}
-            </div>
+              );
+              return (
+                <>
+                  <div className="relative grid gap-4 md:grid-cols-2 xl:grid-cols-3">{current.map(card)}</div>
+                  {legacy.length > 0 && (
+                    <details className="relative mt-5 rounded-xl border border-line bg-bg2/40 p-3">
+                      <summary className="cursor-pointer select-none font-mono text-xs tracking-widest text-muted">
+                        LEGACY 2WD ROBOTS ({legacy.length}) — {legacy.map((t) => t.metadata.id).join(", ")} · kept so existing copies keep working; 4WD is the club standard
+                      </summary>
+                      <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{legacy.map(card)}</div>
+                    </details>
+                  )}
+                </>
+              );
+            })()}
           </section>
         ))}
       </div>

@@ -11,6 +11,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseMasterList } from "../src/lib/catalogue/parse";
 import { buildCatalogue } from "../src/lib/catalogue/build";
+import { buildPlatformAdditions } from "../src/lib/catalogue/platform";
 import { compareCatalogue, reportToMarkdown } from "../src/lib/catalogue/report";
 
 const root = path.resolve(__dirname, "..");
@@ -27,12 +28,13 @@ writeFileSync(
 
 const parsed = parseMasterList(md);
 const records = buildCatalogue(parsed);
-const report = compareCatalogue(parsed, records);
+// platform additions (not in the master list) are reported separately: "552 master-list entries + N platform additions"
+const report = compareCatalogue(parsed, [...records, ...buildPlatformAdditions(parsed)]);
 writeFileSync(path.join(root, "src/data/catalogue.generated.json"), JSON.stringify({ sha256: hash, count: records.length, records }, null, 1));
 writeFileSync(path.join(root, "supabase/seed/components.json"), JSON.stringify(records));
 writeFileSync(path.join(root, "COMPONENT_CATALOGUE_REPORT.md"), reportToMarkdown(report, records, hash));
 
-console.log(`Source entries: ${report.totalSource}  Imported: ${report.imported}  Missing: ${report.missing.length}  Duplicate IDs: ${report.duplicateIds.length}`);
+console.log(`Source entries: ${report.totalSource}  Imported: ${report.imported} (+ ${report.platformAdditions.length} platform additions)  Missing: ${report.missing.length}  Duplicate IDs: ${report.duplicateIds.length}`);
 console.log(`Status — green ${report.bySimStatus.green}, blue ${report.bySimStatus.blue}, yellow ${report.bySimStatus.yellow}, grey ${report.bySimStatus.grey}`);
 if (report.parserWarnings.length) console.warn(report.parserWarnings.join("\n"));
 if (!report.complete) process.exit(1);

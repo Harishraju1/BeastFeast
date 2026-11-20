@@ -96,6 +96,55 @@ Every layer enforces access:
 
 Local mode (no Supabase) applies the same rules in the browser, and the first account on a device becomes its Super Admin. Local mode is single-device and not tamper-proof. `node scripts/dev.mjs 3211 --local` runs the app in local mode even when `.env.local` has Supabase settings.
 
+## 4WD robots and off-road racing
+
+### 4WD is the standard
+- New Robo Race and Sumo projects start with a 4WD skid-steer drivetrain: four DC geared motors (FL, FR, RL, RR), one wheel on each, no caster.
+- The Robot Designer's **4WD drivetrain** panel sets wheel diameter and width, wheelbase, track width, chassis length and width, and ground clearance. It moves the same eight parts, so the wiring is kept.
+- "Convert to 4WD…" upgrades an existing 2WD robot. It asks first and can be undone.
+- Code: `src/lib/robot/drivetrain4wd.ts`.
+
+### Battery
+- **11.1V 2100mAh LiPo Battery (3S)**: 3 cells, 11.1 V nominal, 12.6 V full (standard 3S convention), 23.31 Wh.
+- C rating, connector and charging spec are "not specified".
+- It is a club platform addition (`src/lib/catalogue/platform.ts`) on top of the 552 master-list parts.
+- The designer's power summary shows estimated current draw and runtime.
+- Validation flags parts that can't take 12.6 V.
+
+### Garage
+| Robot | ID |
+| --- | --- |
+| 4WD Robo Race Car | RR-04 |
+| 4WD Off-Road Rover | RR-05 |
+| 4WD Experimental Robot | RR-06 |
+| 4WD Sumo Robot | RW-04 |
+
+- RR-02 was already 4WD.
+- The earlier 2WD race and sumo robots are kept as "Legacy 2WD", because students' copies reference them.
+- The line followers stay 2WD.
+
+### Off-road terrain (`src/lib/track/terrain.ts`)
+**Pieces:** rock, rock field, mud, uneven ground (bumps), zigzag raised path, hill, raised platform, block / step, and hurdle row. Every piece has real height and is drawn from the same height map the physics uses.
+
+**Physics:** each wheel samples its own ground height, slope, grip and drag.
+- Slopes add a downhill force and reduce wheel load. Whether a robot can climb comes from tyre grip and motor torque (no hard-coded angle).
+- Mud lowers grip and adds sinkage drag.
+- Rocks and blocks lower than the robot's ground clearance, and lower than what its wheels can climb, are driven over. Taller ones are solid collisions, and distance sensors see them.
+
+**Body motion:** pitch, roll and height come from a plane fitted through the wheel contacts.
+- No suspension, tipping or jumps.
+- Dynamic load transfer is ignored.
+- The chassis underside never gets stuck.
+
+**Track Designer:** an off-road tool group, a terrain inspector with heights in mm, and a **terrain generator** (difficulty, rock density, mud coverage, hurdle rows, zigzag height, hill slope; regenerate or clear).
+
+**Templates:** 8 off-road tracks (Beginner, Intermediate, Advanced, Rock, Mud, Zigzag, Hill Climb, Mixed).
+
+**Arena:**
+- terrain under the robot, height, pitch and roll, obstacles crossed, collision count, estimated charge used
+- every wheel's rpm and slip
+- a **Motor test** tab (each motor on its own, all forward / reverse, pivot)
+
 ## Accounts, privacy and security
 
 - **Sign-up fields:** full name, email, a +91 mobile number and the NIAT student ID (format N00H01X0000, regex `^N\d{2}H01[A-Z]\d{4}$`, e.g. N24H01A0001), a password plus its confirmation, and an optional profile picture.

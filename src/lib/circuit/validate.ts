@@ -6,6 +6,7 @@ import type { ComponentRecord, PartInstance, PinDef, Project, ValidationIssue, V
 import { type CircuitGraph, type Net, type NetMember, batteryPack, buildGraph, isConnected, optionValue } from "./nets";
 import { DRIVER_WIRING } from "@/lib/robot/drivers";
 import { type SumoLimits, validateMechanics } from "@/lib/mech/validate";
+import { LINEAR_VIN_RECOMMENDED_MAX } from "@/lib/catalogue/specs/controllers";
 
 type Issue = Omit<ValidationIssue, "id">;
 
@@ -161,6 +162,11 @@ function rulePowerAndGround(g: CircuitGraph, add: (i: Issue) => void, NAME: stri
     };
     if (c.kind === "controller") {
       for (const x of suppliedPins) rangeCheck(x, g.netOf.get(key(p, x.id))!);
+      const recMax = c.board ? LINEAR_VIN_RECOMMENDED_MAX[c.board] : undefined;
+      const vinNet = recMax !== undefined ? g.netOf.get(key(p, "VIN")) : undefined;
+      const vinMax = vinNet?.voltage != null ? (vinNet.vMax ?? vinNet.voltage) : null;
+      if (recMax !== undefined && vinMax !== null && vinMax > recMax + 0.05 && vinMax <= (c.pins.find((x) => x.id === "VIN")?.vRange?.[1] ?? recMax) + 0.05)
+        add({ severity: "suggestion", area: "power", code: "S_VIN_ABOVE_RECOMMENDED", title: "VIN IS ABOVE THE RECOMMENDED 7–12 V", partUid: p.uid, pinId: "VIN", incorrect: `VIN reaches ${vinMax.toFixed(1)} V when the battery is fully charged.`, explanation: `This is accepted (absolute limit 20 V), but the board's linear 5 V regulator turns the extra voltage into heat: at ${vinMax.toFixed(1)} V every 100 mA drawn from the 5V pin heats it by ≈${((vinMax - 5) * 0.1).toFixed(2)} W.`, fix: "Keep the load on the 5V pin small (sensors, driver logic, Bluetooth), or feed 5 V from a buck converter for servos and larger loads." });
       if (!suppliedPins.length)
         add({ severity: "critical", area: "power", code: "E_NO_POWER", title: `HEY ${NAME}! YOUR CONTROLLER HAS NO POWER!`, partUid: p.uid, pinId: supplyPins.find((x) => x.fn === "vin")?.id, incorrect: `Nothing supplies ${supplyPins.map((x) => x.label).join(" / ")}.`, explanation: "On the robot there is no USB cable — the controller must be fed from the battery (VIN, through its regulator) or from a regulated 5 V/3.3 V rail.", fix: "Connect battery + (through the power switch) to VIN, or a buck converter's 5 V output to the 5V pin, and battery − to GND." });
     } else {
@@ -425,10 +431,12 @@ function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
     if (!out?.comp.driver) continue;
     if (stall > out.comp.driver.peakCurrentA)
       add({ severity: "warning", area: "compatibility", code: "W_DRIVER_CURRENT", title: "MOTOR CAN DRAW MORE THAN THE DRIVER ALLOWS", partUid: out.part.uid, incorrect: `${m.label} stall ≈${stall} A > ${out.comp.name} peak ${out.comp.driver.peakCurrentA} A.`, explanation: "At start-up, when stalled or when pushing (sumo!) the motor draws its stall current. The driver may overheat or shut down.", fix: "Choose a driver with a higher current rating or a smaller motor." });
-    const vm = g.netOf.get(key(out.part, DRIVER_WIRING[out.comp.id]?.motorSupply ?? ""))?.voltage;
+    const supplyNet = g.netOf.get(key(out.part, DRIVER_WIRING[out.comp.id]?.motorSupply ?? ""));
+    // a freshly charged pack is what the motor sees first: judge by the full-charge voltage (e.g. 12.6 V for 3S)
+    const vm = supplyNet?.vMax ?? supplyNet?.voltage;
     const nominal = Boolean(m.config.customParams) ? Number(m.config.nominalVoltage) : c.motor!.nominalVoltage;
     if (vm && vm - (out.comp.driver.dropV ?? 0) > nominal * 1.5)
-      add({ severity: "warning", area: "compatibility", code: "W_MOTOR_OVERVOLT", title: "MOTOR VOLTAGE TOO HIGH", partUid: m.uid, incorrect: `${m.label} is rated ${nominal} V but can receive ≈${(vm - out.comp.driver.dropV).toFixed(1)} V.`, explanation: "Over-volting a motor makes it faster but shortens its life dramatically and raises the stall current.", fix: "Limit the PWM duty in code, or use a lower-voltage supply." });
+      add({ severity: "warning", area: "compatibility", code: "W_MOTOR_OVERVOLT", title: "MOTOR VOLTAGE TOO HIGH", partUid: m.uid, incorrect: `${m.label} is rated ${nominal} V but can receive ≈${(vm - out.comp.driver.dropV).toFixed(1)} V (${vm.toFixed(1)} V fully charged supply − ${out.comp.driver.dropV} V driver loss).`, explanation: "Over-volting a motor makes it faster but shortens its life dramatically and raises the stall current.", fix: `Use motors rated for this battery (e.g. 12 V gearmotors on a 3S pack), limit the PWM duty in code, or use a lower-voltage supply.` });
   }
   // servo on controller 5V, battery capability
   for (const s of partsOf(g, (c) => c.kind === "servo")) {
@@ -442,7 +450,10 @@ function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
     const c = g.comps.get(b.uid)!;
     const pack = batteryPack(c, b)!;
     const stallTotal = partsOf(g, (x) => x.kind === "dc-motor" && !!x.motor).reduce((a, m) => a + (g.comps.get(m.uid)!.motor!.stallCurrentA ?? 0), 0);
-    if (stallTotal > pack.maxA * 1.2)
+    if (!Number.isFinite(pack.maxA)) {
+      if (stallTotal > 0)
+        add({ severity: "suggestion", area: "power", code: "S_BATTERY_RATING_UNKNOWN", title: "CHECK YOUR BATTERY'S DISCHARGE (C) RATING", partUid: b.uid, incorrect: `Motors can draw up to ≈${stallTotal.toFixed(1)} A together at stall; the discharge rating of ${b.label} is not specified.`, explanation: "The maximum continuous current of a LiPo pack is its C rating × capacity (e.g. 20C × 2.1 Ah = 42 A). It was not supplied for this pack, so it cannot be checked.", fix: "Read the C rating on the pack label and make sure C × capacity (Ah) is above the motors' total stall current." });
+    } else if (stallTotal > pack.maxA * 1.2)
       add({ severity: "warning", area: "power", code: "W_BATTERY_CURRENT", title: "BATTERY CANNOT DELIVER THE MOTOR CURRENT", partUid: b.uid, incorrect: `Motors can draw ≈${stallTotal.toFixed(1)} A; ${b.label} is good for ≈${pack.maxA} A.`, explanation: "The voltage will sag heavily under load, causing resets and weak motors.", fix: "Use a higher-discharge battery (Li-ion/LiPo) instead." });
   }
   // LEDs without resistors

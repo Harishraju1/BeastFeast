@@ -14,6 +14,7 @@ function Completeness() {
   const rows: [string, string | number, ("ok" | "bad" | "dim")?][] = [
     ["Total source entries", rep.totalSource],
     ["Imported entries", rep.imported],
+    ["Platform additions (not in the master list)", rep.platformAdditions.length ? `${rep.platformAdditions.length} — ${rep.platformAdditions.map((p) => p.name).join(", ")}` : 0, "dim"],
     ["Missing entries", rep.missing.length, rep.missing.length ? "bad" : "ok"],
     ["Duplicate database IDs", rep.duplicateIds.length, rep.duplicateIds.length ? "bad" : "ok"],
     ["Source entries imported twice", rep.duplicateSourceRefs.length, rep.duplicateSourceRefs.length ? "bad" : "ok"],

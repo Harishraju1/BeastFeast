@@ -350,9 +350,9 @@
      "side": "L",
      "vRange": [
       7,
-      12
+      13
      ],
-     "note": "7–12 V recommended (6–20 V limits)"
+     "note": "7–12 V recommended (6–20 V absolute limits). A fully charged 3S LiPo (12.6 V) is accepted; above ≈13 V the on-board linear regulator overheats."
     },
     {
      "id": "5V",
@@ -1267,8 +1267,9 @@
      "side": "L",
      "vRange": [
       7,
-      12
-     ]
+      13
+     ],
+     "note": "7–12 V recommended (6–20 V absolute limits). A fully charged 3S LiPo (12.6 V) is accepted; above ≈13 V the on-board linear regulator overheats."
     },
     {
      "id": "5V",
@@ -2521,8 +2522,9 @@
      "side": "L",
      "vRange": [
       7,
-      12
-     ]
+      13
+     ],
+     "note": "7–12 V recommended (6–20 V absolute limits). A fully charged 3S LiPo (12.6 V) is accepted; above ≈13 V the on-board linear regulator overheats."
     },
     {
      "id": "5V",
@@ -2916,8 +2918,9 @@
      "side": "L",
      "vRange": [
       7,
-      12
-     ]
+      13
+     ],
+     "note": "7–12 V recommended (6–20 V absolute limits). A fully charged 3S LiPo (12.6 V) is accepted; above ≈13 V the on-board linear regulator overheats."
     },
     {
      "id": "5V",
@@ -3955,8 +3958,9 @@
      "side": "L",
      "vRange": [
       7,
-      12
-     ]
+      13
+     ],
+     "note": "7–12 V recommended (6–20 V absolute limits). A fully charged 3S LiPo (12.6 V) is accepted; above ≈13 V the on-board linear regulator overheats."
     },
     {
      "id": "5V",

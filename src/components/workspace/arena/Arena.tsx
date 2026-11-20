@@ -31,6 +31,10 @@ interface Snap {
   x: number;
   y: number;
   h: number;
+  /** terrain: height above the floor and body attitude (rad) */
+  z?: number;
+  pitch?: number;
+  roll?: number;
   wheels: Record<string, number>;
   opp?: { x: number; y: number; h: number };
   ghost?: { x: number; y: number; h: number } | null;
@@ -42,8 +46,9 @@ function RobotView({ project, snap, groundOffset }: { project: Project; snap: Re
   useFrame(() => {
     const s = snap.current;
     if (!g.current || !s) return;
-    g.current.position.set(s.x, groundOffset, -s.y);
-    g.current.rotation.y = s.h;
+    g.current.position.set(s.x, groundOffset + (s.z ?? 0), -s.y);
+    // heading about the vertical axis, then pitch (nose up = +) about the robot's side axis, then roll
+    g.current.rotation.set(s.roll ?? 0, s.h, s.pitch ?? 0, "YZX");
     setWheels(s.wheels);
   });
   return (
@@ -77,9 +82,9 @@ function CameraRig({ mode, snap, center }: { mode: Cam; snap: React.RefObject<Sn
   useFrame(() => {
     const s = snap.current;
     if (!s || mode === "free") return;
-    const target = new THREE.Vector3(s.x, 0, -s.y);
+    const target = new THREE.Vector3(s.x, s.z ?? 0, -s.y);
     let pos: THREE.Vector3;
-    if (mode === "robot") pos = new THREE.Vector3(s.x - Math.cos(s.h) * 0.45, 0.28, -(s.y - Math.sin(s.h) * 0.45));
+    if (mode === "robot") pos = new THREE.Vector3(s.x - Math.cos(s.h) * 0.45, 0.28 + (s.z ?? 0), -(s.y - Math.sin(s.h) * 0.45));
     else if (mode === "top") pos = new THREE.Vector3(center[0], 3.2, -center[1] + 0.001);
     else pos = new THREE.Vector3(s.x, 0.18, -s.y + 0.9);
     camera.position.lerp(pos, mode === "top" ? 1 : 0.12);
@@ -95,6 +100,10 @@ export default function Arena({ project }: { project: Project }) {
   const [trackId, setTrackId] = useState<string>(project.trackId && allTracks.some((t) => t.id === project.trackId) ? project.trackId : allTracks[0]?.id);
   const track = allTracks.find((t) => t.id === trackId) ?? allTracks[0];
   const compiled = useMemo(() => (track ? compileTrack(track) : null), [track]);
+  const compiledRef = useRef(compiled);
+  useEffect(() => {
+    compiledRef.current = compiled;
+  }, [compiled]);
   const [mode, setMode] = useState<ControlMode>(project.simConfig?.controlMode ?? (project.codeCheck?.ok ? "code" : "manual"));
   const [level, setLevel] = useState<OpponentLevel>(project.simConfig?.opponent ?? "beginner");
   const [speedX, setSpeedX] = useState(1);
@@ -102,7 +111,14 @@ export default function Arena({ project }: { project: Project }) {
   const [run, setRun] = useState<RunState>("idle");
   const [err, setErr] = useState<string | null>(null);
   const [vm, setVm] = useState<ViewModel | null>(null);
-  const [panel, setPanel] = useState<"telemetry" | "sensors" | "serial" | "debug" | "tune">(project.simConfig?.tunables?.length || project.simConfig?.telemetryPrefix ? "tune" : "telemetry");
+  const [motorTest, setMotorTest] = useState<Record<string, number> | null>(null);
+  const motorTestRef = useRef<Record<string, number> | null>(null);
+  useEffect(() => {
+    motorTestRef.current = motorTest;
+  }, [motorTest]);
+  // terrain features the robot has driven onto and then off again (off-road "obstacles completed")
+  const crossed = useRef<{ inside: Set<number>; done: Set<number> }>({ inside: new Set(), done: new Set() });
+  const [panel, setPanel] = useState<"telemetry" | "sensors" | "serial" | "debug" | "tune" | "motors">(project.simConfig?.tunables?.length || project.simConfig?.telemetryPrefix ? "tune" : "telemetry");
   const [serialIn, setSerialIn] = useState("");
   const [finding, setFinding] = useState<DebugFinding | null>(null);
   const [ghostOn, setGhostOn] = useState(true);
@@ -132,6 +148,7 @@ export default function Arena({ project }: { project: Project }) {
   const build = useCallback(() => {
     if (!track) return null;
     try {
+      crossed.current = { inside: new Set(), done: new Set() };
       const s = new SimSession({ project, track, mode, hex: mode === "code" ? hex?.text : null, opponent: track.kind === "sumo" ? level : null, opponentStartDelayS: content.rules.sumo.startDelayS, studentName: user?.name });
       session.current = s;
       setErr(s.mode === "code" && s.compileResult && !s.compileResult.ok ? "Your code does not compile — open Code Studio." : null);
@@ -140,7 +157,7 @@ export default function Arena({ project }: { project: Project }) {
       resultSaved.current = false;
       setFinding(null);
       setTuneValues(tuneDefaults());
-      setVm(makeVm(s));
+      setVm({ ...makeVm(s), crossed: crossed.current.done.size });
       return s;
     } catch (e) {
       setErr((e as Error).message);
@@ -250,11 +267,20 @@ export default function Arena({ project }: { project: Project }) {
           lastSerialCmd.current = cmd;
         }
       }
+      s.manual.motorTest = s.mode === "manual" ? motorTestRef.current : null;
       const { pauseFor } = s.advance(dt * speedX, 20000);
       const tel = s.telemetry(0);
+      const tr = compiledRef.current?.terrain;
+      if (tr?.active) {
+        tr.features.forEach((ft, fi) => {
+          const inside = tel.pose.x >= ft.bounds.minX && tel.pose.x <= ft.bounds.maxX && tel.pose.y >= ft.bounds.minY && tel.pose.y <= ft.bounds.maxY;
+          if (inside) crossed.current.inside.add(fi);
+          else if (crossed.current.inside.delete(fi)) crossed.current.done.add(fi);
+        });
+      }
       const sn = s.world.getSnapshot();
       const ghost = ghostOn && best?.ghost ? interp(best.ghost, s.time) : null;
-      snap.current = { x: tel.pose.x, y: tel.pose.y, h: tel.pose.heading, wheels: sn.robots[0]?.wheelAngles ?? {}, opp: sn.robots[1] ? { x: sn.robots[1].pose.x, y: sn.robots[1].pose.y, h: sn.robots[1].pose.heading } : undefined, ghost };
+      snap.current = { x: tel.pose.x, y: tel.pose.y, h: tel.pose.heading, z: tel.z ?? 0, pitch: tel.pitch ?? 0, roll: tel.roll ?? 0, wheels: sn.robots[0]?.wheelAngles ?? {}, opp: sn.robots[1] ? { x: sn.robots[1].pose.x, y: sn.robots[1].pose.y, h: sn.robots[1].pose.heading } : undefined, ghost };
       // end conditions
       let end: SimulationResult["outcome"] | null = null;
       if (track?.kind === "sumo") {
@@ -277,7 +303,7 @@ export default function Arena({ project }: { project: Project }) {
       uiT += dt;
       if (uiT > 0.1 || end || pauseFor) {
         uiT = 0;
-        setVm(makeVm(s));
+        setVm({ ...makeVm(s), crossed: crossed.current.done.size });
       }
       schedule(loop);
     };
@@ -341,6 +367,8 @@ export default function Arena({ project }: { project: Project }) {
   if (!track || !compiled) return <div className="p-6 text-muted">No tracks for this competition yet. <Link className="text-accent-ink" href="/tracks">Create one</Link>.</div>;
   const center: [number, number] = [(compiled.bounds.minX + compiled.bounds.maxX) / 2, (compiled.bounds.minY + compiled.bounds.maxY) / 2];
   const motors = project.parts.filter((p) => getComponent(p.componentId)?.kind === "dc-motor");
+  const wheelParts = project.parts.filter((p) => getComponent(p.componentId)?.kind === "wheel");
+  const SURFACE_LABEL: Record<string, string> = { ground: "Ground", mud: "Mud", rock: "Rock", bumps: "Uneven ground", slope: "Slope", zigzag: "Zigzag path", block: "Block", platform: "Platform" };
   const readings = vm?.readings ?? {};
   const pins = vm?.pins ?? [];
 
@@ -427,7 +455,7 @@ export default function Arena({ project }: { project: Project }) {
 
       <aside className="flex min-h-0 flex-col border-l border-line bg-bg2">
         <div className="border-b border-line p-2">
-          <Tabs value={panel} onChange={setPanel} items={[...(project.simConfig?.tunables?.length || project.simConfig?.telemetryPrefix ? [{ value: "tune" as const, label: "Tune" }] : []), { value: "telemetry", label: "Telemetry" }, { value: "sensors", label: "Sensors" }, { value: "serial", label: "Serial" }, { value: "debug", label: <span className="inline-flex items-center gap-1"><Bug size={12} />{vm?.findings.length ? ` ${vm.findings.length}` : ""}</span> }]} />
+          <Tabs value={panel} onChange={setPanel} items={[...(project.simConfig?.tunables?.length || project.simConfig?.telemetryPrefix ? [{ value: "tune" as const, label: "Tune" }] : []), { value: "telemetry", label: "Telemetry" }, ...(mode === "manual" ? [{ value: "motors" as const, label: "Motor test" }] : []), { value: "sensors", label: "Sensors" }, { value: "serial", label: "Serial" }, { value: "debug", label: <span className="inline-flex items-center gap-1"><Bug size={12} />{vm?.findings.length ? ` ${vm.findings.length}` : ""}</span> }]} />
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-3 text-xs">
           {panel === "telemetry" && tel && (
@@ -437,6 +465,16 @@ export default function Arena({ project }: { project: Project }) {
                   ["Speed", `${tel.speed.toFixed(3)} m/s`], ["Max speed", `${(vm?.maxSpeed ?? 0).toFixed(2)} m/s`], ["Distance", `${tel.distance.toFixed(2)} m`], ["Battery", `${tel.batteryVoltage.toFixed(2)} V`],
                   ["Used", `${tel.batteryUsed_mAh.toFixed(1)} mAh`], ["Heading", `${(((tel.pose.heading * 180) / Math.PI) % 360).toFixed(0)}°`], ["Direction", tel.speed > 0.01 ? "forward" : tel.speed < -0.01 ? "reverse" : tel.yawRate > 0.2 ? "turning left" : tel.yawRate < -0.2 ? "turning right" : "stopped"],
                   ["Collision", tel.colliding ? "YES" : "no"], ["On track", tel.onTrack ? "yes" : "NO"], ["Sim time", `${(vm?.time ?? 0).toFixed(2)} s`],
+                  ["Collisions", String(vm?.collisions ?? 0)],
+                  ["Charge used", vm?.capacity ? `${Math.min(100, (tel.batteryUsed_mAh / vm.capacity) * 100).toFixed(1)} % (est.)` : "—"],
+                  ...(compiled?.terrain?.active
+                    ? ([
+                        ["Terrain", SURFACE_LABEL[tel.surface ?? "ground"] ?? tel.surface ?? "Ground"],
+                        ["Height", `${((tel.z ?? 0) * 1000).toFixed(0)} mm`],
+                        ["Pitch / roll", `${(((tel.pitch ?? 0) * 180) / Math.PI).toFixed(1)}° / ${(((tel.roll ?? 0) * 180) / Math.PI).toFixed(1)}°`],
+                        ["Obstacles crossed", `${vm?.crossed ?? 0} / ${compiled.terrain.features.length}`],
+                      ] as [string, string][])
+                    : []),
                   ...(tel.race?.lapTimes.length ? [["Lap times", tel.race.lapTimes.map((x) => x.toFixed(2)).join(", ")]] : []),
                 ] as [string, string][]).map(([k, v]) => (
                   <div key={k} className="contents"><dt className="text-dim">{k}</dt><dd className={k === "Collision" && v === "YES" ? "text-bad" : "text-text"}>{v}</dd></div>
@@ -451,6 +489,21 @@ export default function Arena({ project }: { project: Project }) {
                   </div>
                 ))}
               </div>
+              {wheelParts.length > 0 && tel.wheelRpm && (
+                <div>
+                  <div className="bf-label mb-1">Wheels</div>
+                  {wheelParts.map((w) => {
+                    const slip = tel.wheelSlip?.[w.uid] ?? 0;
+                    return (
+                      <div key={w.uid} className="flex justify-between gap-2 font-mono">
+                        <span className="truncate">{w.label}</span>
+                        <span className="text-brand">{(tel.wheelRpm?.[w.uid] ?? 0).toFixed(0)} rpm</span>
+                        <span className={Math.abs(slip) > 0.3 ? "text-warn" : "text-dim"} title="Wheel slip: 0 % = full grip, 100 % = spinning or sliding">{(Math.abs(slip) * 100).toFixed(0)}% slip</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div>
                 <div className="bf-label mb-1">Controller pins</div>
                 {pins.length === 0 && <div className="text-dim">No pins used yet.</div>}
@@ -505,6 +558,28 @@ export default function Arena({ project }: { project: Project }) {
             </div>
           )}
           {panel === "tune" && <TunePanel project={project} serial={vm?.serial ?? ""} send={(t) => session.current?.sendSerial(t)} running={run === "running" || run === "paused"} values={tuneValues} setValues={setTuneValues} />}
+          {panel === "motors" && (
+            <div className="space-y-3">
+              <p className="text-dim">Drive each motor on its own (Manual mode, simulation running). Keyboard driving pauses while a test is on.</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button size="sm" onClick={() => setMotorTest(Object.fromEntries(motors.map((m) => [m.uid, 0.6])))}>All forward</Button>
+                <Button size="sm" onClick={() => setMotorTest(Object.fromEntries(motors.map((m) => [m.uid, -0.6])))}>All reverse</Button>
+                <Button size="sm" onClick={() => setMotorTest(Object.fromEntries(motors.map((m) => [m.uid, isLeftMotor(project, m.uid) ? -0.6 : 0.6])))}>Pivot left</Button>
+                <Button size="sm" onClick={() => setMotorTest(Object.fromEntries(motors.map((m) => [m.uid, isLeftMotor(project, m.uid) ? 0.6 : -0.6])))}>Pivot right</Button>
+                <Button size="sm" variant={motorTest ? "primary" : "ghost"} onClick={() => setMotorTest(motorTest ? null : Object.fromEntries(motors.map((m) => [m.uid, 0])))}>{motorTest ? "Stop test" : "Start test"}</Button>
+              </div>
+              {motors.map((m) => {
+                const v = motorTest?.[m.uid] ?? 0;
+                return (
+                  <label key={m.uid} className="block font-mono">
+                    <span className="flex justify-between"><span>{m.label}</span><span className="text-brand">{Math.round(v * 100)}% · {(tel?.motorRpm[m.uid] ?? 0).toFixed(0)} rpm</span></span>
+                    <input type="range" min={-100} max={100} step={5} value={Math.round(v * 100)} className="w-full accent-[var(--accent)]" aria-label={`${m.label} power`} onChange={(e) => setMotorTest({ ...(motorTest ?? Object.fromEntries(motors.map((x) => [x.uid, 0]))), [m.uid]: Number(e.target.value) / 100 })} />
+                  </label>
+                );
+              })}
+              {motors.length === 0 && <div className="text-dim">This robot has no motors.</div>}
+            </div>
+          )}
           {panel === "debug" && (
             <div className="space-y-2">
               {!vm?.findings.length && <div className="text-dim">The debugging assistant watches the simulation and reports problems here.</div>}
@@ -596,10 +671,20 @@ function TunePanel({ project, serial, send, running, values, setValues }: { proj
   );
 }
 
+/** Motor is on the robot's left side if the wheel it drives (or the motor itself) sits at y > 0. */
+function isLeftMotor(project: Project, motorUid: string) {
+  const wheel = project.parts.find((p) => p.attachedTo === motorUid && getComponent(p.componentId)?.kind === "wheel");
+  const m = project.parts.find((p) => p.uid === motorUid);
+  return ((wheel ?? m)?.position.y ?? 0) > 0;
+}
+
 type ViewModel = ReturnType<typeof makeVm>;
 function makeVm(s: SimSession) {
   const sn = s.world.getSnapshot();
   return {
+    capacity: s.spec.battery.capacity_mAh > 1 ? s.spec.battery.capacity_mAh : 0,
+    /** terrain features driven over (filled in by the arena loop) */
+    crossed: 0,
     time: s.time,
     tel: s.telemetry(0),
     maxSpeed: s.maxSpeed,

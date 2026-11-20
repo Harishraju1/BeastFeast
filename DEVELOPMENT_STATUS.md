@@ -4,12 +4,23 @@ Last updated: 2026-11-18 (BEAST FEAST rebrand, Forest Sage theme, sign-up with +
 
 ## Completed modules
 
+> **2026-11-20, 4WD and off-road upgrade:**
+> - 4WD skid-steer is the default for Robo Race and Sumo (4WD drivetrain helper and designer panel).
+> - New 11.1V 2100mAh 3S LiPo battery.
+> - Four 4WD Garage robots: RR-04, RR-05, RR-06, RW-04.
+> - Off-road terrain physics: height map, slopes, mud, drivable or solid rocks, zigzag paths, hills, blocks, hurdles, platforms.
+> - 8 off-road tracks, plus a terrain tool group and generator in the Track Designer.
+> - 3D terrain rendering.
+> - 4-motor telemetry and a motor test panel in the arena.
+>
+> The details and limitations are in README → "4WD robots and off-road racing".
+
 | Module | State | Notes |
 | --- | --- | --- |
 | Design system & app shell | ✅ | Dark forest theme (page #131A16, Forest Sage panels, Warm Ivory text, Signal Red accents), Space Grotesk / Inter / JetBrains Mono. Sidebar grouped into Learn / Build / Compete with hints on every link; top bar with search (Ctrl K), notifications, help and settings; footer with the logo; logo on the loading screen |
 | Command Center | ✅ | Interactive 3D hero robot; workspace stats; continue building; weekly missions; achievements & streaks; featured tutorials; leaderboard preview; competition updates |
 | Authentication & profiles | ✅ local / ✅ Supabase connected | Local mode uses salted SHA-256 hashes in browser storage. Cloud mode uses Supabase Auth; the profile row is created by a database trigger |
-| Component catalogue | ✅ | 552/552 master-list entries, 0 missing, 0 duplicate IDs. Classes A/B/C. Honest GREEN/BLUE/YELLOW/GREY status. 75 datasheet-referenced pinouts, 220 function-standard pinouts. In-app completeness validator (can compare a newly uploaded list) |
+| Component catalogue | ✅ | 552/552 master-list entries, 0 missing, 0 duplicate IDs, + 1 platform addition (11.1V 2100mAh LiPo Battery (3S), counted separately). Classes A/B/C. Honest GREEN/BLUE/YELLOW/GREY status. 75 datasheet-referenced pinouts, 220 function-standard pinouts. In-app completeness validator (can compare a newly uploaded list) |
 | Component library UI | ✅ | Category tree, search by model/category/manufacturer, filters (voltage, protocol, competition, simulation status, class). Inspector with generated pinout, front/side/top/3D procedural views, specs (unknown = "unverified"), compatibility, datasheet link. Workshop-equipment tab |
 | 3D Robot Designer | ✅ | Add by click or drag-drop; move/rotate gizmo (snapping); duplicate/delete; wheels snap onto motor shafts; chassis builder (19 chassis types, size, material, mounting holes); exploded view with assembly order; assembly tree / console / warnings |
 | Mechanical validation | ✅ | Wheel attachment, motor orientation, one-sided drive, axle alignment, wheel size mismatch, overlaps, wheel/chassis interference, ground clearance, centre of mass vs support polygon, sensor height/placement, sumo size/mass limits (admin configurable) |
@@ -30,7 +41,7 @@ Last updated: 2026-11-18 (BEAST FEAST rebrand, Forest Sage theme, sign-up with +
 | Brand colour system | ✅ | Forest Sage dominant / Warm Ivory foreground / Signal Red accents, defined once as CSS tokens (`globals.css`) and `src/lib/theme.ts` for 3D, SVG and Monaco. Applied to every page, including the 3D viewports, schematic canvas, track designer, diagrams and code editor. An automated colour audit found no old-palette colours on any route. |
 | Roles & admin security | ✅ | student / admin / super_admin. The `/admin` route is gated on the server (`proxy.ts` plus a Server Component layout that reads the role from the database). The database enforces everything else: RLS, `admin_set_role` / `admin_find_user` / `admin_list_staff` functions, a protect-profile trigger and an append-only `role_audit_log`. MAKE AS ADMIN by email (Super Admin only), revoke, and audit log UI. The Super Admin is bootstrapped server-side (`npm run admin:bootstrap`). |
 | Admin dashboard | ✅ | Students and roles, component editing (images, 3D URL, datasheet, verification, pin JSON), lesson overrides and extra questions, videos, weekly missions, announcements, competition rules, featured projects, analytics |
-| BEAST PROJECT GARAGE | ✅ | 9 reference robots (3 per competition) built from catalogue parts through the normal project pipeline; Garage page with Line Following Lab / Robo Race Garage / Sumo Battle Workshop; VIEW / LOAD / SIMULATE NOW / CUSTOMISE; project view with OVERVIEW, 3D ASSEMBLY, CIRCUIT, CODE, SIMULATION, COMPONENTS tabs; 12-step loader that really builds, compiles, validates and starts the simulation; read-only originals + student copies; 14-check readiness test (all 9: READY TO SIMULATE); live tuning panel (sliders send the firmware's own Serial commands) and firmware telemetry panel; keyboard → Bluetooth serial → firmware for the manual racers |
+| BEAST PROJECT GARAGE | ✅ | 13 reference robots (4WD is the club standard for race and sumo: RR-04, RR-05, RR-06, RW-04 plus RR-02; RR-01, RR-03, RW-01..03 kept as Legacy 2WD) built from catalogue parts through the normal project pipeline; Garage page with Line Following Lab / Robo Race Garage / Sumo Battle Workshop; VIEW / LOAD / SIMULATE NOW / CUSTOMISE; project view with OVERVIEW, 3D ASSEMBLY, CIRCUIT, CODE, SIMULATION, COMPONENTS tabs; 12-step loader that really builds, compiles, validates and starts the simulation; read-only originals + student copies; 14-check readiness test (all 13: READY TO SIMULATE); live tuning panel (sliders send the firmware's own Serial commands) and firmware telemetry panel; keyboard → Bluetooth serial → firmware for the manual racers |
 | Supabase schema | ✅ applied (0001–0009, 2026-11-18) | Tables for all 25 entities, normalised project tables kept in sync by trigger, RLS on every table, `award_xp` / `complete_lesson` / `submit_quiz` security-definer functions, leaderboard view, seed script |
 
 ## In progress / pending
@@ -55,8 +66,8 @@ Last updated: 2026-11-18 (BEAST FEAST rebrand, Forest Sage theme, sign-up with +
 ## BEAST PROJECT GARAGE — test results
 
 Full report: `GARAGE_TEST_REPORT.md` (`npm run garage:report`).
-- **Readiness:** all 9 reference projects pass all 14 checks (READY TO SIMULATE).
-- **Required behaviour scenarios:** 45 / 45 passing.
+- **Readiness:** all 13 reference projects (9 original incl. 5 legacy 2WD + 4 new 4WD) pass all 14 checks (READY TO SIMULATE).
+- **Required behaviour scenarios:** 67 / 67 passing (45 original + 22 for the 4WD robots).
 - **Line:** straight, curves, sharp turns, 12 mm and 30 mm lines, intersections, lost-line recovery and calibration.
 - **Race:** forward, reverse, left, right and stop over Bluetooth; acceleration and braking; collisions; custom track; encoder accuracy; autonomous laps.
 - **Sumo:** edge detection, boundary recovery, detection, attack and distance accuracy.

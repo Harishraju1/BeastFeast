@@ -95,7 +95,7 @@ export const RW01: ProjectTemplate = {
   metadata: {
     id: "RW-01",
     name: "Basic Sumo Robot",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "sumo",
     difficulty: "beginner",
     learningLevel: "Opponent search, edge detection and attack logic",
@@ -106,6 +106,8 @@ export const RW01: ProjectTemplate = {
     limitations: ["One forward sensor: the robot cannot tell if the opponent is to the side", "Ultrasonic echoes can miss angled surfaces", "No rear edge sensors — reversing blindly can leave the ring"],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "HC-SR04 + 2 front edge sensors",
+    drivetrain: "2WD",
+    legacy: true,
   },
   chassis: { componentId: "mini-sumo-robot-chassis", thickness_mm: 2 },
   parts: [
@@ -278,7 +280,7 @@ export const RW02: ProjectTemplate = {
   metadata: {
     id: "RW-02",
     name: "Advanced Sumo Robot",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "sumo",
     difficulty: "intermediate",
     learningLevel: "Sensor fusion, four-corner edge detection, tracking",
@@ -289,6 +291,8 @@ export const RW02: ProjectTemplate = {
     limitations: ["Sharp sensors fold back below 10 cm and read 'far' at contact range", "Both distance sensors face forward — no side detection"],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "HC-SR04 + Sharp IR + 4 corner edge sensors",
+    drivetrain: "2WD",
+    legacy: true,
   },
   chassis: { componentId: "mini-sumo-robot-chassis", thickness_mm: 2 },
   parts: [
@@ -479,7 +483,7 @@ export const RW03: ProjectTemplate = {
   metadata: {
     id: "RW-03",
     name: "Intelligent Sumo Robot",
-    version: "1.0.0",
+    version: "1.1.0",
     competition: "sumo",
     difficulty: "advanced",
     learningLevel: "Multi-sensor direction estimation, encoders, ESP32 and power design",
@@ -490,6 +494,8 @@ export const RW03: ProjectTemplate = {
     limitations: ["Sharp sensors read 'far' below 10 cm (fold-back)", "ESP32 analogRead on ADC2 pins is unavailable with Wi-Fi on — this design uses ADC1 pins only", "The ESP32 interpreter profile is a simplified model of the Arduino-ESP32 core"],
     author: "Robotics Club KKH · BEAST FEAST",
     sensorSummary: "3 Sharp IR + 4 edge sensors + 2 Hall encoders",
+    drivetrain: "2WD",
+    legacy: true,
   },
   chassis: { componentId: "mini-sumo-robot-chassis", thickness_mm: 2 },
   parts: [

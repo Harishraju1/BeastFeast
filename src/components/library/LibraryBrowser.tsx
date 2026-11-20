@@ -299,7 +299,12 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
       )}
       {sel.crossListedWith.length > 0 && <div className="text-[11px] text-dim">Also listed in another section of the master list: {sel.crossListedWith.join(", ")}</div>}
       <div className="text-[10px] text-dim">
-        Source: master list §{sel.sources[0].sectionNumber} item {sel.sources[0].itemNumber}, line {sel.sources[0].line} · ID <span className="font-mono">{sel.id}</span>
+        {sel.sources[0] ? (
+          <>Source: master list §{sel.sources[0].sectionNumber} item {sel.sources[0].itemNumber}, line {sel.sources[0].line}</>
+        ) : (
+          <>Source: platform addition (not in the master list)</>
+        )}{" "}
+        · ID <span className="font-mono">{sel.id}</span>
       </div>
     </div>
   );

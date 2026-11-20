@@ -5,7 +5,7 @@ import { wire } from "@/lib/robot/reference";
 import type { ProjectTemplate } from "./types";
 
 export function buildFromTemplate(t: ProjectTemplate, ownerId: string, mode: "original" | "copy"): Project {
-  let p = newProject(t.metadata.competition, mode === "original" ? `${t.metadata.id} · ${t.metadata.name}` : `${t.metadata.name} (my copy)`, ownerId);
+  let p = newProject(t.metadata.competition, mode === "original" ? `${t.metadata.id} · ${t.metadata.name}` : `${t.metadata.name} (my copy)`, ownerId, { drivetrain: "none" });
   const base = chassisFrom(t.chassis.componentId);
   p = {
     ...p,
@@ -15,6 +15,7 @@ export function buildFromTemplate(t: ProjectTemplate, ownerId: string, mode: "or
       width_mm: t.chassis.width_mm ?? base.width_mm,
       thickness_mm: t.chassis.thickness_mm ?? base.thickness_mm,
       material: t.chassis.material ?? base.material,
+      groundClearance_mm: t.chassis.groundClearance_mm ?? base.groundClearance_mm,
     },
   };
   for (const tp of t.parts) {
@@ -22,6 +23,7 @@ export function buildFromTemplate(t: ProjectTemplate, ownerId: string, mode: "or
     if (tp.config) overrides.config = tp.config;
     if (tp.position) overrides.position = tp.position;
     if (tp.yawDeg !== undefined) overrides.rotation = { x: 0, y: 0, z: (tp.yawDeg * Math.PI) / 180 };
+    if (tp.role) overrides.role = tp.role;
     const r = addPart(p, tp.componentId, overrides as never);
     p = r.project;
     if (tp.attachedTo) {

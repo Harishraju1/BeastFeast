@@ -3,7 +3,10 @@ import type { ParsedMasterList } from "./parse";
 
 export interface CompletenessReport {
   totalSource: number;
+  /** master-list records in the database */
   imported: number;
+  /** platform additions: components added by BEAST FEAST that are not in the master list (counted separately) */
+  platformAdditions: { id: string; name: string }[];
   missing: { section: number; item: number; name: string; line: number }[];
   duplicateIds: string[];
   duplicateSourceRefs: string[];
@@ -22,7 +25,10 @@ export interface CompletenessReport {
   complete: boolean;
 }
 
-export function compareCatalogue(parsed: ParsedMasterList, records: ComponentRecord[]): CompletenessReport {
+export function compareCatalogue(parsed: ParsedMasterList, allRecords: ComponentRecord[]): CompletenessReport {
+  // Platform additions have no master-list source; they are reported separately and never hide a missing entry.
+  const platform = allRecords.filter((r) => r.sources.length === 0);
+  const records = allRecords.filter((r) => r.sources.length > 0);
   const key = (s: number, i: number, n: string) => `${s}#${i}#${n}`;
   const refCount = new Map<string, number>();
   for (const r of records) for (const s of r.sources) refCount.set(key(s.sectionNumber, s.itemNumber, s.sourceName), (refCount.get(key(s.sectionNumber, s.itemNumber, s.sourceName)) ?? 0) + 1);
@@ -32,7 +38,7 @@ export function compareCatalogue(parsed: ParsedMasterList, records: ComponentRec
     .map((e) => ({ section: e.sectionNumber, item: e.itemNumber, name: e.name, line: e.line }));
   const duplicateSourceRefs = [...refCount.entries()].filter(([, c]) => c > 1).map(([k]) => k);
   const idCount = new Map<string, number>();
-  records.forEach((r) => idCount.set(r.id, (idCount.get(r.id) ?? 0) + 1));
+  allRecords.forEach((r) => idCount.set(r.id, (idCount.get(r.id) ?? 0) + 1));
   const duplicateIds = [...idCount.entries()].filter(([, c]) => c > 1).map(([k]) => k);
 
   const seen = new Set<string>();
@@ -54,6 +60,7 @@ export function compareCatalogue(parsed: ParsedMasterList, records: ComponentRec
   return {
     totalSource: parsed.entries.length,
     imported: records.length,
+    platformAdditions: platform.map((r) => ({ id: r.id, name: r.name })),
     missing,
     duplicateIds,
     duplicateSourceRefs,
@@ -86,6 +93,7 @@ export function reportToMarkdown(rep: CompletenessReport, records: ComponentReco
   L.push("| Metric | Value |", "| --- | --- |");
   L.push(`| Total source entries (numbered items, sections 1–16) | ${rep.totalSource} |`);
   L.push(`| Imported entries | ${rep.imported} |`);
+  L.push(`| Platform additions (not in the master list, counted separately) | ${rep.platformAdditions.length}${rep.platformAdditions.length ? ` (${rep.platformAdditions.map((p) => p.name).join(", ")})` : ""} |`);
   L.push(`| Missing entries | ${rep.missing.length} |`);
   L.push(`| Duplicate database IDs | ${rep.duplicateIds.length} |`);
   L.push(`| Source entries imported twice | ${rep.duplicateSourceRefs.length} |`);

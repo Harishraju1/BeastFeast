@@ -1,6 +1,6 @@
 # BEAST PROJECT GARAGE — TEST REPORT
 
-Generated 2026-11-18T09:52:57.784Z by `npm run garage:report`. Every scenario runs the real stack: the project's firmware in the sandboxed interpreter → its circuit graph → driver/motor models → planar physics → sensor geometry → back to the firmware. No path following or scripted results are used.
+Generated 2026-11-20T08:50:42.615Z by `npm run garage:report`. Every scenario runs the real stack: the project's firmware in the sandboxed interpreter → its circuit graph → driver/motor models → planar physics → sensor geometry → back to the firmware. No path following or scripted results are used.
 
 ## Readiness (14 automated checks per project)
 
@@ -9,17 +9,21 @@ Generated 2026-11-18T09:52:57.784Z by `npm run garage:report`. Every scenario ru
 | LF-01 Basic Line Follower | **READY TO SIMULATE** | — | — |
 | LF-02 Advanced Five-Sensor Line Follower | **READY TO SIMULATE** | — | — |
 | LF-03 PID Line Follower | **READY TO SIMULATE** | — | — |
-| RR-01 Basic 2WD Robo Racer | **READY TO SIMULATE** | — | — |
+| RR-04 Standard 4WD Robo Race Car | **READY TO SIMULATE** | — | — |
+| RR-05 4WD Off-Road Rover | **READY TO SIMULATE** | — | — |
+| RR-06 4WD Experimental Robot | **READY TO SIMULATE** | — | — |
 | RR-02 Four-Wheel Drive Racer | **READY TO SIMULATE** | — | — |
+| RR-01 Basic 2WD Robo Racer | **READY TO SIMULATE** | — | — |
 | RR-03 Encoder-Based Smart Racer | **READY TO SIMULATE** | — | — |
+| RW-04 4WD Sumo Robot | **READY TO SIMULATE** | — | — |
 | RW-01 Basic Sumo Robot | **READY TO SIMULATE** | — | — |
 | RW-02 Advanced Sumo Robot | **READY TO SIMULATE** | — | — |
 | RW-03 Intelligent Sumo Robot | **READY TO SIMULATE** | — | — |
 
 ## Summary
 
-- Required scenarios: **45 / 45 passed**
-- Observed-behaviour scenarios (recorded, not required): 16, of which 15 succeeded
+- Required scenarios: **67 / 67 passed**
+- Observed-behaviour scenarios (recorded, not required): 19, of which 18 succeeded
 
 ## Line following
 
@@ -69,6 +73,23 @@ Generated 2026-11-18T09:52:57.784Z by `npm run garage:report`. Every scenario ru
 | Autonomous lap | RR-03 | Race · Beginner Oval | Keeps itself on the road with its two road sensors and completes a lap | Lap completed in 21.5 s; on the line 22% of samples; 3 off-track event(s) | ✅ PASS |
 | Custom track (autonomous) | RR-03 | Custom race loop | Keeps itself on the road with its two road sensors and completes a lap | Lap completed in 19.0 s; on the line 38% of samples; 0 off-track event(s) | ✅ PASS |
 | Obstacle course | RR-03 | Race · S-Curves & Obstacles | Observed behaviour only — RR-03 has no obstacle sensor | No lap within 60 s (6 off-track event(s), worst distance 33.4 cm) | ℹ️ OBSERVED |
+| 4WD: all four motors forward / reverse | RR-04 | Flat test area; F for 1.5 s, stop, B for 1.2 s (Bluetooth commands) | F turns all four wheels forward and the robot drives straight ahead; B turns all four backwards and it reverses | F: 0.80 m/s, heading drift 0°, wheel rpm FL/FR/RL/RR 234/234/234/234; B: -0.56 m/s, rpm -164/-164/-164/-164 | ✅ PASS |
+| 4WD: left / right turns | RR-04 | Flat test area; Q (forward-left) for 1 s, stop, E (forward-right) for 1 s | Q curves left (heading increases) while moving forward; E curves right (heading decreases) | Q: 36° while moving 37 cm forward; E: -36° while moving 37 cm forward | ✅ PASS |
+| 4WD: pivot turn in place | RR-04 | Flat test area; L for 0.8 s, stop, R for 0.8 s | Left pair backwards + right pair forwards spins the robot left on the spot (and the reverse for R) | L: 110°, centre moved 2.5 cm, rpm FL/FR/RL/RR -200/201/-192/193; R: -110°, moved 2.4 cm | ✅ PASS |
+| 4WD: individual motor test | RR-04 | Commands 1, 2, 3, 4 (FL, FR, RL, RR) one after another, 0 between them | Only the selected motor receives voltage and only its wheel is driven (turning forward); the others are braked | motor voltages FL/FR/RL/RR and wheel rpm — FL: 7.5/0.0/0.0/0.0 V, rpm 149/10/17/10; FR: 0.0/7.5/0.0/0.0 V, rpm 10/150/10/16; RL: 0.0/0.0/7.5/0.0 V, rpm 19/12/144/12; RR: 0.0/0.0/0.0/7.5 V, rpm 11/18/12/144 | ✅ PASS |
+| 4WD: four driven wheels, no caster, symmetrical | RR-04 | Built project and its physics model | No caster; four motors, each wheel on its own motor; FL/FR and RL/RR mirror-symmetric; identical wheels; four driven wheels in the physics model | 0 caster(s); wheels FL (75, 92) FR (75, -92) RL (-75, 92) RR (-75, -92) mm; asymmetry 0.0 mm; wheels 65×26 mm; 4 driven wheels in the model | ✅ PASS |
+| 4WD: all four motors forward / reverse | RR-05 | Flat test area; F for 1.5 s, stop, B for 1.2 s (Bluetooth commands) | F turns all four wheels forward and the robot drives straight ahead; B turns all four backwards and it reverses | F: 0.99 m/s, heading drift 0°, wheel rpm FL/FR/RL/RR 222/222/222/222; B: -0.69 m/s, rpm -155/-155/-155/-155 | ✅ PASS |
+| 4WD: left / right turns | RR-05 | Flat test area; Q (forward-left) for 1 s, stop, E (forward-right) for 1 s | Q curves left (heading increases) while moving forward; E curves right (heading decreases) | Q: 27° while moving 46 cm forward; E: -28° while moving 48 cm forward | ✅ PASS |
+| 4WD: pivot turn in place | RR-05 | Flat test area; L for 0.8 s, stop, R for 0.8 s | Left pair backwards + right pair forwards spins the robot left on the spot (and the reverse for R) | L: 107°, centre moved 1.6 cm, rpm FL/FR/RL/RR -197/198/-191/193; R: -111°, moved 1.6 cm | ✅ PASS |
+| 4WD: individual motor test | RR-05 | Commands 1, 2, 3, 4 (FL, FR, RL, RR) one after another, 0 between them | Only the selected motor receives voltage and only its wheel is driven (turning forward); the others are braked | motor voltages FL/FR/RL/RR and wheel rpm — FL: 7.5/0.0/0.0/0.0 V, rpm 131/16/21/16; FR: 0.0/7.5/0.0/0.0 V, rpm 17/132/17/22; RL: 0.0/0.0/7.5/0.0 V, rpm 24/19/127/19; RR: 0.0/0.0/0.0/7.5 V, rpm 19/24/19/127 | ✅ PASS |
+| 4WD: four driven wheels, no caster, symmetrical | RR-05 | Built project and its physics model | No caster; four motors, each wheel on its own motor; FL/FR and RL/RR mirror-symmetric; identical wheels; four driven wheels in the physics model | 0 caster(s); wheels FL (85, 99) FR (85, -99) RL (-85, 99) RR (-85, -99) mm; asymmetry 0.0 mm; wheels 85×30 mm; 4 driven wheels in the model | ✅ PASS |
+| 4WD: all four motors forward / reverse | RR-06 | Flat test area; F for 1.5 s, stop, B for 1.2 s (Bluetooth commands) | F turns all four wheels forward and the robot drives straight ahead; B turns all four backwards and it reverses | F: 0.80 m/s, heading drift 0°, wheel rpm FL/FR/RL/RR 234/234/234/234; B: -0.56 m/s, rpm -164/-164/-164/-164 | ✅ PASS |
+| 4WD: left / right turns | RR-06 | Flat test area; Q (forward-left) for 1 s, stop, E (forward-right) for 1 s | Q curves left (heading increases) while moving forward; E curves right (heading decreases) | Q: 36° while moving 37 cm forward; E: -36° while moving 37 cm forward | ✅ PASS |
+| 4WD: pivot turn in place | RR-06 | Flat test area; L for 0.8 s, stop, R for 0.8 s | Left pair backwards + right pair forwards spins the robot left on the spot (and the reverse for R) | L: 111°, centre moved 3.2 cm, rpm FL/FR/RL/RR -200/202/-190/192; R: -111°, moved 3.1 cm | ✅ PASS |
+| 4WD: individual motor test | RR-06 | Commands 1, 2, 3, 4 (FL, FR, RL, RR) one after another, 0 between them | Only the selected motor receives voltage and only its wheel is driven (turning forward); the others are braked | motor voltages FL/FR/RL/RR and wheel rpm — FL: 7.5/0.0/0.0/0.0 V, rpm 150/10/16/10; FR: 0.0/7.5/0.0/0.0 V, rpm 10/151/10/16; RL: 0.0/0.0/7.5/0.0 V, rpm 19/12/143/12; RR: 0.0/0.0/0.0/7.5 V, rpm 12/19/12/144 | ✅ PASS |
+| 4WD: four driven wheels, no caster, symmetrical | RR-06 | Built project and its physics model | No caster; four motors, each wheel on its own motor; FL/FR and RL/RR mirror-symmetric; identical wheels; four driven wheels in the physics model | 0 caster(s); wheels FL (75, 92) FR (75, -92) RL (-75, 92) RR (-75, -92) mm; asymmetry 0.0 mm; wheels 65×26 mm; 4 driven wheels in the model | ✅ PASS |
+| Custom track (keyboard driver) | RR-04 | Student-built rounded-rectangle road; keys chosen by a scripted driver (Q/E/F, L/R) | The 4WD car responds to the keys and completes a lap | Lap in 11.4 s; 0 off-track event(s) | ✅ PASS |
+| Autopilot obstacle avoidance | RR-05 | Flat area, 25 × 20 cm obstacle 1.6 m straight ahead; no keys pressed (autopilot) | Drives forward, sees the obstacle with its ultrasonic sensor and turns away before touching it | turned away 67 cm before the obstacle centre; 0 collision(s) in 8 s | ✅ PASS |
 
 Known limitations:
 - RR-03 cannot see obstacles; add an HC-SR04 and avoidance logic as an extension exercise
@@ -99,9 +120,17 @@ Known limitations:
 | Match vs advanced AI | RW-03 | Standard dohyo, advanced opponent, 5 s start delay for both | Match ends by a ring-out or the time limit, decided by physics | WIN at 6.4 s; 2 collision event(s) | ✅ PASS |
 | Match vs Beast Mode AI | RW-03 | Standard dohyo, beast opponent, 5 s start delay for both | Match ends by a ring-out or the time limit, decided by physics | WIN at 6.6 s; 2 collision event(s) | ✅ PASS |
 | Distance measurement accuracy | RW-02 | Opponent passive, robot just after its start delay | Ultrasonic distance computed by the firmware (µs / 58) is within 4 cm of the simulated range | firmware: ultrasonic 10 cm, Sharp 10 cm; simulated range 9.9 cm | ✅ PASS |
+| 4WD: four driven wheels, no caster, symmetrical | RW-04 | Built project and its physics model | No caster; four motors, each wheel on its own motor; FL/FR and RL/RR mirror-symmetric; identical wheels; four driven wheels in the physics model | 0 caster(s); wheels FL (30, 64) FR (30, -64) RL (-30, 64) RR (-30, -64) mm; asymmetry 0.0 mm; wheels 40×20 mm; 4 driven wheels in the model | ✅ PASS |
+| Edge detection (alone for 40 s) | RW-04 | Standard dohyo, no opponent | Searches for 40 s without ever leaving the ring | Stayed inside; drove 3.6 m | ✅ PASS |
+| Boundary recovery | RW-04 | Starts 20 cm from the centre facing straight at the border | Edge sensors see the white border; it reverses, turns away and stays in | Stayed inside (final distance from centre 0.18 m) | ✅ PASS |
+| Pushes the opponent out (four-wheel traction) | RW-04 | Opponent placed opposite and left passive | Finds the opponent with the ultrasonic sensor, charges with all four wheels and pushes it out of the ring | first contact 5.30 s; opponent out at 5.70 s | ✅ PASS |
+| Match vs beginner AI | RW-04 | Standard dohyo, beginner opponent, 5 s start delay for both | Wins against the built-in beginner AI by a ring-out | WIN at 5.7 s; 2 collision event(s) | ✅ PASS |
+| Match vs intermediate AI | RW-04 | Standard dohyo, intermediate opponent, 5 s start delay for both | Match ends by a ring-out or the time limit, decided by physics | WIN at 5.9 s; 2 collision event(s) | ✅ PASS |
+| Match vs advanced AI | RW-04 | Standard dohyo, advanced opponent, 5 s start delay for both | Match ends by a ring-out or the time limit, decided by physics | WIN at 6.0 s; 2 collision event(s) | ✅ PASS |
+| Match vs Beast Mode AI | RW-04 | Standard dohyo, beast opponent, 5 s start delay for both | Match ends by a ring-out or the time limit, decided by physics | WIN at 6.3 s; 2 collision event(s) | ✅ PASS |
 
 Known limitations:
 - The reference robots' 25GA370 motors and sticky tyres out-push the built-in opponent robots, so head-on starts are usually decided in the first push
 - The Sharp sensor is out of range (>80 cm) at the start distance and reports 999
 
-Total runtime 121 s.
+Total runtime 119 s.
