@@ -3,7 +3,7 @@ import Editor, { type Monaco, loader } from "@monaco-editor/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { editor as MonacoEditor } from "monaco-editor";
-import { CheckCircle2, Download, FileUp, Lock, Play, Save, Sparkles, Wand2 } from "lucide-react";
+import { CheckCircle2, Cpu, Download, FileUp, Lock, Play, Save, Sparkles, Wand2 } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { useWorkspace } from "@/lib/store/workspace";
 import { compile, getBoard, SUPPORTED_FEATURES, UNSUPPORTED_FEATURES, AVR_SUPPORTED_BOARDS } from "@/lib/arduino";
@@ -18,7 +18,8 @@ import { Button, Modal, Tabs } from "@/components/ui";
 import { IssueCard } from "../Validation";
 import { explainCode } from "@/lib/code/explain";
 import { useArenaHex } from "@/lib/store/hex";
-import { checkOriginality } from "@/lib/code/originality";
+import { checkOwnCode } from "@/lib/code/ownCode";
+import { GenerateModal } from "./GenerateModal";
 
 loader.config({ paths: { vs: "/monaco/vs" } });
 
@@ -69,6 +70,7 @@ export default function CodeStudio({ project }: { project: Project }) {
   const [issues, setIssues] = useState<ValidationIssue[]>(project.codeCheck?.issues ?? []);
   const [tab, setTab] = useState<"check" | "pins" | "explain" | "features">("check");
   const [tplOpen, setTplOpen] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const vstate = validationState(project);
@@ -77,6 +79,14 @@ export default function CodeStudio({ project }: { project: Project }) {
   const boardKey = (ctrl && graph.comps.get(ctrl.uid)?.board) || "generic";
   const board = getBoard(boardKey);
   const wired = useMemo(() => wiredControllerPins(graph), [graph]);
+
+  // adopt code changed from outside the editor (undo / redo, version restore, reset to template) instead of
+  // letting the autosave below write the editor's stale copy back over it
+  const [syncedCode, setSyncedCode] = useState(project.code);
+  if (project.code !== syncedCode) {
+    setSyncedCode(project.code);
+    if (project.code !== code) setCode(project.code);
+  }
 
   // autosave code (debounced via the store)
   useEffect(() => {
@@ -119,7 +129,7 @@ export default function CodeStudio({ project }: { project: Project }) {
     updateProject(project.id, (p) => ({ ...p, code, codeCheck: { at: new Date().toISOString(), ok, issues: all, fingerprint: designFingerprint(p) } }), { history: false });
     setTab("check");
     if (ok) {
-      const own = checkOriginality(code);
+      const own = checkOwnCode(code, project);
       if (own.original) await award("code-check-pass", project.id, undefined, `Own code matches the circuit: ${project.name}`);
       else toast("info", `Code matches the circuit, but no XP: ${own.reason}`);
     }
@@ -173,6 +183,7 @@ export default function CodeStudio({ project }: { project: Project }) {
         <div className="flex flex-wrap items-center gap-1.5 border-b border-line bg-bg2 px-2 py-1.5">
           <span className="mr-2 font-mono text-[10px] text-dim">BOARD: {board.name.toUpperCase()}</span>
           <Button size="sm" variant="primary" onClick={() => void runCheck()}><CheckCircle2 size={13} /> VALIDATE CODE</Button>
+          <Button size="sm" onClick={() => setGenOpen(true)} title="Build a complete sketch from this robot's controller, driver, motors, sensors and wiring"><Cpu size={13} /> Generate for my robot</Button>
           <Button size="sm" onClick={() => setTplOpen(true)}><Sparkles size={13} /> Templates</Button>
           <Button size="sm" onClick={() => setCode(formatCode(code))}><Wand2 size={13} /> Format</Button>
           <Button size="sm" onClick={saveVersion}><Save size={13} /> Save version</Button>
@@ -312,6 +323,7 @@ export default function CodeStudio({ project }: { project: Project }) {
         <SyncWired wired={wired} />
       </aside>
 
+      {genOpen && <GenerateModal project={project} open={genOpen} onClose={() => setGenOpen(false)} onInsert={(c) => { saveVersion(); setCode(c); toast("success", "Generated code inserted — your previous code is saved as a version."); }} />}
       <Modal open={tplOpen} onClose={() => setTplOpen(false)} title="Code templates (optional)" wide>
         <p className="mb-3 text-sm text-muted">Templates are starting points — you can always write your own. Inserting a template replaces the editor contents (your current code is saved as a version first). Check the #define pin numbers against your circuit!</p>
         <div className="grid gap-2 md:grid-cols-2">

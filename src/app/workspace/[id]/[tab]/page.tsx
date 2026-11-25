@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { History, Maximize2, Minimize2, Redo2, Save, ScanLine, Undo2 } from "lucide-react";
+import { History, Maximize2, Minimize2, Redo2, RotateCcw, Save, ScanLine, Undo2 } from "lucide-react";
 import { InlineNotice, NotificationBell } from "@/components/shell/Notifications";
 import { RequireAuth } from "@/components/shell/AppShell";
 import { Badge, Button, Empty, Modal, Spinner } from "@/components/ui";
@@ -13,6 +13,8 @@ import { COMPETITIONS, type Project } from "@/lib/types";
 import { ScanOverlay, ValidationReportModal, useValidate } from "@/components/workspace/Validation";
 import { validationState } from "@/lib/fingerprint";
 import { isTypingTarget } from "@/lib/keyboard";
+import { getTemplate } from "@/lib/garage";
+import { resetToTemplate } from "@/lib/projectReset";
 
 const loading = () => (
   <div className="flex h-full items-center justify-center">
@@ -54,13 +56,48 @@ function Pipeline({ project }: { project: Project }) {
   );
 }
 
+/**
+ * Reset a Garage copy to its original template: snapshot the current state first (Version history), then
+ * replace design, wiring, code and sim config with a fresh build of the template. The project keeps its id,
+ * name, owner, saved versions and past simulation results; the change goes through updateProject, so UNDO
+ * restores it too.
+ */
+function ResetToOriginal({ project }: { project: Project }) {
+  const [open, setOpen] = useState(false);
+  const { snapshotVersion, updateProject, toast, user } = useApp();
+  const o = project.origin!;
+  const t = getTemplate(o.templateId);
+  if (!t) return null;
+  const reset = () => {
+    snapshotVersion(project.id, `Before reset to original ${t.metadata.id} v${t.metadata.version}`);
+    updateProject(project.id, (p) => resetToTemplate(p, user?.name) ?? p);
+    setOpen(false);
+    toast("success", `Reset to ${t.metadata.id} v${t.metadata.version}. Your previous state is in Version history (or press Undo).`);
+  };
+  return (
+    <>
+      <button className="ml-2 inline-flex items-center gap-1 text-accent-ink hover:underline" onClick={() => setOpen(true)}><RotateCcw size={11} /> Reset to original template</button>
+      <Modal open={open} onClose={() => setOpen(false)} title={`Reset to ${t.metadata.id}?`}>
+        <div className="space-y-3 text-sm">
+          <p>This replaces the design, wiring, code and simulation settings of <b>{project.name}</b> with the original <b>{t.metadata.name}</b> (v{t.metadata.version}).</p>
+          <p className="text-muted">Nothing is lost: a snapshot of your current version is saved to Version history first, and Undo also reverts the reset. The project name, saved versions and past simulation results are kept.</p>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={reset}><RotateCcw size={13} /> Reset</Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
 function ReferenceBanner({ project }: { project: Project }) {
   const loadTemplate = useApp((s) => s.loadTemplate);
   const router = useRouter();
   const o = project.origin;
   if (!o) return null;
   if (o.mode === "copy")
-    return <div className="border-b border-line bg-bg2 px-3 py-1 text-[11px] text-muted">Your copy of garage project <Link className="text-accent-ink" href={`/garage/${o.templateId}`}>{o.templateId}</Link> v{o.templateVersion} — edit anything; the original stays unchanged.</div>;
+    return <div className="border-b border-line bg-bg2 px-3 py-1 text-[11px] text-muted">Your copy of garage project <Link className="text-accent-ink" href={`/garage/${o.templateId}`}>{o.templateId}</Link> v{o.templateVersion} — edit anything; the original stays unchanged.<ResetToOriginal project={project} /></div>;
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-brand/40 bg-brand/5 px-3 py-1.5 text-xs">
       <span className="font-mono tracking-widest text-brand">REFERENCE PROJECT {o.templateId} · READ-ONLY</span>

@@ -49,6 +49,13 @@ function LoginInner() {
   const initial = params.get("mode");
   const [mode, setMode] = useState<Mode>(initial === "signup" ? "up" : initial === "forgot" ? "forgot" : "in");
   const [sent, setSent] = useState(false);
+  // one reset email per minute from this page (the server enforces its own limits as well)
+  const [cooldown, setCooldown] = useState(0);
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
   const [f, setF] = useState<Fields>(EMPTY);
   const [touched, setTouched] = useState<Partial<Record<keyof Fields, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -114,8 +121,10 @@ function LoginInner() {
     setBusy(true);
     try {
       if (mode === "forgot") {
+        if (cooldown > 0) return;
         await (await getBackend()).requestPasswordReset(f.email.trim());
         setSent(true);
+        setCooldown(60);
         return;
       }
       if (mode === "in") {
@@ -164,7 +173,7 @@ function LoginInner() {
                 ? "Your phone number and NIAT ID are visible only to you and the club administrators."
                 : mode === "forgot"
                   ? "Enter the email you signed up with and we'll send you a link to choose a new password."
-                  : "Cloud mode: your projects sync across devices."}
+                  : "Your projects are saved to your account and available on any device."}
           </p>
         </div>
 
@@ -237,10 +246,10 @@ function LoginInner() {
         )}
         {err && <div role="alert" className="rounded border border-accent/50 bg-accent/10 px-3 py-2 text-sm text-accent-ink">{err}</div>}
         {info && <div role="status" className="rounded border border-[#2f7a46]/40 bg-[#2f7a46]/10 px-3 py-2 text-sm text-[#215c34]">{info}</div>}
-        <Button variant="primary" size="lg" className="w-full" disabled={busy}>
+        <Button variant="primary" size="lg" className="w-full" disabled={busy || (mode === "forgot" && sent && cooldown > 0)}>
           {busy
             ? mode === "in" ? "Signing in…" : mode === "forgot" ? "Sending…" : "Creating account…"
-            : mode === "in" ? "SIGN IN" : mode === "forgot" ? (sent ? "SEND AGAIN" : "SEND RESET LINK") : "CREATE ACCOUNT"}
+            : mode === "in" ? "SIGN IN" : mode === "forgot" ? (sent ? (cooldown > 0 ? `SEND AGAIN IN ${cooldown}s` : "SEND AGAIN") : "SEND RESET LINK") : "CREATE ACCOUNT"}
         </Button>
         <button
           type="button"

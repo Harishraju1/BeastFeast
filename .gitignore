@@ -48,3 +48,6 @@ next-env.d.ts
 # Supabase CLI working files
 supabase/.temp/
 !.env.production
+
+# local scratch files
+.scratch/

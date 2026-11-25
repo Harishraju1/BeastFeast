@@ -22,7 +22,7 @@ import { TrackScene } from "@/components/three/TrackScene";
 import { Badge, Button, Tabs } from "@/components/ui";
 import { isTypingTarget } from "@/lib/keyboard";
 import { THEME } from "@/lib/theme";
-import { checkOriginality } from "@/lib/code/originality";
+import { checkOwnCode } from "@/lib/code/ownCode";
 
 type Cam = "robot" | "free" | "top" | "side";
 type RunState = "idle" | "running" | "paused" | "finished" | "error";
@@ -200,7 +200,7 @@ export default function Arena({ project }: { project: Project }) {
       };
       updateProject(project.id, (p) => ({ ...p, trackId: track.id, simulations: [...p.simulations.slice(-19), r] }), { history: false });
       // XP only for results achieved by the student's OWN code (not templates, Garage firmware or keyboard driving)
-      const own = mode === "code" ? checkOriginality(project.code) : null;
+      const own = mode === "code" ? checkOwnCode(project.code, project) : null;
       const earns = !!own?.original;
       if ((outcome === "completed" || outcome === "win") && !earns)
         toast("info", mode === "code" ? `Great run — no XP: ${own!.reason}` : "Great run — XP is earned by completing tracks with your own code, not keyboard control.");
@@ -215,7 +215,7 @@ export default function Arena({ project }: { project: Project }) {
       }
       if (outcome === "win") await updateProgress((pr) => ({ ...pr, records: { ...pr.records, [track.id]: { ...pr.records[track.id], wins: (pr.records[track.id]?.wins ?? 0) + 1 } } }));
     },
-    [track, mode, project.id, project.code, project.name, updateProject, award, level, progress, updateProgress, toast],
+    [track, mode, project, updateProject, award, level, progress, updateProgress, toast],
   );
 
   // main loop: fixed physics steps, decoupled from rendering

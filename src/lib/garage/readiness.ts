@@ -15,6 +15,7 @@ import type { TrackDef } from "@/lib/sim/types";
 import type { Project } from "@/lib/types";
 import { buildFromTemplate } from "./build";
 import type { ProjectTemplate, ReadinessCheck, ReadinessReport } from "./types";
+import { validateTemplate } from "./validateTemplate";
 
 const has = (codes: string[], prefix: RegExp) => codes.filter((c) => prefix.test(c));
 
@@ -65,13 +66,15 @@ export function runReadiness(t: ProjectTemplate, opts: { simSeconds?: number; pr
   // 8
   const ground = has(crit, /GROUND/);
   add("Ground connections are present", !ground.length, ground.length ? ground.join(", ") : "Common ground between battery, driver and controller");
-  // 9 + 10
+  // 9 + 10 — firmware the interpreter cannot run (ESP32 Wi-Fi) is checked through its simulator-compilable twin
   const board = getBoard(t.firmware.board);
-  const compiled = compile(project.code, { board });
+  const simulatedFirmware = t.firmware.runsInSimulator !== false;
+  const compiled = compile(simulatedFirmware ? project.code : (t.firmware.checkSource ?? project.code), { board });
   const codeIssues = compiled.ok ? checkCodeAgainstCircuit(project, compiled) : [];
   const codeCrit = codeIssues.filter((i) => i.severity === "critical");
   add("Pin assignments match the code", compiled.ok && !codeCrit.length, !compiled.ok ? "Code does not compile" : codeCrit.length ? codeCrit.map((i) => i.incorrect).join("; ") : codeIssues.length ? `${codeIssues.length} warning(s)` : "Every #define matches the wired pin", codeIssues.length > 0);
-  add("Required code is present", compiled.ok && compiled.hasSetup && compiled.hasLoop, compiled.ok ? `setup() + loop(), ${project.code.split("\n").length} lines, board ${board.name}` : compiled.diagnostics.filter((d) => d.severity === "error").map((d) => `line ${d.line}: ${d.message}`).join("; "));
+  const realHasEntry = simulatedFirmware || (/\bvoid\s+setup\s*\(\s*\)/.test(project.code) && /\bvoid\s+loop\s*\(\s*\)/.test(project.code));
+  add("Required code is present", compiled.ok && compiled.hasSetup && compiled.hasLoop && realHasEntry, compiled.ok ? `setup() + loop(), ${project.code.split("\n").length} lines, board ${board.name}${simulatedFirmware ? "" : " (Wi-Fi sketch: statically checked through its simulator-compilable twin)"}` : compiled.diagnostics.filter((d) => d.severity === "error").map((d) => `line ${d.line}: ${d.message}`).join("; "));
   // 11
   const { notes } = buildRobotSpec(project);
   const unsimulated = project.parts
@@ -86,7 +89,7 @@ export function runReadiness(t: ProjectTemplate, opts: { simSeconds?: number; pr
   // 13 + 14
   let session: SimSession | null = null;
   try {
-    if (track) session = new SimSession({ project, track, mode: "code", opponent: t.simulation.opponent ?? null, opponentStartDelayS: 5 });
+    if (track) session = new SimSession({ project, track, mode: simulatedFirmware ? "code" : "manual", opponent: t.simulation.opponent ?? null, opponentStartDelayS: 5 });
   } catch (e) {
     add("Robot initial position is valid", false, (e as Error).message);
     add("Simulation starts without errors", false, (e as Error).message);
@@ -97,17 +100,22 @@ export function runReadiness(t: ProjectTemplate, opts: { simSeconds?: number; pr
     add("Robot initial position is valid", startOk, `Start (${track!.start.x.toFixed(2)}, ${track!.start.y.toFixed(2)}) m, ${track!.kind === "sumo" ? "inside the arena" : tel.onTrack ? "on the " + (track!.kind === "line" ? "line" : "road") : "OFF the track"}`);
     let err: string | null = null;
     try {
+      if (!simulatedFirmware) session.manual.forward = 1; // Manual mode: drive forward like a student would
       session.advance(opts.simSeconds ?? 1.5, 4000);
       const st = session.runtimeStatus;
       if (st?.state === "error") err = `Runtime error line ${st.error?.line}: ${st.error?.message}`;
-      if (!session.compileResult?.ok) err = "Firmware did not compile for the simulator";
+      if (simulatedFirmware && !session.compileResult?.ok) err = "Firmware did not compile for the simulator";
+      if (!Number.isFinite(session.telemetry().pose.x)) err = "The simulation produced an invalid pose";
     } catch (e) {
       err = (e as Error).message;
     }
-    add("Simulation starts without errors", !err, err ?? `Ran ${session.time.toFixed(2)} s of physics with the firmware (${session.runtimeKind})`);
+    add("Simulation starts without errors", !err, err ?? (simulatedFirmware ? `Ran ${session.time.toFixed(2)} s of physics with the firmware (${session.runtimeKind})` : `Ran ${session.time.toFixed(2)} s in Manual mode (firmware not simulated: ${t.firmware.simulationNote ?? "Wi-Fi"})`));
   }
 
-  const failed = checks.some((c) => !c.ok);
-  const warned = checks.some((c) => c.warning);
-  return { templateId: t.metadata.id, status: failed ? "NOT READY" : warned ? "READY WITH WARNINGS" : "READY TO SIMULATE", checks, at: new Date().toISOString() };
+  // spec-driven families: the template validator (documented warnings are shown but do not lower the status)
+  const template = t.metadata.family ? validateTemplate(t, project) : undefined;
+  const all = [...checks, ...(template ?? [])];
+  const failed = all.some((c) => !c.ok);
+  const warned = all.some((c) => c.warning && !c.documented);
+  return { templateId: t.metadata.id, status: failed ? "NOT READY" : warned ? "READY WITH WARNINGS" : "READY TO SIMULATE", checks, ...(template ? { template } : {}), at: new Date().toISOString() };
 }

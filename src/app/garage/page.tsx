@@ -1,8 +1,8 @@
 "use client";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useState } from "react";
-import { Box, Eye, Loader2, Play, Upload, Wrench } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Box, Eye, Filter, Loader2, Play, Upload, Wrench, X } from "lucide-react";
 import { GARAGE_TEMPLATES, type ProjectTemplate, type ReadinessReport } from "@/lib/garage";
 import { useApp } from "@/lib/store/app";
 import { Badge, Button } from "@/components/ui";
@@ -10,6 +10,7 @@ import { RobotTopView } from "@/components/garage/RobotTopView";
 import { LoadFlow } from "@/components/garage/LoadFlow";
 import { usePreviewProjects, useReadiness } from "@/components/garage/useGarage";
 import type { Project } from "@/lib/types";
+import { robotFacets, type RobotFacets } from "@/lib/robot/facets";
 
 const Preview3D = dynamic(() => import("@/components/garage/Preview3D"), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-bg2" /> });
 
@@ -61,7 +62,7 @@ function StatusBadge({ r }: { r?: ReadinessReport }) {
   return <Badge tone={tone}>{r.status}</Badge>;
 }
 
-function ProjectCard({ t, project, report, onAction }: { t: ProjectTemplate; project: Project; report?: ReadinessReport; onAction: (a: "load" | "simulate" | "customise") => void }) {
+function ProjectCard({ t, project, facets, report, onAction }: { t: ProjectTemplate; project: Project; facets: RobotFacets; report?: ReadinessReport; onAction: (a: "load" | "simulate" | "customise") => void }) {
   const [show3d, setShow3d] = useState(false);
   const diffTone = t.metadata.difficulty === "beginner" ? "ok" : t.metadata.difficulty === "intermediate" ? "warn" : "bad";
   const ready = report && report.status !== "NOT READY";
@@ -81,14 +82,18 @@ function ProjectCard({ t, project, report, onAction }: { t: ProjectTemplate; pro
           <StatusBadge r={report} />
         </div>
         <dl className="grid grid-cols-[92px_1fr] gap-x-2 gap-y-0.5 text-xs">
-          <dt className="text-dim">Components</dt>
-          <dd>{project.parts.length} parts · {project.wires.length} wires</dd>
+          <dt className="text-dim">Controller</dt>
+          <dd>{facets.controller}</dd>
+          <dt className="text-dim">Motors</dt>
+          <dd>{facets.motors}</dd>
+          <dt className="text-dim">Driver</dt>
+          <dd>{facets.driver}</dd>
           <dt className="text-dim">Sensors</dt>
           <dd>{t.metadata.sensorSummary}</dd>
-          <dt className="text-dim">Simulation</dt>
-          <dd>{t.simulation.keyboardViaSerial ? "Keyboard → Bluetooth → firmware" : "Autonomous firmware"}</dd>
-          <dt className="text-dim">Level</dt>
-          <dd>{t.metadata.learningLevel}</dd>
+          <dt className="text-dim">Control</dt>
+          <dd>{facets.control}</dd>
+          <dt className="text-dim">Wiring</dt>
+          <dd>{project.parts.length} parts · {project.wires.length} wires</dd>
         </dl>
         <div className="mt-auto grid grid-cols-2 gap-1.5 pt-2">
           <Link href={`/garage/${t.metadata.id}`} className="inline-flex items-center justify-center gap-1 rounded-md border border-line2 px-2 py-1.5 text-xs hover:border-brand hover:text-brand"><Eye size={12} /> VIEW PROJECT</Link>
@@ -107,11 +112,38 @@ function ProjectCard({ t, project, report, onAction }: { t: ProjectTemplate; pro
  */
 const SHOWN = GARAGE_TEMPLATES.filter((t) => !t.metadata.legacy);
 
+type FilterKey = "competition" | "controller" | "driver" | "sensor" | "difficulty";
+const COMP_LABEL: Record<string, string> = { line: "Line Following", race: "Robo Race", sumo: "Sumo / Robo War" };
+const ALL = "all";
+
 export default function GaragePage() {
   const { user, ready } = useApp();
   const previews = usePreviewProjects();
   const reports = useReadiness();
   const [flow, setFlow] = useState<{ id: string; intent: "load" | "simulate" | "customise" } | null>(null);
+  const [filters, setFilters] = useState<Record<FilterKey, string>>({ competition: ALL, controller: ALL, driver: ALL, sensor: ALL, difficulty: ALL });
+  const facets = useMemo(() => Object.fromEntries(SHOWN.map((t) => [t.metadata.id, robotFacets(previews[t.metadata.id], { keyboardControl: t.simulation.keyboardViaSerial })])) as Record<string, RobotFacets>, [previews]);
+  const options = useMemo(() => {
+    const uniq = (xs: string[]) => [...new Set(xs)].sort();
+    const fs = SHOWN.map((t) => facets[t.metadata.id]);
+    return {
+      competition: uniq(SHOWN.map((t) => t.metadata.competition)).map((v) => ({ v, l: COMP_LABEL[v] ?? v })),
+      controller: uniq(fs.map((f) => f.controller)).map((v) => ({ v, l: v })),
+      driver: uniq(fs.map((f) => f.driver)).map((v) => ({ v, l: v })),
+      sensor: uniq(fs.flatMap((f) => f.sensorTypes)).map((v) => ({ v, l: v })),
+      difficulty: ["beginner", "intermediate", "advanced"].filter((d) => SHOWN.some((t) => t.metadata.difficulty === d)).map((v) => ({ v, l: v })),
+    } satisfies Record<FilterKey, { v: string; l: string }[]>;
+  }, [facets]);
+  const matches = (t: ProjectTemplate) => {
+    const f = facets[t.metadata.id];
+    return (filters.competition === ALL || t.metadata.competition === filters.competition)
+      && (filters.controller === ALL || f.controller === filters.controller)
+      && (filters.driver === ALL || f.driver === filters.driver)
+      && (filters.sensor === ALL || (f.sensorTypes as string[]).includes(filters.sensor))
+      && (filters.difficulty === ALL || t.metadata.difficulty === filters.difficulty);
+  };
+  const filtered = SHOWN.filter(matches);
+  const active = Object.values(filters).some((v) => v !== ALL);
 
   return (
     <div>
@@ -135,7 +167,22 @@ export default function GaragePage() {
       </section>
 
       <div className="mx-auto max-w-7xl space-y-10 px-5 py-8">
-        {LABS.map((lab) => (
+        <div className="bf-panel flex flex-wrap items-end gap-3 p-3" role="search" aria-label="Filter robot templates">
+          <span className="bf-label flex items-center gap-1.5 self-center text-muted"><Filter size={13} /> Filter</span>
+          {(Object.keys(options) as FilterKey[]).map((k) => (
+            <label key={k} className="flex min-w-[140px] flex-1 flex-col gap-1 text-[11px] text-dim sm:flex-none">
+              {k === "sensor" ? "Sensor type" : k === "controller" ? "Microcontroller" : k === "driver" ? "Motor driver" : k[0].toUpperCase() + k.slice(1)}
+              <select className="bf-input h-8 py-0 text-xs" value={filters[k]} onChange={(e) => setFilters((f) => ({ ...f, [k]: e.target.value }))}>
+                <option value={ALL}>All</option>
+                {options[k].map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </label>
+          ))}
+          <span className="ml-auto self-center font-mono text-xs text-dim">{filtered.length}/{SHOWN.length} robots</span>
+          {active && <Button size="sm" onClick={() => setFilters({ competition: ALL, controller: ALL, driver: ALL, sensor: ALL, difficulty: ALL })}><X size={12} /> Clear</Button>}
+        </div>
+        {filtered.length === 0 && <p className="text-sm text-muted">No robot matches these filters. <button className="text-accent-ink hover:underline" onClick={() => setFilters({ competition: ALL, controller: ALL, driver: ALL, sensor: ALL, difficulty: ALL })}>Clear filters</button></p>}
+        {LABS.filter((lab) => filtered.some((t) => t.metadata.competition === lab.competition)).map((lab) => (
           <section key={lab.competition} className={`relative overflow-hidden rounded-2xl border border-line p-5 ${lab.bg}`}>
             {lab.deco}
             <div className="relative mb-4">
@@ -143,12 +190,13 @@ export default function GaragePage() {
               <h2 className={`font-display text-2xl font-bold tracking-wide ${lab.accent}`}><span className="mr-2 inline-block h-5 w-1.5 translate-y-0.5 rounded-sm bg-accent" />{lab.title}</h2>
             </div>
             {(() => {
-              const current = SHOWN.filter((t) => t.metadata.competition === lab.competition);
+              const current = filtered.filter((t) => t.metadata.competition === lab.competition);
               const card = (t: ProjectTemplate) => (
                 <ProjectCard
                   key={t.metadata.id}
                   t={t}
                   project={previews[t.metadata.id]}
+                  facets={facets[t.metadata.id]}
                   report={reports[t.metadata.id]}
                   onAction={(intent) => (ready && !user ? (location.href = `/login?next=/garage`) : setFlow({ id: t.metadata.id, intent }))}
                 />

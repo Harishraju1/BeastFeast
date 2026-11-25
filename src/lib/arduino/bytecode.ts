@@ -117,6 +117,10 @@ export const B = {
   NO_TONE: 32,
   YIELD: 33,
   EXIT: 34,
+  // ESP32 Arduino core 3.x LEDC PWM
+  LEDC_ATTACH: 35,
+  LEDC_WRITE: 36,
+  LEDC_DETACH: 37,
   SERIAL_BEGIN: 40,
   SERIAL_AVAILABLE: 41,
   SERIAL_READ: 42,

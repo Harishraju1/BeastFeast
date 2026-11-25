@@ -111,7 +111,7 @@ const BUILTIN_NAMES = [
   "analogReference", "delay", "delayMicroseconds", "millis", "micros", "pulseIn", "pulseInLong", "map", "constrain", "abs",
   "min", "max", "sq", "round", "random", "randomSeed", "bitRead", "bitWrite", "bitSet", "bitClear", "bit", "highByte",
   "lowByte", "attachInterrupt", "detachInterrupt", "digitalPinToInterrupt", "noInterrupts", "interrupts", "tone",
-  "noTone", "yield", "exit", "F", "String", "strlen", ...MATH1, ...MATH2, ...CHAR_CLASSES,
+  "noTone", "yield", "exit", "ledcAttach", "ledcWrite", "ledcDetach", "F", "String", "strlen", ...MATH1, ...MATH2, ...CHAR_CLASSES,
 ];
 
 // ------------------------------------------------------------------------------------------------
@@ -1955,6 +1955,31 @@ class Compiler {
         this.genArgs(e, [T.int], name);
         this.builtin(B.NO_TONE, 1);
         return T.void;
+      // ---- ESP32 Arduino core 3.x LEDC PWM (pin-based API) ----
+      case "ledcAttach":
+      case "ledcWrite":
+      case "ledcDetach": {
+        if (boardArch(this.board) !== "esp32") return this.error(e.loc, `${name}() is part of the ESP32 Arduino core (LEDC PWM) and does not exist on ${this.board.name} — use analogWrite()`, "UNDECLARED");
+        if (name === "ledcAttach") {
+          this.recordPin("analogWrite", e.args[0] ?? callee, e.loc);
+          this.genArgs(e, [T.int, T.ulong, T.int], name);
+          this.builtin(B.LEDC_ATTACH, 3);
+          return T.bool;
+        }
+        if (name === "ledcWrite") {
+          this.recordPin("analogWrite", e.args[0] ?? callee, e.loc);
+          this.genArgs(e, [T.int, T.ulong], name);
+          this.builtin(B.LEDC_WRITE, 2);
+          return T.bool;
+        }
+        this.genArgs(e, [T.int], name);
+        this.builtin(B.LEDC_DETACH, 1);
+        return T.bool;
+      }
+      case "ledcSetup":
+      case "ledcAttachPin":
+      case "ledcDetachPin":
+        return this.error(e.loc, `${name}() is the ESP32 core 2.x LEDC API, removed in core 3.x — use ledcAttach(pin, frequency, resolutionBits) and ledcWrite(pin, duty)`, "UNSUPPORTED_FEATURE");
       case "yield":
         this.genArgs(e, [], name);
         this.builtin(B.YIELD, 0);

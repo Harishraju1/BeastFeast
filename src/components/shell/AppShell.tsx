@@ -133,7 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const saveIcon = saveState === "saving" ? <Loader2 size={14} className="animate-spin" /> : saveState === "error" ? <CloudOff size={14} className="text-bad" /> : saveState === "saved" ? <Check size={14} className="text-ok" /> : <Cloud size={14} />;
-  const saveText = { idle: "All changes saved", dirty: "Unsaved changes…", saving: "Saving…", saved: "Saved", error: "Save failed" }[saveState];
+  const saveText = { idle: "All changes saved", dirty: "Unsaved changes…", saving: "Saving…", saved: "Saved", error: "Unable to sync" }[saveState];
 
   return (
     <div className="flex min-h-screen">
@@ -174,7 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <PanelLeftClose size={18} className="shrink-0" />
             <span className={`${immersive && !mobileOpen ? "hidden" : "hidden xl:inline"}`}>Hide side menu</span>
           </button>
-          <div className={`px-2 py-1 font-mono text-[9px] tracking-widest ${BACKEND_MODE === "local" ? "text-warn" : "text-ok"} ${immersive ? "hidden" : "hidden xl:block"}`}>{BACKEND_MODE === "local" ? "LOCAL MODE · THIS DEVICE" : "CLOUD SYNC · SUPABASE"}</div>
+          {BACKEND_MODE === "local" && <div className={`px-2 py-1 font-mono text-[9px] tracking-widest text-warn ${immersive ? "hidden" : "hidden xl:block"}`}>LOCAL MODE · THIS DEVICE</div>}
         </div>
       </aside>
 

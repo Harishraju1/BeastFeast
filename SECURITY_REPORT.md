@@ -174,3 +174,51 @@ The app's own API routes (`/api/avatar`, `/api/cron/daily-xp-reset`) send no COR
 2. Optionally raise the minimum password length to 8 under Authentication → Policies.
 3. Optionally set `CRON_SECRET` in Vercel, so only Vercel's scheduler can call the backup cron route. The route is safe either way: the reset is idempotent.
 4. Upgrade Monaco when 0.58 is released (item 5).
+
+---
+
+# Backend hardening, monitoring and email audit (2026-11-25)
+
+**Architecture (verified in code):** browser → Vercel (pages, `/api/avatar`, `/api/cron/daily-xp-reset`, `/admin` server check) → Supabase (Mumbai) directly through the REST API with row-level security and role-checked database functions. There is no separate backend server (no Render, no Neon).
+
+## Email rate-limit errors — root cause
+- Sign-up confirmation and password-reset emails are sent by Supabase Auth's **built-in mailer**: 2 emails per hour for the whole project, and delivery only to members of the Supabase organisation.
+- The app does not send duplicates: both forms block double submits, nothing sends from an effect or on refresh, and every account shows exactly one confirmation email.
+- Sign-ups arrive in bursts, so the third in any hour fails with `over_email_send_rate_limit`.
+- **Fix (manual):** connect a custom SMTP provider (Authentication → Emails → SMTP), then set Authentication → Rate Limits → emails per hour to about 100, within the provider's own allowance. Keep the per-address interval at 60 s.
+- App changes: an honest "email limit reached" message, a 60 s cooldown on "Send again", and clear wrong-password / unconfirmed-email messages.
+
+## Protection
+- Rate limits are counted in one database table (`rl_hit`), shared by every server instance. Sign-in, sign-up and email limits are Supabase Auth's own.
+- `/api/avatar`: requests without a session cookie get 401 before any work. The limit is 10 per hour per user, and 429 responses carry `Retry-After`. Size limit 5 MB, same-origin only.
+- Volumetric protection is Vercel's edge network. Optional: add a rate-limit rule for `/api/*` in Vercel → Firewall.
+- Server functions run in `bom1` (Mumbai), next to the database.
+
+## Saving under load
+Measured with `npm run load:test`:
+- Migration 0013: an autosave now rebuilds only the derived tables whose section changed.
+- In the browser:
+  - autosave fires 2 s after the last edit;
+  - unchanged documents are not re-sent;
+  - failures retry with exponential back-off and jitter behind a circuit breaker (`src/lib/sync/saveGuard.ts`);
+  - unsaved work is kept on the device and restored on the next visit;
+  - internal error text is never shown to students.
+- Version snapshots no longer store replay paths.
+
+| Load test (1000 simulated students) | Before | After |
+|---|---|---|
+| 100 saves at once | 0.52 s | 0.41 s |
+| 1000 saves at once | 86 s, 5 failed | 67 s, 1 failed |
+| 1000 editing for 60 s (save every ~4 s) | 11 % failed | 0 % failed, ~73 s waits |
+
+The free database handles about 150 saves per second. More than that needs a larger compute plan.
+
+## Monitoring (admin → Database & API Monitoring)
+- **Sources:** real database statistics, captured every 5 minutes by pg_cron (`monitoring_snapshots`, kept 120 days), plus `pg_stat_statements` for application roles. Everything is read through role-checked `admin_monitoring_*` functions.
+- **Access:** admins see the overview, trends, emails, jobs and rate limits. Super admins also see per-operation, per-table and per-member usage, and can edit settings.
+- **Shown as unavailable rather than estimated:**
+  - HTTP status codes per route (Vercel Observability);
+  - provider email errors (Supabase → Logs → Auth);
+  - provider billing (needs a management token, not configured).
+- Cost estimates appear only from plan figures a super admin enters.
+- Checks: `npm run monitoring:smoke` (48 live checks). Backup before migrating: `npm run db:backup`.

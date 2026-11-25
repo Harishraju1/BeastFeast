@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { Monitoring } from "@/components/admin/Monitoring";
 import { RequireAuth } from "@/components/shell/AppShell";
 import { Badge, Button, Field, PageHeader, Panel, Tabs } from "@/components/ui";
 import { useApp } from "@/lib/store/app";
@@ -15,7 +16,7 @@ import { XpRulesEditor } from "@/components/admin/XpRulesEditor";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { ROLE_LABEL, isStaff } from "@/lib/roles";
 
-type Tab = "users" | "admins" | "xp" | "components" | "learning" | "videos" | "missions" | "announcements" | "competitions" | "featured" | "analytics";
+type Tab = "users" | "admins" | "xp" | "components" | "learning" | "videos" | "missions" | "announcements" | "competitions" | "featured" | "analytics" | "monitoring";
 const rid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 
 function Components() {
@@ -301,7 +302,7 @@ function Inner() {
     <div className="mx-auto max-w-7xl px-5 py-8">
       <PageHeader kicker={user?.role === "super_admin" ? "SUPER ADMIN · ROBOTICS CLUB KKH" : "ADMIN · ROBOTICS CLUB KKH"} title="Admin Dashboard" />
       <div className="mb-5 overflow-x-auto">
-        <Tabs value={tab} onChange={setTab} items={(["users", "admins", "xp", "components", "learning", "videos", "missions", "announcements", "competitions", "featured", "analytics"] as Tab[]).map((t) => ({ value: t, label: t === "users" ? "User Management" : t === "admins" ? "Admin Management" : t === "xp" ? "XP Rules" : t[0].toUpperCase() + t.slice(1) }))} />
+        <Tabs value={tab} onChange={setTab} items={(["users", "admins", "xp", "components", "learning", "videos", "missions", "announcements", "competitions", "featured", "analytics", "monitoring"] as Tab[]).map((t) => ({ value: t, label: t === "users" ? "User Management" : t === "admins" ? "Admin Management" : t === "xp" ? "XP Rules" : t === "monitoring" ? "Database & API Monitoring" : t[0].toUpperCase() + t.slice(1) }))} />
       </div>
       {tab === "admins" && <AdminManagement />}
       {tab === "xp" && <XpRulesEditor />}
@@ -314,6 +315,7 @@ function Inner() {
       {tab === "competitions" && <Competitions />}
       {tab === "featured" && <Featured />}
       {tab === "analytics" && <Analytics />}
+      {tab === "monitoring" && <Monitoring />}
     </div>
   );
 }

@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.json({ ok: false, error: "Supabase is not configured" }, { status: 500 });
+  if (!url || !key) return NextResponse.json({ ok: false, error: "service not configured" }, { status: 500 });
   const sb = createClient(url, key, { auth: { persistSession: false } });
   const { data, error } = await sb.rpc("reset_daily_xp", { p_trigger: "vercel-cron" });
   if (error) {

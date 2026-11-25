@@ -80,6 +80,8 @@ export class ArduinoRuntime {
   private rng = 1;
   private adcBits = 10;
   private pwmBits = 8;
+  /** ESP32 LEDC: pins attached with ledcAttach(pin, freq, bits) */
+  private ledc = new Map<number, { bits: number; freq: number }>();
   private rx: number[] = [];
   private serialBegun = false;
   private servoCount = 0;
@@ -121,6 +123,7 @@ export class ArduinoRuntime {
     this.rng = 1;
     this.adcBits = Math.round(Math.log2(this.board.adcMax + 1));
     this.pwmBits = 8;
+    this.ledc.clear();
     this.rx = [];
     this.serialBegun = false;
     this.servoCount = 0;
@@ -815,6 +818,52 @@ export class ArduinoRuntime {
         host.tone?.(pin, freq);
         if (dur > 0) this.events.push({ at: this.now + dur * 1000, pin, kind: "noTone" });
         return;
+      }
+      case B.LEDC_ATTACH: {
+        // ESP32 core 3.x: ledcAttach(pin, freq, resolutionBits) picks a free LEDC channel for the pin
+        const [pin, freq, bits] = a as number[];
+        if (!this.checkPin("ledcAttach", pin)) return 0;
+        if ([34, 35, 36, 39].includes(pin)) {
+          this.warn(`ledcAttach(${pin}, …): GPIO ${pin} is input-only on the ESP32 — no PWM output`);
+          return 0;
+        }
+        if (bits < 1 || bits > 16 || freq <= 0) {
+          this.warn(`ledcAttach(${pin}, ${freq}, ${bits}): the resolution must be 1-16 bits and the frequency above 0 — not attached`);
+          return 0;
+        }
+        if (this.ledc.size >= 16 && !this.ledc.has(pin)) {
+          this.warn(`ledcAttach(${pin}, …): all 16 LEDC channels of the ESP32 are in use`);
+          return 0;
+        }
+        this.ledc.set(pin, { bits, freq });
+        this.pinModes.set(pin, "OUTPUT");
+        host.pinMode(pin, "OUTPUT");
+        host.analogWrite(pin, 0);
+        this.spend(20);
+        return 1;
+      }
+      case B.LEDC_WRITE: {
+        const [pin, duty] = a as number[];
+        const ch = this.ledc.get(pin);
+        if (!ch) {
+          this.warn(`ledcWrite(${pin}, …) without ledcAttach(${pin}, frequency, bits) — the pin is not connected to a PWM channel, nothing happens`);
+          return 0;
+        }
+        const max = Math.pow(2, ch.bits) - 1;
+        let v = duty;
+        if (v < 0 || v > max) {
+          // the core clamps to the full-on value (2^bits)
+          v = v < 0 ? 0 : max;
+        }
+        host.analogWrite(pin, ch.bits === 8 ? v : Math.round((v * 255) / max));
+        this.spend(6);
+        return 1;
+      }
+      case B.LEDC_DETACH: {
+        const pin = a[0] as number;
+        if (!this.ledc.delete(pin)) return 0;
+        host.digitalWrite(pin, 0);
+        return 1;
       }
       case B.NO_TONE: {
         const pin = a[0] as number;

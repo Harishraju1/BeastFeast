@@ -72,7 +72,8 @@ describe("4WD Garage reference robots", () => {
   });
 
   it("lists the 4WD robots first in each section, legacy robots last", () => {
-    const ids = (c: string) => GARAGE_TEMPLATES.filter((t) => t.metadata.competition === c).map((t) => t.metadata.id);
+    // reference robots only (the spec-driven template families are listed after them, see families.test.ts)
+    const ids = (c: string) => GARAGE_TEMPLATES.filter((t) => t.metadata.competition === c && !t.metadata.family).map((t) => t.metadata.id);
     expect(ids("race")).toEqual(["RR-04", "RR-05", "RR-06", "RR-02", "RR-01", "RR-03"]);
     expect(ids("sumo")).toEqual(["RW-04", "RW-01", "RW-02", "RW-03"]);
     expect(ids("line")).toEqual(["LF-01", "LF-02", "LF-03"]);

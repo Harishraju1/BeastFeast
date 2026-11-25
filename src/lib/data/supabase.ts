@@ -30,12 +30,21 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
   return res.data;
 }
 
-/** Messages raised by our database functions are written for users; known low-level ones are reworded. */
-function friendlyError(msg: string): string {
+import { EMAIL_LIMIT_REACHED, TEMPORARILY_UNAVAILABLE } from "@/lib/messages";
+export { EMAIL_LIMIT_REACHED, TEMPORARILY_UNAVAILABLE };
+
+/**
+ * Messages raised by our database functions are written for users and pass through; known low-level ones
+ * are reworded; anything that looks like internal server, database or gateway detail is never shown.
+ */
+export function friendlyError(msg: string): string {
+  if (/over_email_send_rate_limit|email rate limit/i.test(msg)) return EMAIL_LIMIT_REACHED;
+  if (/too many requests|rate limit/i.test(msg)) return "Too many attempts. Please wait a minute and try again.";
   if (/failed to fetch|networkerror|network request failed/i.test(msg)) return "Network connection failed. Check your internet connection and try again.";
   if (/jwt expired|invalid jwt|refresh token/i.test(msg)) return "Your session has expired. Please sign in again.";
   if (/permission denied|row-level security/i.test(msg)) return "Permission denied.";
   if (/duplicate key value/i.test(msg)) return "That record already exists.";
+  if (/<!doctype|<html|PGRST\d|statement timeout|upstream|connection pool|connection (termination|refused|reset)|could not connect|ECONN|ETIMEDOUT|gateway|service unavailable|internal server error|relation .* does not exist|column .* does not exist|function .* does not exist|syntax error|violates .* constraint|database error/i.test(msg)) return TEMPORARILY_UNAVAILABLE;
   return msg;
 }
 
@@ -54,6 +63,12 @@ const toAttempt = (a: Record<string, unknown>): QuizAttempt => ({
 export class SupabaseBackend implements Backend {
   readonly mode = "supabase" as const;
   private sb: SupabaseClient;
+  /** Admin monitoring reads. Only the admin_monitoring_* functions, which check the caller's role on the server. */
+  async monitoringRpc<T>(fn: `admin_monitoring_${string}`, args: Record<string, unknown> = {}): Promise<T> {
+    const { data, error } = await this.sb.rpc(fn, args);
+    if (error) throw new Error(friendlyError(error.message));
+    return data as T;
+  }
   constructor(url: string, anonKey: string) {
     // Session lives in cookies (not localStorage) so the server can verify who is signed in — the /admin
     // layout checks the user's role on the server before rendering anything.
@@ -88,12 +103,16 @@ export class SupabaseBackend implements Backend {
     }
     if (!res.data.session) throw new Error("Check your email to confirm your account, then sign in.");
     const p = await this.currentUser();
-    if (!p) throw new Error("Profile was not created — check the database trigger.");
+    if (!p) throw new Error("Your account was created, but your profile isn't ready yet. Please sign in again in a minute.");
     return p;
   }
   async signIn(email: string, password: string) {
     const res = await this.sb.auth.signInWithPassword({ email, password });
-    if (res.error) throw new Error(res.error.message);
+    if (res.error) {
+      if (/invalid login credentials/i.test(res.error.message)) throw new Error("Incorrect email or password.");
+      if (/email not confirmed/i.test(res.error.message)) throw new Error("Confirm your email first — open the link we sent you (check spam too), then sign in.");
+      throw new Error(friendlyError(res.error.message));
+    }
     const p = await this.currentUser();
     if (!p) throw new Error("No profile found for this account.");
     return p;
@@ -105,7 +124,8 @@ export class SupabaseBackend implements Backend {
     const redirectTo = `${window.location.origin}/reset-password`;
     const { error } = await this.sb.auth.resetPasswordForEmail(email.trim(), { redirectTo });
     if (!error) return;
-    if (/rate limit|security purposes|only request this/i.test(error.message)) throw new Error("Too many reset requests. Please wait a few minutes and try again.");
+    if (/over_email_send_rate_limit|email rate limit/i.test(error.message)) throw new Error(EMAIL_LIMIT_REACHED);
+    if (/rate limit|security purposes|only request this/i.test(error.message)) throw new Error("A reset link was sent recently. Please wait a minute before asking for another.");
     if (/invalid.*email|validate email/i.test(error.message)) throw new Error("Enter a valid email address.");
     throw new Error(friendlyError(error.message));
   }

@@ -47,6 +47,12 @@ export interface ProjectTemplate {
     legacy?: boolean;
     /** command protocol shown for keyboard/Bluetooth-controlled robots (defaults to the RR protocol) */
     controlProtocol?: string;
+    /** Template family (spec-driven templates), e.g. "Robo Race Car". Reference robots have none. */
+    family?: string;
+    /** Short variant name within the family, e.g. "ESP32 · 2 × BTS7960 · Wi-Fi" */
+    variantLabel?: string;
+    /** Human-readable configuration of the variant */
+    options?: { controller: string; driver: string; motors: string; sensors: string; control: string };
   };
   chassis: { componentId: string; length_mm?: number; width_mm?: number; thickness_mm?: number; material?: string; groundClearance_mm?: number };
   parts: TemplatePart[];
@@ -59,6 +65,17 @@ export interface ProjectTemplate {
     source: string;
     libraries: string[];
     adjustable: { name: string; meaning: string }[];
+    /** spec-driven templates: the behaviour and control method the firmware was generated for */
+    behaviour?: string;
+    control?: string;
+    /**
+     * false = the firmware uses something the BEAST interpreter does not simulate (ESP32 Wi-Fi): it is statically
+     * checked instead, and the arena drives the robot in Manual mode. Default true.
+     */
+    runsInSimulator?: boolean;
+    simulationNote?: string;
+    /** simulator-compilable twin of a non-simulated sketch (same pins and motor code), used for static checks */
+    checkSource?: string;
   };
   simulation: ProjectSimConfig & { defaultTrackId: string; alternativeTrackIds: string[] };
 }
@@ -70,6 +87,8 @@ export interface ReadinessCheck {
   name: string;
   ok: boolean;
   warning?: boolean;
+  /** a warning the template documents in its limitations (shown, but it does not lower the status) */
+  documented?: boolean;
   detail: string;
 }
 
@@ -77,6 +96,8 @@ export interface ReadinessReport {
   templateId: string;
   status: ReadinessStatus;
   checks: ReadinessCheck[];
+  /** template validation (spec-driven families only) */
+  template?: ReadinessCheck[];
   at: string;
 }
 

@@ -15,7 +15,13 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const ALLOWED = new Set(["jpeg", "png", "webp"]);
-const json = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
+const json = (status: number, body: Record<string, unknown>, headers: Record<string, string> = {}) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
+
+/** Seconds until the avatar limiter's hourly window (rl_hit 'avatar', 10 per 3600 s) starts again. */
+const retryAfterS = () => String(3600 - (Math.floor(Date.now() / 1000) % 3600));
+
+/** Signed-in requests always carry the session cookie; without it there is nothing to check, so no work is done. */
+const hasSessionCookie = (req: Request) => /(?:^|;\s*)sb-[^=]*-auth-token(?:\.\d+)?=/.test(req.headers.get("cookie") ?? "");
 
 function sameOrigin(req: Request) {
   const origin = req.headers.get("origin");
@@ -30,6 +36,7 @@ function sameOrigin(req: Request) {
 async function authed(req: Request) {
   if (!SUPABASE_CONFIGURED) return { error: json(400, { error: "Profile pictures are stored on this device in local mode." }) };
   if (!sameOrigin(req)) return { error: json(403, { error: "Permission denied." }) };
+  if (!hasSessionCookie(req)) return { error: json(401, { error: "Your session has expired. Please sign in again." }) };
   const sb = await serverSupabase();
   const { data } = await sb.auth.getUser();
   if (!data.user) return { error: json(401, { error: "Your session has expired. Please sign in again." }) };
@@ -51,7 +58,7 @@ export async function POST(req: Request) {
   if (len > AVATAR_MAX_BYTES + 64 * 1024) return json(413, { error: "The picture must be 5 MB or smaller." });
 
   const limited = await sb.rpc("avatar_upload_allowed");
-  if (limited.error) return json(429, { error: limited.error.message.includes("Too many") ? limited.error.message : "Please try again later." });
+  if (limited.error) return json(429, { error: limited.error.message.includes("Too many") ? limited.error.message : "Please try again later." }, { "Retry-After": retryAfterS() });
 
   let file: File | null = null;
   try {

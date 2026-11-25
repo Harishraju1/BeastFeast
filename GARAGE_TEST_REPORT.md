@@ -1,8 +1,8 @@
 # BEAST PROJECT GARAGE — TEST REPORT
 
-Generated 2026-11-20T16:06:31.932Z by `npm run garage:report`. Every scenario runs the real stack: the project's firmware in the sandboxed interpreter → its circuit graph → driver/motor models → planar physics → sensor geometry → back to the firmware. No path following or scripted results are used.
+Generated 2026-11-25T13:28:24.006Z by `npm run garage:report`. Every scenario runs the real stack: the project's firmware in the sandboxed interpreter → its circuit graph → driver/motor models → planar physics → sensor geometry → back to the firmware. No path following or scripted results are used.
 
-## Readiness (14 automated checks per project)
+## Readiness (14 automated checks per project; spec-driven family templates also run the 9-check template validator)
 
 | Project | Status | Failed checks | Warnings |
 | --- | --- | --- | --- |
@@ -19,10 +19,56 @@ Generated 2026-11-20T16:06:31.932Z by `npm run garage:report`. Every scenario ru
 | RW-01 Basic Sumo Robot | **READY TO SIMULATE** | — | — |
 | RW-02 Advanced Sumo Robot | **READY TO SIMULATE** | — | — |
 | RW-03 Intelligent Sumo Robot | **READY TO SIMULATE** | — | — |
+| T-RACE-UNO-L298N 4WD Robo Race Car — Uno, L298N | **READY TO SIMULATE** | — | Current per driver channel (documented): 4 warning(s) — documented in the limitations: FL Motor stall ≈5 A > L298N peak 3 A.; FR Motor stall ≈5 A > L298N peak 3 A.; RL Motor stall ≈5 A > L298N peak 3 A.; RR Motor stall ≈5 A > L298N peak 3 A. |
+| T-RACE-UNO-BTS 4WD Robo Race Car — Uno, BTS7960 | **READY TO SIMULATE** | — | — |
+| T-RACE-ESP32-L298N 4WD Robo Race Car — ESP32, L298N | **READY TO SIMULATE** | — | Current per driver channel (documented): 4 warning(s) — documented in the limitations: FL Motor stall ≈5 A > L298N peak 3 A.; FR Motor stall ≈5 A > L298N peak 3 A.; RL Motor stall ≈5 A > L298N peak 3 A.; RR Motor stall ≈5 A > L298N peak 3 A. |
+| T-RACE-ESP32-BTS 4WD Robo Race Car — ESP32, BTS7960 | **READY TO SIMULATE** | — | — |
+| T-RACE-ESP32-BTS-WIFI 4WD Robo Race Car — ESP32, BTS7960, Wi-Fi | **READY TO SIMULATE** | — | — |
+| T-LINE-UNO-3 4WD Line Follower — Uno, 3 sensors | **READY TO SIMULATE** | — | — |
+| T-LINE-UNO-5 4WD Line Follower — Uno, 5 sensors | **READY TO SIMULATE** | — | — |
+| T-LINE-ESP32-3 4WD Line Follower — ESP32, 3 sensors | **READY TO SIMULATE** | — | — |
+| T-LINE-ESP32-5 4WD Line Follower — ESP32, 5 sensors | **READY TO SIMULATE** | — | — |
+| T-LINE-ESP32-8 4WD Line Follower — ESP32, 8 sensors | **READY TO SIMULATE** | — | — |
+| T-SUMO-UNO 4WD Mini-Sumo — Uno | **READY TO SIMULATE** | — | — |
+| T-SUMO-ESP32 4WD Mini-Sumo — ESP32 | **READY TO SIMULATE** | — | — |
+| T-ROVER-UNO 4WD Off-Road Rover — Uno | **READY TO SIMULATE** | — | — |
+| T-ROVER-ESP32 4WD Off-Road Rover — ESP32 | **READY TO SIMULATE** | — | — |
+| T-OBST-UNO 4WD Obstacle Avoider — Uno | **READY TO SIMULATE** | — | — |
+| T-OBST-ESP32 4WD Obstacle Avoider — ESP32 | **READY TO SIMULATE** | — | — |
+| T-BT-UNO Bluetooth 4WD Robot — Uno | **READY TO SIMULATE** | — | — |
+| T-BT-ESP32 Bluetooth 4WD Robot — ESP32 | **READY TO SIMULATE** | — | — |
+| T-BT-ESP32-WIFI Bluetooth 4WD Robot — ESP32, Wi-Fi | **READY TO SIMULATE** | — | — |
+
+## Template families (spec-driven: one configuration → parts, wiring, pin map, firmware)
+
+| Family | Variant | Controller | Driver | Motors | Sensors | Control | Firmware | Template checks |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Robo Race Car | T-RACE-UNO-L298N | Arduino Uno R3 | 1 × L298N | 4 × Johnson DC Gear Motor | None (driver-controlled) | HC-05 Bluetooth (Serial) | generated, runs in the simulator | 9/9 |
+| Robo Race Car | T-RACE-UNO-BTS | Arduino Uno R3 | 2 × BTS7960 | 4 × Johnson DC Gear Motor | None (driver-controlled) | HC-05 Bluetooth (Serial) | generated, runs in the simulator | 9/9 |
+| Robo Race Car | T-RACE-ESP32-L298N | ESP32 DevKit V1 | 1 × L298N | 4 × Johnson DC Gear Motor | None (driver-controlled) | HC-05 Bluetooth (Serial2) | generated, runs in the simulator | 9/9 |
+| Robo Race Car | T-RACE-ESP32-BTS | ESP32 DevKit V1 | 2 × BTS7960 | 4 × Johnson DC Gear Motor | None (driver-controlled) | HC-05 Bluetooth (Serial2) | generated, runs in the simulator | 9/9 |
+| Robo Race Car | T-RACE-ESP32-BTS-WIFI | ESP32 DevKit V1 | 2 × BTS7960 | 4 × Johnson DC Gear Motor | None (driver-controlled) | ESP32 Wi-Fi (web page) | generated + statically checked (Wi-Fi not simulated; arena: Manual mode) | 9/9 |
+| Line Following Robot | T-LINE-UNO-3 | Arduino Uno R3 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | 3-channel digital reflectance array (3-Channel IR Sensor Array) | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Line Following Robot | T-LINE-UNO-5 | Arduino Uno R3 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | 5-channel digital reflectance array (5-Channel IR Sensor Array) | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Line Following Robot | T-LINE-ESP32-3 | ESP32 DevKit V1 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | 3-channel digital reflectance array (3-Channel IR Sensor Array) | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Line Following Robot | T-LINE-ESP32-5 | ESP32 DevKit V1 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | 5-channel digital reflectance array (5-Channel IR Sensor Array) | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Line Following Robot | T-LINE-ESP32-8 | ESP32 DevKit V1 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | 8-channel analog reflectance array (QTR-8A) | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Sumo Robot | T-SUMO-UNO | Arduino Uno R3 | 2 × TB6612FNG | 4 × N20 Micro Metal Gear Motor | HC-SR04 ultrasonic (opponent) + 2 front edge sensors | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Sumo Robot | T-SUMO-ESP32 | ESP32 DevKit V1 | 2 × TB6612FNG | 4 × N20 Micro Metal Gear Motor | US-100 ultrasonic (opponent) + 2 front edge sensors | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Off-Road Rover | T-ROVER-UNO | Arduino Uno R3 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | HC-SR04 ultrasonic (obstacle) | HC-05 Bluetooth (Serial) | generated, runs in the simulator | 9/9 |
+| Off-Road Rover | T-ROVER-ESP32 | ESP32 DevKit V1 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | US-100 ultrasonic (obstacle) | HC-05 Bluetooth (Serial2) | generated, runs in the simulator | 9/9 |
+| Obstacle Avoidance Robot | T-OBST-UNO | Arduino Uno R3 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | HC-SR04 ultrasonic (obstacle) | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Obstacle Avoidance Robot | T-OBST-ESP32 | ESP32 DevKit V1 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | US-100 ultrasonic (obstacle) | None (autonomous) | generated, runs in the simulator | 9/9 |
+| Bluetooth-Controlled 4WD Robot | T-BT-UNO | Arduino Uno R3 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | None (driver-controlled) | HC-05 Bluetooth (Serial) | generated, runs in the simulator | 9/9 |
+| Bluetooth-Controlled 4WD Robot | T-BT-ESP32 | ESP32 DevKit V1 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | None (driver-controlled) | HC-05 Bluetooth (Serial2) | generated, runs in the simulator | 9/9 |
+| Bluetooth-Controlled 4WD Robot | T-BT-ESP32-WIFI | ESP32 DevKit V1 | 2 × TB6612FNG | 4 × 25GA370 Gear Motor | None (driver-controlled) | ESP32 Wi-Fi (web page) | generated + statically checked (Wi-Fi not simulated; arena: Manual mode) | 9/9 |
+
+Not offered:
+- T-LINE-UNO-8: The Arduino Uno has only 6 analog inputs (A0–A5) and its 12 remaining digital pins are all used by the two TB6612FNG drivers, so an 8-channel analog array cannot be wired. Use the ESP32 8-sensor variant.
 
 ## Summary
 
-- Required scenarios: **67 / 67 passed**
+- Required scenarios: **107 / 107 passed**
 - Observed-behaviour scenarios (recorded, not required): 19, of which 18 succeeded
 
 ## Line following
@@ -56,6 +102,16 @@ Generated 2026-11-20T16:06:31.932Z by `npm run garage:report`. Every scenario ru
 | Sensor calibration | LF-02 | Firmware sweeps over the line during its first seconds | Every sensor records a white minimum and a black maximum at least 400 counts apart | Ranges: 51-972 51-972 51-972 51-972 51-972 | ✅ PASS |
 | Sensor calibration | LF-03 | Firmware sweeps over the line during its first seconds | Every sensor records a white minimum and a black maximum at least 400 counts apart | Ranges: 51-972 51-972 51-972 51-972 51-972 51-972 51-972 51-972 | ✅ PASS |
 | PID telemetry and live tuning | LF-03 | Runs 5 s, then sends P0.20 over Serial | Telemetry lines PID,error,prev,integral,derivative,output,left,right,ticksL,ticksR stream every 100 ms; firmware keeps running after retuning | 50 telemetry lines; last: PID,-267.00,-267.00,-20000.00,-29.00,-83.50,77,244,3071,3745 | ✅ PASS |
+| Beginner Oval lap | T-LINE-UNO-3 | Line · Beginner Oval; generated firmware with 3 sensors | Completes a lap in the course direction using only its sensors | Lap in 17.3 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
+| Sharp Corners lap | T-LINE-UNO-3 | Line · Sharp Corners; generated firmware with 3 sensors | Completes a lap in the course direction using only its sensors | Lap in 14.6 s, heading turned 360°, 4 off-track event(s) | ✅ PASS |
+| Beginner Oval lap | T-LINE-UNO-5 | Line · Beginner Oval; generated firmware with 5 sensors | Completes a lap in the course direction using only its sensors | Lap in 14.6 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
+| Sharp Corners lap | T-LINE-UNO-5 | Line · Sharp Corners; generated firmware with 5 sensors | Completes a lap in the course direction using only its sensors | Lap in 12.6 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
+| Beginner Oval lap | T-LINE-ESP32-3 | Line · Beginner Oval; generated firmware with 3 sensors | Completes a lap in the course direction using only its sensors | Lap in 17.6 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
+| Sharp Corners lap | T-LINE-ESP32-3 | Line · Sharp Corners; generated firmware with 3 sensors | Completes a lap in the course direction using only its sensors | Lap in 14.6 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
+| Beginner Oval lap | T-LINE-ESP32-5 | Line · Beginner Oval; generated firmware with 5 sensors | Completes a lap in the course direction using only its sensors | Lap in 14.6 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
+| Sharp Corners lap | T-LINE-ESP32-5 | Line · Sharp Corners; generated firmware with 5 sensors | Completes a lap in the course direction using only its sensors | Lap in 12.7 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
+| Beginner Oval lap | T-LINE-ESP32-8 | Line · Beginner Oval; generated firmware with 8 sensors | Completes a lap in the course direction using only its sensors | Lap in 15.3 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
+| Sharp Corners lap | T-LINE-ESP32-8 | Line · Sharp Corners; generated firmware with 8 sensors | Completes a lap in the course direction using only its sensors | Lap in 14.1 s, heading turned 360°, 0 off-track event(s) | ✅ PASS |
 
 ## Robo Race
 
@@ -90,6 +146,32 @@ Generated 2026-11-20T16:06:31.932Z by `npm run garage:report`. Every scenario ru
 | 4WD: four driven wheels, no caster, symmetrical | RR-06 | Built project and its physics model | No caster; four motors, each wheel on its own motor; FL/FR and RL/RR mirror-symmetric; identical wheels; four driven wheels in the physics model | 0 caster(s); wheels FL (75, 92) FR (75, -92) RL (-75, 92) RR (-75, -92) mm; asymmetry 0.0 mm; wheels 65×26 mm; 4 driven wheels in the model | ✅ PASS |
 | Custom track (keyboard driver) | RR-04 | Student-built rounded-rectangle road; keys chosen by a scripted driver (Q/E/F, L/R) | The 4WD car responds to the keys and completes a lap | Lap in 11.4 s; 0 off-track event(s) | ✅ PASS |
 | Autopilot obstacle avoidance | RR-05 | Flat area, 25 × 20 cm obstacle 1.6 m straight ahead; no keys pressed (autopilot) | Drives forward, sees the obstacle with its ultrasonic sensor and turns away before touching it | turned away 67 cm before the obstacle centre; 0 collision(s) in 8 s | ✅ PASS |
+| Bluetooth drive F / B / L / R / S | T-RACE-UNO-L298N | Flat test area; F 1.5 s, S, B 1 s, S, L 0.75 s, R 0.75 s, S — each command repeated every 0.25 s like a phone app | F: all four wheels forward, straight; S stops; B reverses; L spins left (heading +), R spins right (heading −) | F 0.70 m/s (rpm FL/FR/RL/RR 207/207/207/207, drift 0°); S 0.023 m/s; B -0.49 m/s; L 102°; R -62° | ✅ PASS |
+| Connection loss stops the car | T-RACE-UNO-L298N | One F command, then silence (the phone lost the connection) | Drives while commands arrive, then stops on its own ≈1 s after the last command | speed 0.7 s after F: 0.70 m/s; 2.2 s after F: 0.027 m/s; motor voltages 0.0/0.0/0.0/0.0 V; "LINK LOST" printed | ✅ PASS |
+| Bluetooth drive F / B / L / R / S | T-RACE-UNO-BTS | Flat test area; F 1.5 s, S, B 1 s, S, L 0.75 s, R 0.75 s, S — each command repeated every 0.25 s like a phone app | F: all four wheels forward, straight; S stops; B reverses; L spins left (heading +), R spins right (heading −) | F 0.82 m/s (rpm FL/FR/RL/RR 240/240/240/240, drift -0°); S 0.000 m/s; B -0.57 m/s; L 119°; R -73° | ✅ PASS |
+| Connection loss stops the car | T-RACE-UNO-BTS | One F command, then silence (the phone lost the connection) | Drives while commands arrive, then stops on its own ≈1 s after the last command | speed 0.7 s after F: 0.82 m/s; 2.2 s after F: 0.000 m/s; motor voltages 0.0/0.0/0.0/0.0 V; "LINK LOST" printed | ✅ PASS |
+| Bluetooth drive F / B / L / R / S | T-RACE-ESP32-L298N | Flat test area; F 1.5 s, S, B 1 s, S, L 0.75 s, R 0.75 s, S — each command repeated every 0.25 s like a phone app | F: all four wheels forward, straight; S stops; B reverses; L spins left (heading +), R spins right (heading −) | F 0.70 m/s (rpm FL/FR/RL/RR 207/207/207/207, drift 0°); S 0.023 m/s; B -0.49 m/s; L 101°; R -62° | ✅ PASS |
+| Connection loss stops the car | T-RACE-ESP32-L298N | One F command, then silence (the phone lost the connection) | Drives while commands arrive, then stops on its own ≈1 s after the last command | speed 0.7 s after F: 0.70 m/s; 2.2 s after F: 0.027 m/s; motor voltages 0.0/0.0/0.0/0.0 V; "LINK LOST" printed | ✅ PASS |
+| Bluetooth drive F / B / L / R / S | T-RACE-ESP32-BTS | Flat test area; F 1.5 s, S, B 1 s, S, L 0.75 s, R 0.75 s, S — each command repeated every 0.25 s like a phone app | F: all four wheels forward, straight; S stops; B reverses; L spins left (heading +), R spins right (heading −) | F 0.82 m/s (rpm FL/FR/RL/RR 240/240/240/240, drift -0°); S 0.000 m/s; B -0.57 m/s; L 118°; R -72° | ✅ PASS |
+| Connection loss stops the car | T-RACE-ESP32-BTS | One F command, then silence (the phone lost the connection) | Drives while commands arrive, then stops on its own ≈1 s after the last command | speed 0.7 s after F: 0.82 m/s; 2.2 s after F: 0.000 m/s; motor voltages 0.0/0.0/0.0/0.0 V; "LINK LOST" printed | ✅ PASS |
+| Manual-mode drive (Wi-Fi not simulated) | T-RACE-ESP32-BTS-WIFI | Arena Manual mode (W, then A) — the Wi-Fi firmware itself is not simulated | All four wheels are electrically reachable: the robot drives forward and turns left | forward 0.73 m/s, rpm 214/214/214/214; turn 163° | ✅ PASS |
+| Drives onto the off-road track | T-ROVER-UNO | Beginner Off-Road Track; F held for 4 s over Bluetooth | Drives onto the terrain: the body rises and tilts (terrain interaction), every value stays finite | moved 229 cm; body height range 33.6 mm; max pitch 10°; values finite | ✅ PASS |
+| Drives onto the off-road track | T-ROVER-ESP32 | Beginner Off-Road Track; F held for 4 s over Bluetooth | Drives onto the terrain: the body rises and tilts (terrain interaction), every value stays finite | moved 229 cm; body height range 33.5 mm; max pitch 10°; values finite | ✅ PASS |
+| Avoids an obstacle ahead | T-OBST-UNO | Flat area, 25 × 20 cm obstacle 1.6 m straight ahead; 12 s | Drives forward, stops or turns before the obstacle and never touches it | turned 56 cm before the obstacle centre; 0 collision(s) | ✅ PASS |
+| Never drives into a wall | T-OBST-UNO | Flat area, 1.6 m wide wall 1.8 m ahead; 12 s | Stops / turns before the wall and never drives into it head-on | 0 contact(s), 0 at > 0.1 m/s; drove 6.9 m | ✅ PASS |
+| Obstacle course without head-on hits | T-OBST-UNO | Race · S-Curves & Obstacles, 20 s autonomous | Wanders the course without hitting an obstacle head-on | 0 contact(s), 0 head-on (> 0.1 m/s); drove 11.7 m | ✅ PASS |
+| Avoids an obstacle ahead | T-OBST-ESP32 | Flat area, 25 × 20 cm obstacle 1.6 m straight ahead; 12 s | Drives forward, stops or turns before the obstacle and never touches it | turned 56 cm before the obstacle centre; 0 collision(s) | ✅ PASS |
+| Never drives into a wall | T-OBST-ESP32 | Flat area, 1.6 m wide wall 1.8 m ahead; 12 s | Stops / turns before the wall and never drives into it head-on | 0 contact(s), 0 at > 0.1 m/s; drove 6.9 m | ✅ PASS |
+| Obstacle course without head-on hits | T-OBST-ESP32 | Race · S-Curves & Obstacles, 20 s autonomous | Wanders the course without hitting an obstacle head-on | 0 contact(s), 0 head-on (> 0.1 m/s); drove 11.5 m | ✅ PASS |
+| Bluetooth drive F / B / L / R / S | T-BT-UNO | Flat test area; F 1.5 s, S, B 1 s, S, L 0.75 s, R 0.75 s, S — each command repeated every 0.25 s like a phone app | F: all four wheels forward, straight; S stops; B reverses; L spins left (heading +), R spins right (heading −) | F 0.80 m/s (rpm FL/FR/RL/RR 234/234/234/234, drift -0°); S 0.000 m/s; B -0.56 m/s; L 100°; R -63° | ✅ PASS |
+| Speed command V<n> | T-BT-UNO | V230 then F for 1.5 s; stop; V110 then F for 1.5 s | The robot drives clearly slower after V110 than after V230 | V230: 0.92 m/s; V110: 0.44 m/s | ✅ PASS |
+| Individual motor test 1–4 | T-BT-UNO | Commands 1, 2, 3, 4 (FL, FR, RL, RR), each held 0.5 s, 0 between them | Only the selected motor gets voltage and its wheel turns forward | FL: 7.5/0.0/0.0/0.0 V, rpm 150/10/16/10; FR: 0.0/7.5/0.0/0.0 V, rpm 10/150/10/16; RL: 0.0/0.0/7.5/0.0 V, rpm 19/12/144/12; RR: 0.0/0.0/0.0/7.5 V, rpm 12/19/12/144 | ✅ PASS |
+| Connection loss stops the robot | T-BT-UNO | One F command, then silence (the phone lost the connection) | Drives while commands arrive, then stops on its own ≈1 s after the last command | speed 0.7 s after F: 0.80 m/s; 2.2 s after F: 0.000 m/s; motor voltages 0.0/0.0/0.0/0.0 V; "LINK LOST" printed | ✅ PASS |
+| Bluetooth drive F / B / L / R / S | T-BT-ESP32 | Flat test area; F 1.5 s, S, B 1 s, S, L 0.75 s, R 0.75 s, S — each command repeated every 0.25 s like a phone app | F: all four wheels forward, straight; S stops; B reverses; L spins left (heading +), R spins right (heading −) | F 0.80 m/s (rpm FL/FR/RL/RR 234/234/234/234, drift 0°); S 0.000 m/s; B -0.56 m/s; L 102°; R -62° | ✅ PASS |
+| Speed command V<n> | T-BT-ESP32 | V230 then F for 1.5 s; stop; V110 then F for 1.5 s | The robot drives clearly slower after V110 than after V230 | V230: 0.92 m/s; V110: 0.44 m/s | ✅ PASS |
+| Individual motor test 1–4 | T-BT-ESP32 | Commands 1, 2, 3, 4 (FL, FR, RL, RR), each held 0.5 s, 0 between them | Only the selected motor gets voltage and its wheel turns forward | FL: 7.5/0.0/0.0/0.0 V, rpm 148/10/17/10; FR: 0.0/7.5/0.0/0.0 V, rpm 10/149/10/17; RL: 0.0/0.0/7.5/0.0 V, rpm 18/11/145/12; RR: 0.0/0.0/0.0/7.5 V, rpm 11/18/11/145 | ✅ PASS |
+| Connection loss stops the robot | T-BT-ESP32 | One F command, then silence (the phone lost the connection) | Drives while commands arrive, then stops on its own ≈1 s after the last command | speed 0.7 s after F: 0.80 m/s; 2.2 s after F: 0.000 m/s; motor voltages 0.0/0.0/0.0/0.0 V; "LINK LOST" printed | ✅ PASS |
+| Manual-mode drive (Wi-Fi not simulated) | T-BT-ESP32-WIFI | Arena Manual mode (W, then A) — the Wi-Fi firmware itself is not simulated | All four wheels are electrically reachable: the robot drives forward and turns left | forward 0.71 m/s, rpm 209/209/209/209; turn 146° | ✅ PASS |
 
 Known limitations:
 - RR-03 cannot see obstacles; add an HC-SR04 and avoidance logic as an extension exercise
@@ -128,9 +210,13 @@ Known limitations:
 | Match vs intermediate AI | RW-04 | Standard dohyo, intermediate opponent, 5 s start delay for both | Match ends by a ring-out or the time limit, decided by physics | WIN at 5.9 s; 2 collision event(s) | ✅ PASS |
 | Match vs advanced AI | RW-04 | Standard dohyo, advanced opponent, 5 s start delay for both | Match ends by a ring-out or the time limit, decided by physics | WIN at 6.0 s; 2 collision event(s) | ✅ PASS |
 | Match vs Beast Mode AI | RW-04 | Standard dohyo, beast opponent, 5 s start delay for both | Match ends by a ring-out or the time limit, decided by physics | WIN at 6.3 s; 2 collision event(s) | ✅ PASS |
+| Stays in the ring (alone, 40 s) | T-SUMO-UNO | Standard dohyo, no opponent, 40 s | Searches the ring (spin + creep), reaches the border and always turns back in | Stayed inside; drove 4.5 m, furthest 32 cm from the centre | ✅ PASS |
+| Beats the beginner AI | T-SUMO-UNO | Standard dohyo, beginner AI, 5 s start delay for both | Pushes the beginner AI out of the ring and stays in itself | WIN at 5.7 s; 2 collision event(s); still inside 5 s later | ✅ PASS |
+| Stays in the ring (alone, 40 s) | T-SUMO-ESP32 | Standard dohyo, no opponent, 40 s | Searches the ring (spin + creep), reaches the border and always turns back in | Stayed inside; drove 5.3 m, furthest 32 cm from the centre | ✅ PASS |
+| Beats the beginner AI | T-SUMO-ESP32 | Standard dohyo, beginner AI, 5 s start delay for both | Pushes the beginner AI out of the ring and stays in itself | WIN at 5.7 s; 2 collision event(s); still inside 5 s later | ✅ PASS |
 
 Known limitations:
 - The reference robots' 25GA370 motors and sticky tyres out-push the built-in opponent robots, so head-on starts are usually decided in the first push
 - The Sharp sensor is out of range (>80 cm) at the start distance and reports 999
 
-Total runtime 173 s.
+Total runtime 259 s.

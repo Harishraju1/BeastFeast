@@ -51,13 +51,17 @@ function library() {
   return LIBRARY;
 }
 
-export function checkOriginality(code: string): OriginalityResult {
+/**
+ * `extra`: further sources the code must not copy — e.g. the firmware the code generator produces for this
+ * very robot, so generated code is never counted as the student's own work.
+ */
+export function checkOriginality(code: string, extra: { name: string; source: string }[] = []): OriginalityResult {
   const own = shape(meaningfulLines(code ?? ""));
   if (own.length < MIN_LINES)
     return { original: false, similarity: 0, closest: null, meaningfulLines: own.length, reason: `Too short to count as a program (${own.length} meaningful lines, at least ${MIN_LINES} needed).` };
   let best = 0;
   let closest: string | null = null;
-  for (const t of library()) {
+  for (const t of [...library(), ...extra.map((e) => ({ name: e.name, lines: new Set(shape(meaningfulLines(e.source))) }))]) {
     const hits = own.filter((l) => t.lines.has(l)).length / own.length;
     if (hits > best) {
       best = hits;

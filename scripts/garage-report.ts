@@ -8,19 +8,27 @@ import path from "node:path";
 import { GARAGE_TEMPLATES } from "../src/lib/garage";
 import { runReadiness } from "../src/lib/garage/readiness";
 import { allScenarios, runScenario } from "../src/lib/garage/scenarios";
+import { familyScenarios } from "../src/lib/garage/familyScenarios";
+import { UNSUPPORTED_VARIANTS } from "../src/lib/garage/projects/families";
 
 const L: string[] = [];
 const started = Date.now();
 L.push("# BEAST PROJECT GARAGE — TEST REPORT", "");
 L.push(`Generated ${new Date().toISOString()} by \`npm run garage:report\`. Every scenario runs the real stack: the project's firmware in the sandboxed interpreter → its circuit graph → driver/motor models → planar physics → sensor geometry → back to the firmware. No path following or scripted results are used.`, "");
 
-L.push("## Readiness (14 automated checks per project)", "", "| Project | Status | Failed checks | Warnings |", "| --- | --- | --- | --- |");
+L.push("## Readiness (14 automated checks per project; spec-driven family templates also run the 9-check template validator)", "", "| Project | Status | Failed checks | Warnings |", "| --- | --- | --- | --- |");
+const familyRows: string[] = [];
 for (const t of GARAGE_TEMPLATES) {
   const r = runReadiness(t, { simSeconds: 2 });
-  L.push(`| ${t.metadata.id} ${t.metadata.name} | **${r.status}** | ${r.checks.filter((c) => !c.ok).map((c) => c.name).join("; ") || "—"} | ${r.checks.filter((c) => c.warning).map((c) => `${c.name}: ${c.detail}`).join("; ") || "—"} |`);
+  const all = [...r.checks, ...(r.template ?? [])];
+  L.push(`| ${t.metadata.id} ${t.metadata.name} | **${r.status}** | ${all.filter((c) => !c.ok).map((c) => c.name).join("; ") || "—"} | ${all.filter((c) => c.warning).map((c) => `${c.name}${c.documented ? " (documented)" : ""}: ${c.detail}`).join("; ").replace(/\|/g, "/") || "—"} |`);
+  if (t.metadata.family)
+    familyRows.push(`| ${t.metadata.family} | ${t.metadata.id} | ${t.metadata.options?.controller} | ${t.metadata.options?.driver} | ${t.metadata.options?.motors} | ${t.metadata.options?.sensors} | ${t.metadata.options?.control} | ${t.firmware.runsInSimulator === false ? "generated + statically checked (Wi-Fi not simulated; arena: Manual mode)" : "generated, runs in the simulator"} | ${(r.template ?? []).filter((c) => c.ok).length}/${(r.template ?? []).length} |`);
 }
+L.push("", "## Template families (spec-driven: one configuration → parts, wiring, pin map, firmware)", "", "| Family | Variant | Controller | Driver | Motors | Sensors | Control | Firmware | Template checks |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |", ...familyRows);
+L.push("", "Not offered:", ...UNSUPPORTED_VARIANTS.map((u) => `- ${u.id}: ${u.reason}`));
 
-const results = allScenarios().map(runScenario);
+const results = [...allScenarios(), ...familyScenarios()].map(runScenario);
 const req = results.filter((r) => r.mustPass);
 L.push("", "## Summary", "");
 L.push(`- Required scenarios: **${req.filter((r) => r.pass).length} / ${req.length} passed**`);

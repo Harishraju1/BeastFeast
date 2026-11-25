@@ -16,10 +16,13 @@ import { LoadFlow } from "@/components/garage/LoadFlow";
 import { RobotTopView } from "@/components/garage/RobotTopView";
 import { useReadiness } from "@/components/garage/useGarage";
 import { WIRE_HEX as THEME_WIRES } from "@/lib/theme";
+import { specSheet, wiringTable, type ConnectionType } from "@/lib/robot/specSheet";
 
 const Preview3D = dynamic(() => import("@/components/garage/Preview3D"), { ssr: false });
 const WIRE_HEX: Record<string, string> = THEME_WIRES;
-type Tab = "overview" | "assembly" | "circuit" | "code" | "simulation" | "components";
+type Tab = "overview" | "components" | "wiring" | "code" | "assembly" | "simulation" | "specs";
+const TAB_LABEL: Record<Tab, string> = { overview: "OVERVIEW", components: "COMPONENTS", wiring: "WIRING", code: "CODE", assembly: "3D ASSEMBLY", simulation: "SIMULATION", specs: "SPECIFICATIONS" };
+const TYPE_TONE: Record<ConnectionType, "bad" | "dim" | "warn" | "accent" | "ok" | "brand"> = { power: "bad", ground: "dim", motor: "warn", signal: "accent", sensor: "ok", communication: "brand" };
 
 export default function GarageProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,7 +45,8 @@ export default function GarageProjectPage() {
     }, {}),
   );
   const label = (uid: string) => project.parts.find((p) => p.uid === uid)?.label ?? uid;
-  const byPart = project.parts.map((p) => ({ p, wires: project.wires.filter((w) => w.from.part === p.uid || w.to.part === p.uid) })).filter((x) => x.wires.length);
+  const wiring = tab === "wiring" ? wiringTable(project) : [];
+  const sheet = tab === "specs" || tab === "overview" ? specSheet(project) : null;
   const act = (a: "load" | "simulate" | "customise") => (user ? setFlow(a) : (location.href = `/login?next=/garage/${id}`));
 
   return (
@@ -67,7 +71,7 @@ export default function GarageProjectPage() {
       </div>
 
       <div className="my-5 overflow-x-auto">
-        <Tabs value={tab} onChange={setTab} items={(["overview", "assembly", "circuit", "code", "simulation", "components"] as Tab[]).map((v) => ({ value: v, label: v === "assembly" ? "3D ASSEMBLY" : v.toUpperCase() }))} />
+        <Tabs value={tab} onChange={setTab} items={(Object.keys(TAB_LABEL) as Tab[]).map((v) => ({ value: v, label: TAB_LABEL[v] }))} />
       </div>
 
       {tab === "overview" && (
@@ -84,6 +88,9 @@ export default function GarageProjectPage() {
             </Panel>
           </div>
           <div className="space-y-5">
+            {sheet?.drivers.filter((d) => d.warning).map((d) => (
+              <div key={d.label} role="alert" className="flex gap-2 rounded-lg border border-warn/50 bg-warn/10 p-3 text-sm"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-warn" /><span><b>{d.label} current limit:</b> {d.warning}</span></div>
+            ))}
             <div className="h-72 overflow-hidden rounded-xl border border-line"><Preview3D project={project} /></div>
             <Panel title="Chassis & mass">
               <dl className="grid grid-cols-2 gap-y-1 text-sm">
@@ -122,28 +129,37 @@ export default function GarageProjectPage() {
         </div>
       )}
 
-      {tab === "circuit" && (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Panel title={`Wiring (${project.wires.length} connections)`} bodyClass="max-h-[560px] overflow-auto p-3">
-            {byPart.map(({ p, wires }) => (
-              <div key={p.uid} className="mb-3">
-                <div className="mb-1 text-sm font-semibold">{p.label} <span className="text-xs font-normal text-dim">{getComponent(p.componentId)?.name}</span></div>
-                {wires.filter((w) => w.from.part === p.uid).map((w) => (
-                  <div key={w.id} className="flex items-center gap-2 font-mono text-[11px]">
-                    <span className="h-2 w-6 rounded" style={{ background: WIRE_HEX[w.color] }} />
-                    {p.label}.{w.from.pin} → {label(w.to.part)}.{w.to.pin}
-                  </div>
+      {tab === "wiring" && (
+        <div className="space-y-5">
+          <Panel title={`Connections (${wiring.length})`} bodyClass="max-h-[560px] overflow-auto p-0">
+            <table className="w-full text-[12px]">
+              <thead className="sticky top-0 bg-bg2"><tr className="bf-label text-left"><th className="px-3 py-2">From</th><th className="px-3 py-2">To</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Wire</th><th className="px-3 py-2">Voltage</th><th className="px-3 py-2">Note</th></tr></thead>
+              <tbody>
+                {wiring.map((r) => (
+                  <tr key={r.id} className="border-t border-line/60">
+                    <td className="px-3 py-1.5 font-mono">{r.from}</td>
+                    <td className="px-3 py-1.5 font-mono">{r.to}</td>
+                    <td className="px-3 py-1.5"><Badge tone={TYPE_TONE[r.type]}>{r.type}</Badge></td>
+                    <td className="px-3 py-1.5"><span className="inline-flex items-center gap-1.5"><span className="h-2 w-5 rounded" style={{ background: WIRE_HEX[r.color] }} />{r.color}</span></td>
+                    <td className="px-3 py-1.5 font-mono">{r.voltage == null ? "—" : `${r.voltage} V`}</td>
+                    <td className="px-3 py-1.5 text-muted">{r.note}</td>
+                  </tr>
                 ))}
-              </div>
-            ))}
-          </Panel>
-          <Panel title="Pin mapping">
-            <table className="w-full text-sm">
-              <thead><tr className="bf-label text-left"><th className="py-1">Controller pin</th><th>Connected to</th><th>Purpose</th></tr></thead>
-              <tbody>{t.pinMap.map((r) => <tr key={r.pin} className="border-t border-line align-top"><td className="py-1.5 font-mono text-brand">{r.pin}</td><td className="pr-2">{r.connectedTo}</td><td className="text-muted">{r.purpose}</td></tr>)}</tbody>
+              </tbody>
             </table>
-            <p className="mt-3 text-xs text-dim">Wire colours follow the studio convention: red supply, black ground, yellow signal, green sensor output, blue communication/encoders, orange motor. Load the project to open the full interactive schematic in Circuit Studio.</p>
           </Panel>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Panel title="Pin mapping">
+              <table className="w-full text-sm">
+                <thead><tr className="bf-label text-left"><th className="py-1">Controller pin</th><th>Connected to</th><th>Purpose</th></tr></thead>
+                <tbody>{t.pinMap.map((r) => <tr key={r.pin} className="border-t border-line align-top"><td className="py-1.5 font-mono text-brand">{r.pin}</td><td className="pr-2">{r.connectedTo}</td><td className="text-muted">{r.purpose}</td></tr>)}</tbody>
+              </table>
+            </Panel>
+            <Panel title="Reading the wiring">
+              <p className="text-sm text-muted">Every row above is one wire in this robot. Voltages come from the circuit solver (battery → switch → driver / regulator → controller), not from labels. Wire colours follow the studio convention: red supply, black ground, yellow signal, green sensor output, blue communication/encoders, orange motor.</p>
+              <p className="mt-2 text-xs text-dim">Load the project to open the full interactive schematic in Circuit Studio — the circuit, the code generator and the simulator all read this same wiring.</p>
+            </Panel>
+          </div>
         </div>
       )}
 
@@ -192,6 +208,56 @@ export default function GarageProjectPage() {
                 ))}
               </ol>
             )}
+          </Panel>
+        </div>
+      )}
+
+      {tab === "specs" && sheet && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Panel title="Mechanical">
+            <dl className="grid grid-cols-[150px_1fr] gap-y-1.5 text-sm">
+              <dt className="text-dim">Drivetrain</dt><dd>{t.metadata.drivetrain ?? "—"}{t.metadata.drivetrain === "4WD" ? " skid-steer, four powered wheels" : ""}</dd>
+              {sheet.dimensions && (<><dt className="text-dim">Chassis</dt><dd>{sheet.dimensions.length_mm} × {sheet.dimensions.width_mm} × {sheet.dimensions.thickness_mm} mm {sheet.dimensions.material}</dd></>)}
+              <dt className="text-dim">Ground clearance</dt><dd>{sheet.groundClearance_mm == null ? "—" : `${Math.round(sheet.groundClearance_mm)} mm`}</dd>
+              {sheet.wheels && (<><dt className="text-dim">Wheels</dt><dd>{sheet.wheels.count}× {sheet.wheels.name} — Ø{sheet.wheels.diameter_mm} × {sheet.wheels.width_mm} mm</dd></>)}
+              {sheet.motors && (<><dt className="text-dim">Motors</dt><dd>{sheet.motors.count}× {sheet.motors.name}{sheet.motors.ratedV ? ` — ${sheet.motors.ratedV} V, ${sheet.motors.rpm} rpm no-load, ${sheet.motors.stallA} A stall` : ""}</dd></>)}
+              <dt className="text-dim">Total mass</dt><dd>{sheet.mass_g} g{sheet.massEstimated ? " (some parts estimated)" : ""}</dd>
+              <dt className="text-dim">Controller</dt><dd>{sheet.controller ?? "—"}</dd>
+              <dt className="text-dim">Sensors</dt><dd>{sheet.sensors.length ? sheet.sensors.join(" · ") : "none"}</dd>
+            </dl>
+          </Panel>
+          <Panel title="Power">
+            {sheet.power.battery ? (
+              <dl className="grid grid-cols-[150px_1fr] gap-y-1.5 text-sm">
+                <dt className="text-dim">Battery</dt><dd>{sheet.power.battery.name}</dd>
+                <dt className="text-dim">Voltage</dt><dd>{sheet.power.battery.nominal_V} V nominal · {sheet.power.battery.full_V} V full · {sheet.power.battery.cutoff_V} V cut-off ({sheet.power.battery.cells}S)</dd>
+                <dt className="text-dim">Capacity / energy</dt><dd>{sheet.power.battery.capacity_mAh} mAh · {sheet.power.battery.energy_Wh} Wh</dd>
+                <dt className="text-dim">Typical draw (est.)</dt><dd>{sheet.power.totalCurrent_A.toFixed(2)} A while driving</dd>
+                <dt className="text-dim">All motors stalled</dt><dd>{sheet.power.stallCurrent_A} A worst case</dd>
+                <dt className="text-dim">Runtime (est.)</dt><dd>{sheet.power.runtime_min == null ? "not enough data" : `≈ ${sheet.power.runtime_min} min of driving (80 % usable capacity)`}</dd>
+              </dl>
+            ) : <p className="text-sm text-muted">No battery in this robot.</p>}
+            {sheet.power.missing.length > 0 && <ul className="mt-2 text-xs text-warn">{sheet.power.missing.map((m) => <li key={m}>{m}</li>)}</ul>}
+          </Panel>
+          <Panel title="Motor driver channel loading" className="lg:col-span-2" bodyClass="overflow-x-auto p-0">
+            <table className="w-full text-sm">
+              <thead className="bg-bg2"><tr className="bf-label text-left"><th className="px-3 py-2">Driver</th><th className="px-3 py-2">Motors / channel</th><th className="px-3 py-2">Rating (cont. / peak)</th><th className="px-3 py-2">Channel draw (driving / stall)</th><th className="px-3 py-2">Result</th></tr></thead>
+              <tbody>
+                {sheet.drivers.map((d) => (
+                  <tr key={d.label} className="border-t border-line align-top">
+                    <td className="px-3 py-2">{d.label} <span className="text-xs text-dim">{d.name}</span></td>
+                    <td className="px-3 py-2">{d.motorsPerChannel}</td>
+                    <td className="px-3 py-2 font-mono">{d.contA} A / {d.peakA} A</td>
+                    <td className="px-3 py-2 font-mono">{d.channelDriveA} A / {d.channelStallA} A</td>
+                    <td className="px-3 py-2">{d.ok ? <span className="inline-flex items-center gap-1 text-ok"><CheckCircle2 size={14} /> within limits</span> : <span className="flex gap-1 text-warn"><AlertTriangle size={14} className="mt-0.5 shrink-0" />{d.warning}</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="px-3 py-2 text-xs text-dim">Currents are estimates from the motor datasheet values scaled to the battery voltage; driving assumes 25 % of the way from no-load to stall.</p>
+          </Panel>
+          <Panel title="Limitations" className="lg:col-span-2">
+            <ul className="space-y-1 text-sm text-muted">{t.metadata.limitations.map((o) => <li key={o} className="flex gap-2"><AlertTriangle size={14} className="mt-0.5 shrink-0 text-warn" />{o}</li>)}</ul>
           </Panel>
         </div>
       )}

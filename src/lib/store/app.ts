@@ -1,5 +1,7 @@
 "use client";
 import { create } from "zustand";
+import { CircuitBreaker, backupUnsaved, clearBackup, readBackups, saveFingerprint, slimForSnapshot } from "@/lib/sync/saveGuard";
+import { TEMPORARILY_UNAVAILABLE } from "@/lib/messages";
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
 import { type AdminContent, type LearningActivityKind, type Progress, type XpEventType, getBackend } from "@/lib/data";
@@ -71,6 +73,14 @@ interface AppState {
 }
 
 const timers: Record<string, ReturnType<typeof setTimeout>> = {};
+/** Wait after the last edit before autosaving. */
+const AUTOSAVE_MS = 2000;
+const SYNC_RETRYING = "Unable to sync — retrying automatically.";
+/** One breaker for all saves: they share one database. */
+const saveBreaker = new CircuitBreaker();
+/** Fingerprint of what the server last accepted, per project — unchanged documents are not re-sent. */
+const lastSaved: Record<string, string> = {};
+let outageNotified = false;
 let toastId = 1;
 let lastLockNotice = 0;
 
@@ -105,8 +115,23 @@ export const useApp = create<AppState>((set, get) => ({
       /* ignore */
     }
     if (user) {
-      const [projects, tracks, progress] = await Promise.all([be.listProjects(user.id), be.listTracks(user.id), be.getProgress(user.id)]);
+      const [loaded, tracks, progress] = await Promise.all([be.listProjects(user.id), be.listTracks(user.id), be.getProgress(user.id)]);
+      for (const p of loaded) lastSaved[p.id] = saveFingerprint(p);
+      // changes that could not be saved last time are still on this device: put them back and save them
+      const restoredIds: string[] = [];
+      const projects = loaded.map((p) => p);
+      for (const b of readBackups<Project>(user.id)) {
+        const i = projects.findIndex((p) => p.id === b.id);
+        if (i >= 0 && b.updatedAt > projects[i].updatedAt) {
+          projects[i] = b;
+          restoredIds.push(b.id);
+        } else clearBackup(b.id); // saved already, or the project was deleted elsewhere
+      }
       set({ user, projects, tracks, progress, content, ready: true, lastProjectId: last && projects.some((p) => p.id === last) ? last : projects[0]?.id ?? null });
+      if (restoredIds.length) {
+        for (const id of restoredIds) timers[id] = setTimeout(() => void get().saveNow(id), 500);
+        get().toast("info", `Restored unsaved changes from this device (${restoredIds.length} project${restoredIds.length === 1 ? "" : "s"}). Saving them now.`);
+      }
       // settle the daily learning penalty for past days (computed on the server in cloud mode)
       try {
         const pen = await be.applyInactivityPenalties();
@@ -147,6 +172,7 @@ export const useApp = create<AppState>((set, get) => ({
   async createProject(p, opts = { award: true }) {
     const be = await getBackend();
     await be.saveProject(p);
+    lastSaved[p.id] = saveFingerprint(p);
     set({ projects: [p, ...get().projects], lastProjectId: p.id });
     try {
       localStorage.setItem("bf5.lastProject", p.id);
@@ -205,7 +231,7 @@ export const useApp = create<AppState>((set, get) => ({
       /* ignore */
     }
     clearTimeout(timers[id]);
-    timers[id] = setTimeout(() => void get().saveNow(id), 1200);
+    timers[id] = setTimeout(() => void get().saveNow(id), AUTOSAVE_MS);
   },
   undo(id) {
     const h = get().history[id];
@@ -214,7 +240,7 @@ export const useApp = create<AppState>((set, get) => ({
     const prev = h.past[h.past.length - 1];
     set({ projects: get().projects.map((p) => (p.id === id ? prev : p)), history: { ...get().history, [id]: { past: h.past.slice(0, -1), future: [cur, ...h.future] } }, saveState: "dirty" });
     clearTimeout(timers[id]);
-    timers[id] = setTimeout(() => void get().saveNow(id), 1200);
+    timers[id] = setTimeout(() => void get().saveNow(id), AUTOSAVE_MS);
   },
   redo(id) {
     const h = get().history[id];
@@ -223,33 +249,70 @@ export const useApp = create<AppState>((set, get) => ({
     const next = h.future[0];
     set({ projects: get().projects.map((p) => (p.id === id ? next : p)), history: { ...get().history, [id]: { past: [...h.past, cur], future: h.future.slice(1) } }, saveState: "dirty" });
     clearTimeout(timers[id]);
-    timers[id] = setTimeout(() => void get().saveNow(id), 1200);
+    timers[id] = setTimeout(() => void get().saveNow(id), AUTOSAVE_MS);
   },
   async saveNow(id) {
     clearTimeout(timers[id]);
     delete timers[id];
     const p = get().projects.find((x) => x.id === id);
     if (!p) return;
+    const fp = saveFingerprint(p);
+    if (lastSaved[id] === fp) {
+      // nothing changed since the last successful save (e.g. undo back to it) — no database write
+      clearBackup(id);
+      if (!Object.keys(timers).length) set({ saveState: "saved", saveError: null });
+      return;
+    }
+    const now = Date.now();
+    if (!saveBreaker.canAttempt(now)) {
+      // the database is struggling: wait for the breaker instead of adding load; keep the work on this device
+      backupUnsaved(p);
+      timers[id] = setTimeout(() => void get().saveNow(id), saveBreaker.waitMs(now) || 1000);
+      set({ saveState: "error", saveError: SYNC_RETRYING });
+      return;
+    }
     set({ saveState: "saving" });
     try {
       const be = await getBackend();
       await be.saveProject(p);
-      set({ saveState: "saved", saveError: null });
+      saveBreaker.onSuccess();
+      lastSaved[id] = fp;
+      clearBackup(id);
+      set({ saveState: timers[id] ? "dirty" : "saved", saveError: null });
+      if (outageNotified) {
+        outageNotified = false;
+        get().toast("success", "Back online — your changes are saved.");
+      }
     } catch (e) {
-      set({ saveState: "error", saveError: (e as Error).message });
-      get().toast("error", `Autosave failed: ${(e as Error).message}`);
+      const msg = (e as Error).message;
+      const kept = backupUnsaved(p);
+      // temporary problems are retried with back-off; anything else needs the student's attention
+      if (msg === TEMPORARILY_UNAVAILABLE || /network|too many|try again/i.test(msg)) {
+        const delay = saveBreaker.onFailure(Date.now());
+        if (!timers[id]) timers[id] = setTimeout(() => void get().saveNow(id), delay);
+        set({ saveState: "error", saveError: SYNC_RETRYING });
+        if (!outageNotified) {
+          outageNotified = true;
+          get().toast("error", kept ? "Unable to sync right now. Your changes are kept on this device and will be saved automatically." : "Unable to sync right now — retrying automatically. Keep this tab open until it says Saved.");
+        }
+      } else {
+        set({ saveState: "error", saveError: msg });
+        get().toast("error", `Your changes couldn't be saved: ${msg}`);
+      }
     }
   },
   snapshotVersion(id, note) {
     get().updateProject(id, (p) => {
       const { versions, ...rest } = p;
       void versions;
-      return { ...p, versions: [...p.versions.slice(-19), { id: `v_${Date.now()}`, at: new Date().toISOString(), note, snapshot: JSON.stringify(rest) }] };
+      return { ...p, versions: [...p.versions.slice(-19), { id: `v_${Date.now()}`, at: new Date().toISOString(), note, snapshot: JSON.stringify(slimForSnapshot(rest)) }] };
     }, { history: false });
   },
   async deleteProject(id) {
     const be = await getBackend();
     await be.deleteProject(id);
+    clearBackup(id);
+    delete lastSaved[id];
     set({ projects: get().projects.filter((p) => p.id !== id), lastProjectId: get().lastProjectId === id ? null : get().lastProjectId });
   },
   async duplicateProject(id) {
