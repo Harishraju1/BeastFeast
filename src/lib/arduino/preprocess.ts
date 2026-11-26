@@ -44,6 +44,13 @@ export const KNOWN_LIBRARIES: Record<string, "full" | "declare-only" | "ignored"
   "Servo.h": "full",
   "Wire.h": "declare-only",
   "SoftwareSerial.h": "declare-only",
+  // display / sensor libraries emulated by the BEAST interpreter (text output and readings — see features.ts)
+  "LiquidCrystal.h": "full",
+  "LiquidCrystal_I2C.h": "full",
+  "Adafruit_SSD1306.h": "full",
+  "Adafruit_GFX.h": "ignored",
+  "SPI.h": "ignored",
+  "DHT.h": "full",
 };
 
 interface CondFrame {
@@ -257,7 +264,7 @@ class Preprocessor {
         if (!Object.prototype.hasOwnProperty.call(KNOWN_LIBRARIES, lib)) {
           this.err(
             t,
-            `Library "${lib}" is not available in the BEAST simulator. Supported: Servo.h (plus Arduino.h, math.h; Wire.h and SoftwareSerial.h can be included but not used).`,
+            `Library "${lib}" is not available in the BEAST simulator. Supported: Servo.h, LiquidCrystal.h, LiquidCrystal_I2C.h, Adafruit_SSD1306.h (text), DHT.h (plus Arduino.h, math.h; Wire.h and SoftwareSerial.h can be included but not used).`,
             "UNSUPPORTED_FEATURE",
           );
         }

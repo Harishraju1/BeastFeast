@@ -221,10 +221,29 @@ function ruleMotors(g: CircuitGraph, add: (i: Issue) => void, NAME: string): num
     const c = g.comps.get(m.uid)!;
     const terms = c.pins.filter((p) => p.fn === "motor-term");
     if (terms.length < 2) continue;
+    if (terms.length === 3) {
+      // three-phase brushless motor: needs an ESC, not an H-bridge — never report a "missing third wire" as the problem
+      const onBridge = terms.some((t) => g.netOf.get(key(m, t.id))?.members.some((x) => x.pin.fn === "motor-out" && x.comp.kind === "motor-driver"));
+      const onEsc = terms.every((t) => g.netOf.get(key(m, t.id))?.members.some((x) => x.comp.kind === "esc"));
+      if (!onEsc)
+        add({ severity: onBridge ? "critical" : "warning", area: "electrical", code: "E_BLDC_NEEDS_ESC", title: `${m.label.toUpperCase()} IS A BRUSHLESS MOTOR — IT NEEDS AN ESC`, partUid: m.uid, pinId: terms[0].id, incorrect: onBridge ? "A three-phase motor is wired to a DC H-bridge." : "The three phase wires A, B, C are not on an ESC.", explanation: "A brushless motor has three phase wires that must be switched in sequence by an electronic speed controller (ESC). An H-bridge for brushed DC motors cannot drive it.", fix: "Connect A, B and C to an ESC's motor outputs, or use a brushed DC gear motor with your H-bridge." });
+      continue;
+    }
     const nets = terms.map((t) => g.netOf.get(key(m, t.id)));
     const unconnected = terms.filter((t) => !isConnected(g, key(m, t.id)));
     if (unconnected.length) {
-      add({ severity: "critical", area: "electrical", code: "E_MOTOR_UNCONNECTED", title: `HEY ${NAME}! ${m.label.toUpperCase()} IS NOT CONNECTED!`, partUid: m.uid, pinId: unconnected[0].id, incorrect: `${unconnected.map((t) => t.label).join(" and ")} not wired.`, explanation: "A DC motor needs both terminals connected to a driver channel's two outputs so the driver can reverse it.", fix: "Wire M+ and M− to OUT1/OUT2 (or OUT3/OUT4) of your motor driver." });
+      // a motor the 4WD drivetrain added (FL/FR/RL/RR) that the student never wired is the usual cause — say so
+      const fromDrivetrain = /^(front|rear)-(left|right)$/.test(m.role ?? "");
+      const side = /left/.test(m.role ?? "") ? "left" : /right/.test(m.role ?? "") ? "right" : null;
+      const sibling = side && g.parts.find((o) => o.uid !== m.uid && g.comps.get(o.uid)?.kind === "dc-motor" && (o.role ?? "").includes(side) && g.comps.get(o.uid)!.pins.some((t) => t.fn === "motor-term" && g.netOf.get(key(o, t.id))?.members.some((x) => x.pin.fn === "motor-out")));
+      add({
+        severity: "critical", area: "electrical", code: "E_MOTOR_UNCONNECTED", title: `HEY ${NAME}! ${m.label.toUpperCase()} IS NOT CONNECTED!`, partUid: m.uid, pinId: unconnected[0].id,
+        incorrect: `${unconnected.map((t) => t.label).join(" and ")} not wired.${fromDrivetrain ? ` (${m.label} was added by the 4WD drivetrain.)` : ""}`,
+        explanation: fromDrivetrain
+          ? `Your robot has four drive motors. ${sibling ? `${sibling.label} on the same side is already on a driver channel; ` : ""}each ${side ?? ""} motor must be wired too, or that wheel is dead weight.`
+          : "A DC motor needs both terminals connected to a driver channel's two outputs so the driver can reverse it.",
+        fix: sibling ? `Wire ${m.label} in parallel with ${sibling.label} (same driver outputs, same polarity), or switch the drivetrain to 2WD in the Robot Designer.` : "Wire M+ and M− to OUT1/OUT2 (or OUT3/OUT4) of your motor driver.",
+      });
       continue;
     }
     if (nets[0] === nets[1]) {
@@ -265,8 +284,20 @@ function ruleDrivers(g: CircuitGraph, add: (i: Issue) => void, NAME: string): nu
       const jumper = Boolean(optionValue(c, d, "regJumper"));
       const vs = g.netOf.get(key(d, "VS"));
       const vsMax = vs?.vMax ?? vs?.voltage ?? 0;
-      if (jumper && vsMax > 12.05)
-        add({ severity: "critical", area: "power", code: "E_L298N_JUMPER_OVERVOLT", title: "POWER SYSTEM WARNING! L298N 5V JUMPER WITH >12 V!", partUid: d.uid, pinId: "VS", incorrect: `VS reaches ${vsMax.toFixed(1)} V with the 5V-regulator jumper fitted.`, explanation: "The on-board 78M05 regulator is only meant for up to 12 V. Above that it overheats.", fix: "Remove the 5V-regulator jumper and feed 5 V into the +5V pin from your controller or a buck converter." });
+      // On-board 78M05: absolute maximum input 35 V. Below that the limit is heat in the regulator:
+      // P = (VS − 5 V) × (L298 logic ≈36 mA max + whatever is powered from the module's +5V pin).
+      // ≈1 W is the practical limit of the small DPAK regulator without a heatsink. Sellers' "≤ 12 V" is guidance.
+      if (jumper && vsMax > 0) {
+        const fiveNet0 = g.netOf.get(key(d, "5V"));
+        const loads = (fiveNet0?.members ?? []).filter((m) => m.part.uid !== d.uid && (m.pin.fn === "vin" || (m.pin.fn === "vout" && m.pin.vRange)) && g.powered.has(m.part.uid));
+        const loadA = 0.036 + loads.reduce((a, m) => a + (m.comp.kind === "controller" ? 0.05 : m.comp.kind === "servo" ? 0.5 : m.comp.kind === "display" ? 0.03 : 0.02), 0);
+        const heatW = Math.max(0, vsMax - 5) * loadA;
+        const who = loads.length ? ` (L298N logic + ${loads.map((m) => m.part.label).join(", ")})` : " (L298N logic only)";
+        if (vsMax > 35.05 || heatW > 1.0)
+          add({ severity: "critical", area: "power", code: "E_L298N_JUMPER_OVERVOLT", title: "POWER SYSTEM WARNING! THE L298N 5V REGULATOR WILL OVERHEAT!", partUid: d.uid, pinId: "VS", incorrect: vsMax > 35.05 ? `VS reaches ${vsMax.toFixed(1)} V; the on-board 78M05 regulator's absolute maximum input is 35 V.` : `≈${heatW.toFixed(2)} W in the 78M05: (${vsMax.toFixed(1)} V − 5 V) × ≈${(loadA * 1000).toFixed(0)} mA${who}.`, explanation: "With the jumper fitted the module's small 78M05 makes 5 V from VS and turns the difference into heat. Above about 1 W (or 35 V) it overheats and shuts down or fails.", fix: "Remove the 5V-regulator jumper and feed the +5V pin from the controller's 5V pin or a buck converter — or power the extra loads from their own regulator." });
+        else if (vsMax > 12.05)
+          add({ severity: "warning", area: "power", code: "W_L298N_REG_HEAT", title: "L298N 5V REGULATOR ABOVE THE USUAL 12 V GUIDANCE", partUid: d.uid, pinId: "VS", incorrect: `VS reaches ${vsMax.toFixed(1)} V with the jumper fitted: ≈${heatW.toFixed(2)} W in the 78M05${who}.`, explanation: "Module sellers advise removing the jumper above 12 V. With only a small load on +5V the regulator stays within its limits (35 V input, ≈1 W heat), so this works — but it gets warm, and every extra load on +5V adds heat.", fix: "Fine as it is. If you power more from the L298N's +5V pin, remove the jumper and feed 5 V from the controller or a buck converter." });
+      }
       const fiveNet = g.netOf.get(key(d, "5V"));
       if (jumper && vs?.voltage != null && !fiveNet?.voltage)
         add({ severity: "critical", area: "power", code: "E_L298N_NO_LOGIC", title: `HEY ${NAME}! THE L298N LOGIC HAS NO 5 V!`, partUid: d.uid, pinId: "5V", incorrect: `VS is only ${vs.voltage.toFixed(1)} V: the on-board 78M05 regulator needs about 7 V to make 5 V.`, explanation: "With the regulator jumper fitted the L298N makes its own 5 V logic supply from VS. Below ≈6.5 V it cannot, so the driver ignores IN1–IN4 and the motors never move.", fix: "Use a higher-voltage battery (2S or more), or remove the jumper and feed the +5V pin from the controller's 5V pin." });

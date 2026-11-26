@@ -32,6 +32,32 @@ interface Frame {
   spBase: number;
 }
 
+/** LCD / OLED / DHT objects created by the sketch (state read by the circuit bench). */
+export interface DeviceObj {
+  __dev: true;
+  kind: "lcd" | "lcd-i2c" | "oled" | "dht";
+  id: number;
+  args: number[];
+  /** character LCD: cols × rows; OLED: text grid of 21 × 8 at size 1 (128 × 64 px, 6 × 8 px per character) */
+  cols: number;
+  rows: number;
+  /** what the screen shows (OLED: after display(); LCD: immediately) */
+  lines: string[];
+  /** OLED drawing buffer (shown on display()) */
+  pending: string[];
+  /** OLED characters with pixel position and text size (what display() last showed / what is being drawn) */
+  runs: { x: number; y: number; size: number; ch: string }[];
+  pendingRuns: { x: number; y: number; size: number; ch: string }[];
+  cx: number;
+  cy: number;
+  textSize: number;
+  backlight: boolean;
+  on: boolean;
+  begun: boolean;
+  width: number;
+  height: number;
+}
+
 interface ServoObj {
   __servo: true;
   pin: number;
@@ -85,6 +111,8 @@ export class ArduinoRuntime {
   private rx: number[] = [];
   private serialBegun = false;
   private servoCount = 0;
+  /** library devices declared by the sketch, in declaration order */
+  devices: DeviceObj[] = [];
   private warnSet = new Set<string>();
   private curIns: Instr | null = null;
 
@@ -127,6 +155,7 @@ export class ArduinoRuntime {
     this.rx = [];
     this.serialBegun = false;
     this.servoCount = 0;
+    this.devices = [];
     this.warnings = [];
     this.warnSet.clear();
     this.serialLog = "";
@@ -611,6 +640,68 @@ export class ArduinoRuntime {
     return n;
   }
 
+  private deviceText(d: DeviceObj, text: string, newline: boolean) {
+    if (d.kind === "dht") return;
+    if (d.kind === "oled") putText(d.pending, d, text, newline);
+    else putText(d.lines, d, text, false);
+  }
+
+  private deviceCall(d: DeviceObj, m: string, a: number[], host: ArduinoHost): unknown {
+    const blank = () => Array.from({ length: d.rows }, () => " ".repeat(d.cols));
+    switch (m) {
+      case "begin":
+        if (d.kind === "lcd" && a.length >= 2) {
+          d.cols = Math.max(1, Math.min(40, a[0]));
+          d.rows = Math.max(1, Math.min(4, a[1]));
+          d.lines = blank();
+        }
+        d.begun = true;
+        return d.kind === "oled" ? 1 : 0;
+      case "init":
+        d.begun = true;
+        return 0;
+      case "backlight": d.backlight = true; return 0;
+      case "noBacklight": d.backlight = false; return 0;
+      case "display":
+        if (d.kind === "oled") {
+          d.lines = [...d.pending];
+          d.runs = [...d.pendingRuns];
+        }
+        else d.on = true;
+        return 0;
+      case "noDisplay": d.on = false; return 0;
+      case "clear":
+        d.lines = blank();
+        d.cx = 0;
+        d.cy = 0;
+        return 0;
+      case "clearDisplay":
+        d.pending = blank();
+        d.pendingRuns = [];
+        return 0;
+      case "home": d.cx = 0; d.cy = 0; return 0;
+      case "setCursor":
+        // LCD: (column, row); OLED: pixels → character cells of 6 × 8
+        if (d.kind === "oled") { d.cx = Math.floor(a[0] / 6); d.cy = Math.floor(a[1] / 8); }
+        else { d.cx = a[0]; d.cy = a[1]; }
+        return 0;
+      case "setTextSize": d.textSize = Math.max(1, Math.round(a[0])); return 0;
+      case "write": this.deviceText(d, String.fromCharCode(a[0] & 0xff), false); return 1;
+      case "width": return d.width;
+      case "height": return d.height;
+      case "readTemperature":
+      case "readHumidity": {
+        if (!d.begun) this.warn("dht.begin() was not called in setup() — the first readings may fail");
+        const r = host.readDht?.(d.args[0], d.args[1]) ?? null;
+        if (!r) return NaN;
+        if (m === "readHumidity") return r.humidity;
+        return a[0] ? r.temperature * 1.8 + 32 : r.temperature;
+      }
+      default:
+        return 0; // cursor/noCursor/blink/noBlink/setTextColor/setRotation/invertDisplay: no visible effect in text mode
+    }
+  }
+
   private servoArg(v: unknown): ServoObj {
     return v as ServoObj;
   }
@@ -989,6 +1080,28 @@ export class ArduinoRuntime {
         s.pin = -1;
         return;
       }
+      // ---------------- library devices
+      case B.DEV_NEW: {
+        const kind = ins.c as DeviceObj["kind"];
+        const args = a.map(Number);
+        const oled = kind === "oled";
+        const cols = kind === "lcd-i2c" ? args[1] : oled ? Math.floor((args[0] || 128) / 6) : kind === "lcd" ? 16 : 0;
+        const rows = kind === "lcd-i2c" ? args[2] : oled ? Math.floor((args[1] || 64) / 8) : kind === "lcd" ? 2 : 0;
+        const d: DeviceObj = { __dev: true, kind, id: this.devices.length, args, runs: [], pendingRuns: [], cols: Math.max(0, Math.min(40, cols)), rows: Math.max(0, Math.min(8, rows)), lines: [], pending: [], cx: 0, cy: 0, textSize: 1, backlight: !oled, on: true, begun: false, width: oled ? args[0] || 128 : 0, height: oled ? args[1] || 64 : 0 };
+        d.lines = Array.from({ length: d.rows }, () => " ".repeat(d.cols));
+        d.pending = [...d.lines];
+        this.devices.push(d);
+        return d;
+      }
+      case B.DEV_CALL:
+        return this.deviceCall(a[0] as DeviceObj, ins.c as string, a.slice(1).map(Number), host);
+      case B.DEV_PRINT: {
+        const d = a[0] as DeviceObj;
+        const [fmt, nl] = String(ins.c).split("|").map(Number);
+        const text = a.length >= 2 ? printStr(a[1], fmt, a.length === 3 ? (a[2] as number) : undefined) : "";
+        this.deviceText(d, text, nl === 1);
+        return text.length;
+      }
       // ---------------- String
       case B.STR_LENGTH: return (a[0] as string).length;
       case B.STR_ISEMPTY: return (a[0] as string).length === 0 ? 1 : 0;
@@ -1071,6 +1184,22 @@ export class ArduinoRuntime {
 // ------------------------------------------------------------------------------------------------
 // formatting helpers (Arduino-compatible)
 // ------------------------------------------------------------------------------------------------
+
+function putText(buf: string[], d: DeviceObj, text: string, newline: boolean) {
+  const step = d.kind === "oled" ? Math.max(1, d.textSize) : 1;
+  for (const ch of text) {
+    if (ch === "\n") { d.cx = 0; d.cy += step; continue; }
+    if (ch === "\r") continue;
+    if (d.kind === "oled" && d.cx + step > d.cols) { d.cx = 0; d.cy += step; } // the GFX library wraps text
+    if (d.kind === "oled" && d.cy < d.rows && d.pendingRuns.length < 400) d.pendingRuns.push({ x: d.cx * 6, y: d.cy * 8, size: step, ch });
+    if (d.cy >= 0 && d.cy < d.rows && d.cx < d.cols) {
+      const row = buf[d.cy];
+      buf[d.cy] = row.slice(0, d.cx) + ch + row.slice(d.cx + 1);
+    }
+    d.cx += step;
+  }
+  if (newline) { d.cx = 0; d.cy += step; }
+}
 
 function newServo(): ServoObj {
   return { __servo: true, pin: -1, us: 1472, min: 544, max: 2400, lastAngle: 90, written: false };

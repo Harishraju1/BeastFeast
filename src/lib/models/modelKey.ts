@@ -74,6 +74,17 @@ export type ModelKey =
   | "battery-generic"
   // casters
   | "caster"
+  // small electronics, displays and power modules
+  | "resistor"
+  | "capacitor"
+  | "led"
+  | "switch"
+  | "breadboard"
+  | "ldr"
+  | "dht"
+  | "to92"
+  | "display"
+  | "regulator"
   // every other kind keeps its simple block representation
   | "generic";
 
@@ -178,6 +189,9 @@ function sensorModel(c: Comp, t: string): ModelInfo {
   if (/mpu6050/.test(t)) return m("imu", true, "MPU-6050 (GY-521) breakout");
   if (k === "imu") return m("imu", false, "IMU breakout board");
   if (/limit-switch/.test(t)) return m("microswitch", true, "Lever micro-switch");
+  if (/\bldr\b|photoresistor/.test(t)) return m("ldr", true, "Photoresistor (LDR)");
+  if (/\bdht(11|22)\b/.test(t)) return m("dht", true, /22/.test(t) ? "DHT22 (white grille)" : "DHT11 (blue grille)");
+  if (/ds18b20|lm35|tmp36/.test(t)) return m("to92", true, `${c.name} (TO-92 package)`);
   if (k === "bumper") return m("microswitch", false, "Micro-switch bumper");
   return m("sensor-generic", false, "Sensor module");
 }
@@ -234,6 +248,20 @@ export function modelKeyFor(c: Comp): ModelInfo {
       return batteryModel(c, t);
     case "caster":
       return casterModel(c, t);
+    case "resistor":
+      return /variable|potentiometer|trimmer/.test(t) ? m("generic", false, "Block representation") : m("resistor", true, "Axial resistor with colour bands");
+    case "capacitor":
+      return m("capacitor", true, /electrolytic|tantalum/.test(t) ? "Radial electrolytic capacitor" : "Ceramic disc capacitor");
+    case "led":
+      return c.name && /^(red|green|blue|yellow|white) led$|^led diode$/i.test(c.name) ? m("led", true, "5 mm LED") : m("generic", false, "Block representation");
+    case "switch":
+      return /push|tactile|button/.test(t) ? m("switch", true, "6 × 6 mm tactile push button") : /toggle/.test(t) ? m("switch", true, "Toggle switch (bat lever)") : m("generic", false, "Block representation");
+    case "pcb":
+      return /breadboard/.test(t) ? m("breadboard", true, "Solderless breadboard") : m("generic", false, "Block representation");
+    case "display":
+      return /lcd|oled/.test(t) ? m("display", true, /oled/.test(t) ? "0.96\"/1.3\" OLED module" : /20x4|20×4/.test(t) ? "20×4 character LCD" : "16×2 character LCD") : m("generic", false, "Block representation");
+    case "regulator":
+      return m("regulator", /buck|lm2596|xl40|mp1584|mp2307|tps5430|ams1117|1117|7805|7812|lm317/.test(t), /buck|lm2596|xl40|mp1584|mp2307|tps5430/.test(t) ? "Buck converter module" : /1117/.test(t) ? "AMS1117 regulator board" : "TO-220 linear regulator");
     default:
       return m("generic", false, "Block representation");
   }

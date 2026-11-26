@@ -409,7 +409,30 @@ export function planRepair(project: Project, issue: ValidationIssue): RepairPlan
           );
         }
       }
-      return null;
+      // every channel is in use (e.g. a 4WD robot): put the motor in parallel with the driven motor on its side
+      {
+        const side = /left/.test(part.role ?? "") ? "left" : /right/.test(part.role ?? "") ? "right" : null;
+        const terms = comp.pins.filter((p) => p.fn === "motor-term");
+        const sib = side && g.parts.find((o) => o.uid !== part.uid && (o.role ?? "").includes(side) && g.comps.get(o.uid)?.kind === "dc-motor");
+        if (!sib || terms.length !== 2) return null;
+        const sc = g.comps.get(sib.uid)!;
+        const st = sc.pins.filter((p) => p.fn === "motor-term");
+        const outs = st.map((t) => g.netOf.get(`${sib.uid}.${t.id}`)?.members.find((m) => m.pin.fn === "motor-out"));
+        if (!outs[0] || !outs[1]) return null;
+        // same mounting orientation as the sibling → same polarity
+        const t1 = memberOf(g, part.uid, terms[0].id)!, t2 = memberOf(g, part.uid, terms[1].id)!;
+        const removes = [...wiresAt(project, t1.key), ...wiresAt(project, t2.key)];
+        return withRemoveText(
+          build(issue, `${part.label} is not wired. Let me connect it in parallel with ${sib.label}.`, {
+            identify: identify(`${part.label} is one of the ${side} drive motors, but nothing drives it. Every driver channel is already in use, so it shares the channel of ${sib.label}.`),
+            removes,
+            select: { kind: "select", title: "Select the correct pins", explanation: `${outs[0].part.label} ${outs[0].pin.label} and ${outs[1].pin.label} already drive ${sib.label}. Motors on the same side turn together, so they can share these outputs.`, partUid: outs[0].part.uid, pins: [{ part: outs[0].part.uid, pin: outs[0].pin.id }, { part: outs[1].part.uid, pin: outs[1].pin.id }] },
+            adds: [mkWire(outs[0], t1), mkWire(outs[1], t2)],
+            connectText: `We connect ${part.label} in parallel with ${sib.label} (same polarity). Both motors now get the same voltage; their currents add up on that channel, so check the current warning afterwards.`,
+          }),
+          "it was only partly connected.",
+        );
+      }
     }
     case "E_ANALOG_ON_DIGITAL": {
       if (!part || !target) return null;

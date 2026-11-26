@@ -27,7 +27,8 @@
     "quiz-xp:smoke": "tsx scripts/quiz-xp-smoke.ts",
     "xp:audit": "tsx scripts/xp-duplicate-audit.ts",
     "accounts:bulk": "tsx scripts/bulk-accounts.ts",
-    "sim:bench": "tsx scripts/sim-benchmark.ts"
+    "sim:bench": "tsx scripts/sim-benchmark.ts",
+    "sim:coverage": "tsx scripts/sim-coverage.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

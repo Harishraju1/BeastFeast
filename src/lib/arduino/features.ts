@@ -25,6 +25,9 @@ export const SUPPORTED_FEATURES: string[] = [
   "tone(pin, freq[, duration]) and noTone(pin)",
   "Serial (and Serial1 as an alias): begin, print, println (with DEC/HEX/OCT/BIN and float decimals), write, available, read, peek, parseInt, parseFloat, readString, readStringUntil, F(\"…\")",
   "Servo library: attach, write, writeMicroseconds, read, attached, detach",
+  "LiquidCrystal / LiquidCrystal_I2C: begin, init, backlight, clear, home, setCursor, print, write (text shown on the wired display)",
+  "Adafruit_SSD1306: begin, clearDisplay, setTextSize, setCursor, print, println, display — text only",
+  "DHT library: begin, readTemperature, readHumidity (values from the wired, powered DHT11/DHT22)",
   "String: + and += with numbers and text, ==, <, length, charAt, [i], indexOf, lastIndexOf, substring, toInt, toFloat, equals, equalsIgnoreCase, startsWith, endsWith, compareTo, concat, trim, toUpperCase, toLowerCase, replace, remove, setCharAt, c_str",
   "Teaching checks: array index out of bounds, division by zero and runaway recursion stop the program with a clear message; warnings for analogWrite on non-PWM pins, digitalWrite without pinMode(OUTPUT), integer overflow in constants, '=' used in a condition, and more",
 ];
@@ -36,7 +39,7 @@ export const UNSUPPORTED_FEATURES: string[] = [
   "goto, exceptions (try/catch/throw), lambdas, namespaces / std::, auto, typedef, enum class",
   "Function overloading and default parameter values",
   "Arrays with more than 2 dimensions; arrays of String text manipulation beyond the listed String methods",
-  "Libraries other than Servo: Wire (I2C) and SoftwareSerial can be included/declared but not used; SPI, LiquidCrystal, NeoPixel, etc. are not available",
+  "Libraries other than Servo: Wire (I2C) and SoftwareSerial can be included/declared but not used; SPI, NeoPixel, OneWire/DallasTemperature, graphics drawing (drawLine, drawBitmap …) are not available",
   "C string functions (sprintf, strcpy, strcmp, atoi, dtostrf, …) — use the String class instead",
   "Stringizing (#) and token pasting (##) in macros; variadic macros",
   "Direct register access (PORTB, DDRB, …), raw ISR() vectors, PROGMEM, EEPROM, sleep modes, watchdog",

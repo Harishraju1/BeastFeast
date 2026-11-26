@@ -140,6 +140,12 @@ export const B = {
   SERVO_READ_US: 65,
   SERVO_ATTACHED: 66,
   SERVO_DETACH: 67,
+  /** library devices (LCD, OLED, DHT): c = device kind; args = constructor arguments */
+  DEV_NEW: 68,
+  /** c = method name; args = [device, ...numbers] */
+  DEV_CALL: 69,
+  /** c = "fmt|newline"; args = [device, value?, base/decimals?] */
+  DEV_PRINT: 70,
   STR_LENGTH: 80,
   STR_CHARAT: 81,
   STR_INDEXOF: 82,

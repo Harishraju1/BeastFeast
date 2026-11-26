@@ -23,7 +23,18 @@ export type CType =
   | { k: "cstr"; name: string }
   | { k: "array"; elem: CType; size: number | null; name: string }
   | { k: "Servo"; name: string }
-  | { k: "SoftwareSerial"; name: string };
+  | { k: "SoftwareSerial"; name: string }
+  | { k: "Device"; dev: DeviceKind; name: string };
+
+/** Library objects emulated by the interpreter. */
+export type DeviceKind = "lcd" | "lcd-i2c" | "oled" | "dht";
+const DEVICE_METHODS: Record<DeviceKind, Record<string, { min: number; max: number; ret: "void" | "bool" | "float" | "int" }>> = {
+  "lcd-i2c": { begin: { min: 0, max: 3, ret: "void" }, init: { min: 0, max: 0, ret: "void" }, backlight: { min: 0, max: 0, ret: "void" }, noBacklight: { min: 0, max: 0, ret: "void" }, clear: { min: 0, max: 0, ret: "void" }, home: { min: 0, max: 0, ret: "void" }, setCursor: { min: 2, max: 2, ret: "void" }, display: { min: 0, max: 0, ret: "void" }, noDisplay: { min: 0, max: 0, ret: "void" }, cursor: { min: 0, max: 0, ret: "void" }, noCursor: { min: 0, max: 0, ret: "void" }, blink: { min: 0, max: 0, ret: "void" }, noBlink: { min: 0, max: 0, ret: "void" }, write: { min: 1, max: 1, ret: "void" } },
+  lcd: { begin: { min: 2, max: 3, ret: "void" }, clear: { min: 0, max: 0, ret: "void" }, home: { min: 0, max: 0, ret: "void" }, setCursor: { min: 2, max: 2, ret: "void" }, display: { min: 0, max: 0, ret: "void" }, noDisplay: { min: 0, max: 0, ret: "void" }, cursor: { min: 0, max: 0, ret: "void" }, noCursor: { min: 0, max: 0, ret: "void" }, blink: { min: 0, max: 0, ret: "void" }, noBlink: { min: 0, max: 0, ret: "void" }, write: { min: 1, max: 1, ret: "void" } },
+  oled: { begin: { min: 0, max: 4, ret: "bool" }, clearDisplay: { min: 0, max: 0, ret: "void" }, display: { min: 0, max: 0, ret: "void" }, setTextSize: { min: 1, max: 2, ret: "void" }, setTextColor: { min: 1, max: 2, ret: "void" }, setCursor: { min: 2, max: 2, ret: "void" }, setRotation: { min: 1, max: 1, ret: "void" }, invertDisplay: { min: 1, max: 1, ret: "void" }, width: { min: 0, max: 0, ret: "int" }, height: { min: 0, max: 0, ret: "int" }, write: { min: 1, max: 1, ret: "void" } },
+  dht: { begin: { min: 0, max: 1, ret: "void" }, readTemperature: { min: 0, max: 2, ret: "float" }, readHumidity: { min: 0, max: 1, ret: "float" } },
+};
+const DEVICE_INCLUDE: Record<DeviceKind, string> = { lcd: "LiquidCrystal.h", "lcd-i2c": "LiquidCrystal_I2C.h", oled: "Adafruit_SSD1306.h", dht: "DHT.h" };
 
 type IntType = Extract<CType, { k: "int" }>;
 
@@ -228,6 +239,10 @@ class Compiler {
       cstr: { k: "cstr", name: "const char*" },
       Servo: { k: "Servo", name: "Servo" },
       SoftwareSerial: { k: "SoftwareSerial", name: "SoftwareSerial" },
+      LiquidCrystal_I2C: { k: "Device", dev: "lcd-i2c", name: "LiquidCrystal_I2C" } as CType,
+      LiquidCrystal: { k: "Device", dev: "lcd", name: "LiquidCrystal" } as CType,
+      Adafruit_SSD1306: { k: "Device", dev: "oled", name: "Adafruit_SSD1306" } as CType,
+      DHT: { k: "Device", dev: "dht", name: "DHT" } as CType,
     };
   }
 
@@ -288,6 +303,14 @@ class Compiler {
       case "SoftwareSerial":
         if (!this.includes.includes("SoftwareSerial.h")) this.softError(ts.loc, "SoftwareSerial needs '#include <SoftwareSerial.h>'", "UNDECLARED");
         return T.SoftwareSerial;
+      case "LiquidCrystal_I2C":
+      case "LiquidCrystal":
+      case "Adafruit_SSD1306":
+      case "DHT": {
+        const dt = (T as unknown as Record<string, CType>)[ts.base] as Extract<CType, { k: "Device" }>;
+        if (!this.includes.includes(DEVICE_INCLUDE[dt.dev])) this.softError(ts.loc, `${ts.base} needs '#include <${DEVICE_INCLUDE[dt.dev]}>' at the top of the sketch`, "UNDECLARED");
+        return dt;
+      }
     }
     if (ts.base.startsWith("enum:")) return T.int;
     return this.error(ts.loc, `Unknown type '${ts.base}'`);
@@ -552,6 +575,12 @@ class Compiler {
     if (Object.prototype.hasOwnProperty.call(LANGUAGE_CONSTANTS, name)) return { v: LANGUAGE_CONSTANTS[name], t: this.T.int };
     if (Object.prototype.hasOwnProperty.call(FLOAT_CONSTANTS, name)) return { v: FLOAT_CONSTANTS[name], t: this.T.double };
     if (Object.prototype.hasOwnProperty.call(UNSIGNED_LONG_CONSTANTS, name)) return { v: UNSIGNED_LONG_CONSTANTS[name], t: this.T.ulong };
+    // library constants exist only when their header is included (students often use their own WHITE/BLACK)
+    if (this.includes.includes("DHT.h") && /^DHT(11|21|22)$/.test(name)) return { v: Number(name.slice(3)), t: this.T.int };
+    if (this.includes.includes("Adafruit_SSD1306.h")) {
+      const oled: Record<string, number> = { SSD1306_SWITCHCAPVCC: 2, SSD1306_EXTERNALVCC: 1, SSD1306_WHITE: 1, SSD1306_BLACK: 0, SSD1306_INVERSE: 2, WHITE: 1, BLACK: 0, INVERSE: 2 };
+      if (Object.prototype.hasOwnProperty.call(oled, name)) return { v: oled[name], t: this.T.int };
+    }
     if (/^B[01]{1,8}$/.test(name)) return { v: parseInt(name.slice(1), 2), t: this.T.int };
     if (/^A\d+$/.test(name)) return null;
     return null;
@@ -672,7 +701,7 @@ class Compiler {
     if (this.globals.has(d.name)) this.error(d.loc, `'${d.name}' is already declared as a variable`, "REDECLARED");
     if (SERIAL_NAMES.has(d.name)) this.error(d.loc, `'${d.name}' is a reserved name`, "REDECLARED");
     const ret = this.resolveType(d.ret);
-    if (ret.k === "Servo" || ret.k === "SoftwareSerial") this.error(d.ret.loc, `Functions cannot return ${ret.name}`, "UNSUPPORTED_FEATURE");
+    if (ret.k === "Servo" || ret.k === "SoftwareSerial" || ret.k === "Device") this.error(d.ret.loc, `Functions cannot return ${ret.name}`, "UNSUPPORTED_FEATURE");
     const params = d.params.map((p) => ({ type: this.paramType(p), name: p.name }));
     const existing = this.funcs.get(d.name);
     if (existing) {
@@ -690,7 +719,7 @@ class Compiler {
   paramType(p: Param): CType {
     let t = this.resolveType(p.type);
     if (t.k === "void") this.error(p.loc, "A parameter cannot have type void");
-    if (t.k === "Servo" || t.k === "SoftwareSerial") this.error(p.loc, `Passing a ${t.name} object to a function needs references, which are not supported — use the global object directly`, "UNSUPPORTED_FEATURE");
+    if (t.k === "Servo" || t.k === "SoftwareSerial" || t.k === "Device") this.error(p.loc, `Passing a ${t.name} object to a function needs references, which are not supported — use the global object directly`, "UNSUPPORTED_FEATURE");
     if (p.dims.length) {
       const dims: (number | null)[] = p.dims.map((d, i) => {
         if (!d) {
@@ -858,6 +887,20 @@ class Compiler {
       });
       return;
     }
+    if (base.k === "Device") {
+      if (dc.init) this.error(dc.loc, `Declare a ${base.name} with constructor arguments, e.g. ${base.dev === "lcd-i2c" ? "LiquidCrystal_I2C lcd(0x27, 16, 2);" : base.dev === "lcd" ? "LiquidCrystal lcd(12, 11, 5, 4, 3, 2);" : base.dev === "oled" ? "Adafruit_SSD1306 display(128, 64, &Wire, -1);" : "DHT dht(2, DHT11);"}`);
+      const args = dc.ctorArgs ?? [];
+      const need = { lcd: [6, 10], "lcd-i2c": [3, 3], oled: [2, 4], dht: [2, 3] }[base.dev];
+      if (args.length < need[0] || args.length > need[1]) this.error(dc.loc, `${base.name} needs ${need[0] === need[1] ? need[0] : `${need[0]}–${need[1]}`} constructor arguments (got ${args.length})`);
+      if (base.dev === "dht" && args[0]) this.recordPin("pinMode", args[0], dc.loc);
+      const sym = this.declareVar(dc, type, isConst, global, isStaticLocal);
+      this.withTarget(isStaticLocal, () => {
+        args.forEach((a, i) => this.emitConv(this.genExpr(a, true), this.T.long, a.loc, `argument ${i + 1} of ${base.name}`));
+        this.emit(OP.BUILTIN, B.DEV_NEW, args.length, base.dev);
+        this.storeVar(sym);
+      });
+      return;
+    }
     if (base.k === "SoftwareSerial") {
       const sym = this.declareVar(dc, type, isConst, global, isStaticLocal);
       this.warn(dc.loc, "SoftwareSerial can be declared, but using it is not supported by the BEAST simulator (use Serial instead)", "UNSUPPORTED_FEATURE");
@@ -992,7 +1035,7 @@ class Compiler {
       if (!c) { constant = false; break; }
       values.push(wrap(c.v, this.kindOf(base)));
     }
-    if (base.k === "Servo") constant = false;
+    if (base.k === "Servo" || base.k === "Device") constant = false;
     if (!constant) return { dims: finalDims, items, constant: false };
     const dv = this.defaultValue(base);
     const make = (): unknown[] => {
@@ -2090,7 +2133,7 @@ class Compiler {
             fmt = this.fmtOf(t);
             if (t.k === "array" && fmt !== F.CHARARR) this.error(e.args[0].loc, "Cannot print a whole array — print the elements one at a time in a loop", "TYPE");
             if (t.k === "void") this.error(e.args[0].loc, "This function returns nothing (void), so there is nothing to print", "TYPE");
-            if (t.k === "Servo" || t.k === "SoftwareSerial") this.error(e.args[0].loc, `Cannot print a ${t.name} object`, "TYPE");
+            if (t.k === "Servo" || t.k === "SoftwareSerial" || t.k === "Device") this.error(e.args[0].loc, `Cannot print a ${t.name} object`, "TYPE");
             if (n === 2) {
               if (fmt === F.STR || fmt === F.CHARARR) this.error(e.args[1].loc, "The second argument of print() (base or decimals) only applies to numbers", "TYPE");
               if (fmt === F.CHAR) fmt = F.INT;
@@ -2151,6 +2194,36 @@ class Compiler {
     // ---- objects
     const ot = this.typeOf(obj);
     if (ot.k === "SoftwareSerial") return this.error(m.loc, `SoftwareSerial.${name}() is not supported by the BEAST simulator — use Serial instead`, "UNSUPPORTED_FEATURE");
+    if (ot.k === "Device") {
+      const n = e.args.length;
+      const oname = obj.kind === "ident" ? obj.name : ot.name;
+      if ((name === "print" || name === "println") && ot.dev !== "dht") {
+        if (name === "println" && ot.dev !== "oled") this.warn(m.loc, `${oname}.println() prints two extra characters on a character LCD — use print() and setCursor() to start a new line`);
+        this.argCount(e, name === "println" ? 0 : 1, 2, `${oname}.${name}`);
+        this.genExpr(obj, true);
+        let fmt: number = F.STR;
+        if (n >= 1) {
+          const t = this.genExpr(e.args[0], true);
+          fmt = this.fmtOf(t);
+          if (t.k === "void") this.error(e.args[0].loc, "This function returns nothing (void), so there is nothing to print", "TYPE");
+          if (t.k === "Servo" || t.k === "SoftwareSerial" || t.k === "Device") this.error(e.args[0].loc, `Cannot print a ${t.name} object`, "TYPE");
+          if (n === 2) {
+            if (fmt === F.STR || fmt === F.CHARARR) this.error(e.args[1].loc, "The second argument of print() (base or decimals) only applies to numbers", "TYPE");
+            if (fmt === F.CHAR) fmt = F.INT;
+            this.emitConv(this.genExpr(e.args[1], true), T.int, e.args[1].loc);
+          }
+        }
+        this.builtin(B.DEV_PRINT, n + 1, `${fmt}|${name === "println" ? 1 : 0}`);
+        return T.uint;
+      }
+      const spec = DEVICE_METHODS[ot.dev][name];
+      if (!spec) return this.error(m.loc, `${ot.name} has no method '${name}' in the BEAST simulator (supported: ${Object.keys(DEVICE_METHODS[ot.dev]).concat(ot.dev === "dht" ? [] : ["print"]).join(", ")})`, "UNSUPPORTED_FEATURE");
+      this.argCount(e, spec.min, spec.max, `${oname}.${name}`);
+      this.genExpr(obj, true);
+      e.args.forEach((a, i) => this.emitConv(this.genExpr(a, true), name === "readTemperature" ? T.bool : T.long, a.loc, `argument ${i + 1} of ${name}()`));
+      this.builtin(B.DEV_CALL, n + 1, name);
+      return spec.ret === "float" ? T.float : spec.ret === "bool" ? T.bool : spec.ret === "int" ? T.int : T.void;
+    }
     if (ot.k === "Servo") {
       const recv = () => this.genExpr(obj, true);
       switch (name) {

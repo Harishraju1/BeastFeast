@@ -1,72 +1,41 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { AlertTriangle, BatteryMedium, Cpu, Gauge } from "lucide-react";
-import { BenchSim } from "@/lib/sim/bench";
+import { useBench3 } from "@/lib/store/bench";
+export type { BenchMode } from "@/lib/store/bench";
 import { designFingerprint } from "@/lib/fingerprint";
 import type { SensorReading } from "@/lib/sim/types";
 import type { Project } from "@/lib/types";
 
-export type BenchMode = "stopped" | "running" | "paused";
-
-/** Owns the bench simulator and its animation loop (≈20 UI updates per second; the code runs at 1 kHz). */
+/**
+ * The circuit bench for this project, from the shared bench store (one simulation and one animation loop for
+ * Circuit Studio and the Robot Designer). Re-renders ≈20× per second while it runs.
+ */
 export function useBench(project: Project) {
-  const [mode, setMode] = useState<BenchMode>("stopped");
-  const [sim, setSim] = useState<BenchSim | null>(null);
-  const [builtFor, setBuiltFor] = useState("");
-  const [, setTick] = useState(0);
+  const st = useBench3();
   const key = `${designFingerprint(project)}|${project.code?.length ?? 0}|${project.code?.slice(-200)}`;
-
+  const mine = st.projectId === project.id;
   // the circuit or code changed while the bench is on: rebuild from the new circuit, keeping the sensor inputs
-  if (sim && mode !== "stopped" && builtFor !== key) {
-    const next = new BenchSim(project);
-    for (const [k, v] of Object.entries(sim.readings)) if (k in next.readings) next.readings[k] = v;
-    setSim(next);
-    setBuiltFor(key);
-  }
-
   useEffect(() => {
-    if (mode !== "running" || !sim) return;
-    let raf = 0;
-    let last = performance.now();
-    let lastUi = 0;
-    const loop = (now: number) => {
-      // catch up after slow / throttled frames (BenchSim.advance caps one call at 0.4 s of simulated time)
-      const dt = Math.min(0.4, (now - last) / 1000);
-      last = now;
-      sim.advance(dt);
-      if (now - lastUi > 50) {
-        lastUi = now;
-        setTick((t) => t + 1);
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [mode, sim]);
-
-  const fresh = () => {
-    setSim(new BenchSim(project));
-    setBuiltFor(key);
-  };
+    const s = useBench3.getState();
+    if (s.projectId === project.id && s.sim && s.mode !== "stopped" && s.builtFor !== key) s.rebuild(project, key);
+  }, [key, project]);
+  const mode = mine ? st.mode : "stopped";
   return {
     mode,
-    sim: mode === "stopped" ? null : sim,
-    run: () => {
-      if (mode === "stopped" || !sim) fresh();
-      setMode("running");
-    },
-    pause: () => setMode("paused"),
-    stop: () => {
-      setSim(null);
-      setMode("stopped");
-    },
-    reset: () => {
-      fresh();
-      if (mode === "stopped") setMode("paused");
-    },
+    sim: mine && st.mode !== "stopped" ? st.sim : null,
+    wheelAngles: mine ? st.wheelAngles : {},
+    run: () => st.start(project, key),
+    pause: () => st.pause(),
+    stop: () => st.stop(),
+    reset: () => st.reset(project, key),
     setReading: (uid: string, r: SensorReading) => {
-      sim?.setReading(uid, r);
-      setTick((t) => t + 1);
+      st.sim?.setReading(uid, r);
+      st.bump();
+    },
+    setEnv: (uid: string, e: { temperature?: number; humidity?: number; lux?: number }) => {
+      st.sim?.setEnv(uid, e);
+      st.bump();
     },
   };
 }
@@ -93,7 +62,14 @@ export function BenchPanel({ bench, project }: { bench: ReturnType<typeof useBen
               <span>{f1(st.battery.volts)} V</span><span>{Math.round(st.battery.soc * 100)} % charge</span>
               <span>{st.battery.currentA.toFixed(2)} A</span><span>{f1(st.battery.powerW)} W</span>
             </div>
-            <div className="text-[10px] text-dim">Full {f1(st.battery.full)} V · empty {f1(st.battery.empty)} V · sags with load (internal resistance)</div>
+            <div className="mt-1 grid grid-cols-2 gap-x-2 text-[10px] text-muted" data-testid="battery-props">
+              <span>{st.battery.cells}S{st.battery.parallel}P · {st.battery.capacity_mAh} mAh</span><span>{f1(st.battery.energyWh)} Wh</span>
+              <span>Full {f1(st.battery.full)} V · cut-off {f1(st.battery.empty)} V</span><span>R int ≈{(st.battery.rint * 1000).toFixed(0)} mΩ</span>
+              <span>Max {Number.isFinite(st.battery.maxA) ? `${f1(st.battery.maxA)} A` : "not specified"}</span><span>≈{st.battery.tempC.toFixed(1)} °C (estimate)</span>
+              <span className="col-span-2">Runtime at this load: {st.battery.runtimeMin === null ? "—" : st.battery.runtimeMin > 600 ? "> 10 h" : `≈${Math.round(st.battery.runtimeMin)} min`}</span>
+            </div>
+            {st.battery.warnings.map((w) => <div key={w} className="mt-1 rounded border border-warn/50 bg-warn/10 px-1.5 py-0.5 text-[10px] text-warn">{w}</div>)}
+            <div className="text-[10px] text-dim">Voltage sags with load (internal resistance); charge drains with the simulated current × time.</div>
           </div>
         ) : (
           <div className="text-warn">No battery in the circuit: nothing is powered.</div>
@@ -121,14 +97,38 @@ export function BenchPanel({ bench, project }: { bench: ReturnType<typeof useBen
         {st.dc.filter((e) => e.kind === "resistor").map((e) => (
           <div key={e.partUid} className="flex justify-between font-mono"><span className="font-sans">{label(e.partUid)}</span><span className={e.overload ? "text-bad" : ""}>{(Math.abs(e.current) * 1000).toFixed(1)} mA · {(e.power * 1000).toFixed(0)} mW</span></div>
         ))}
-        {Object.entries(st.servo).map(([pin, a]) => <div key={pin} className="font-mono">Servo on pin {pin}: {Math.round(a)}°</div>)}
+        {Object.entries(st.servos).map(([uid, sv]) => <div key={uid} className="flex justify-between font-mono"><span className="font-sans">{label(uid)}</span><span>{sv.pin === null ? "signal not wired" : !sv.powered ? "no power" : `${Math.round(sv.angle)}° → ${Math.round(sv.target)}°`}</span></div>)}
+        {Object.entries(st.regulators).map(([uid, r]) => (
+          <div key={uid} className="font-mono">
+            <div className="flex justify-between"><span className="font-sans">{label(uid)}</span><span>{f1(r.vin)} V → {f1(r.vout)} V</span></div>
+            <div className="flex justify-between text-[10px] text-muted"><span>out {(r.ioutA * 1000).toFixed(0)} mA · in {(r.iinA * 1000).toFixed(0)} mA</span><span>{Math.round(r.efficiency * 100)} % · {r.heatW.toFixed(2)} W heat</span></div>
+            {r.warning && <div className="text-[10px] text-warn">{r.warning}</div>}
+          </div>
+        ))}
+        {st.displays.map((d, i) => (
+          <div key={i} className="text-[11px]"><span className="font-sans font-semibold">{d.partUid ? label(d.partUid) : d.kind.toUpperCase()}</span>{" "}{d.reason ? <span className="text-warn">{d.reason}</span> : <span className="font-mono text-muted">{(d.kind === "oled" ? d.runs.map((r) => r.ch).join("") : d.lines.join(" / ")).trim().slice(0, 60) || "(blank)"}</span>}</div>
+        ))}
         {s.notSimulated.length > 0 && (
           <div className="mt-1 text-[11px] text-dim">Not simulated: {s.notSimulated.map((n) => `${n.label} (${n.reason})`).join("; ")}</div>
         )}
       </div>
       <div className="space-y-1">
         <div className="bf-label flex items-center gap-1"><Cpu size={12} /> Sensors (set what they see)</div>
-        {Object.keys(s.readings).length === 0 && <div className="text-muted">No simulated sensors.</div>}
+        {Object.keys(s.readings).length === 0 && Object.keys(s.env).length === 0 && <div className="text-muted">No simulated sensors.</div>}
+        {Object.entries(s.env).map(([uid, e]) => (
+          <div key={uid} className="rounded border border-line p-1.5">
+            <div className="font-semibold">{label(uid)}</div>
+            {e.temperature !== undefined && (
+              <label className="flex items-center gap-2">Temp <input type="range" min={-20} max={60} step={0.5} value={e.temperature} aria-label="Temperature" onChange={(ev) => bench.setEnv(uid, { temperature: Number(ev.target.value) })} /><span className="font-mono">{e.temperature.toFixed(1)} °C</span></label>
+            )}
+            {e.humidity !== undefined && (
+              <label className="flex items-center gap-2">Hum. <input type="range" min={0} max={100} step={1} value={e.humidity} aria-label="Humidity" onChange={(ev) => bench.setEnv(uid, { humidity: Number(ev.target.value) })} /><span className="font-mono">{Math.round(e.humidity)} %</span></label>
+            )}
+            {e.lux !== undefined && (
+              <label className="flex items-center gap-2">Light <input type="range" min={0} max={3} step={0.05} value={Math.log10(Math.max(1, e.lux))} aria-label="Light level" onChange={(ev) => bench.setEnv(uid, { lux: Math.round(Math.pow(10, Number(ev.target.value))) })} /><span className="font-mono">{Math.round(e.lux)} lux</span></label>
+            )}
+          </div>
+        ))}
         {Object.entries(s.readings).map(([uid, r]) => (
           <div key={uid} className="rounded border border-line p-1.5">
             <div className="font-semibold">{label(uid)}</div>

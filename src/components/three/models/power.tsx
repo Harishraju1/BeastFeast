@@ -89,12 +89,49 @@ function CellHolder({ part, comp, x, y, z, emissive }: { part: PartInstance; com
   return (
     <group>
       <Box size={[x, 2 * MM, z]} color="#111" pos={[0, -y / 2 + 1 * MM, 0]} emissive={emissive} />
-      {Array.from({ length: n }, (_, i) => (
-        <mesh key={i} position={[0, 0, (i - (n - 1) / 2) * r * 2.1]} rotation={[0, 0, Math.PI / 2]} castShadow>
-          <cylinderGeometry args={[r, r, x * 0.85, 20]} />
-          <meshStandardMaterial color={["#2b7de9", "#21a366", "#e0413a", "#7a4ee0", "#e0a21b"][groupOf(i) % 5]} metalness={0.3} roughness={0.4} />
-        </mesh>
-      ))}
+      {Array.from({ length: n }, (_, i) => {
+        const zc = (i - (n - 1) / 2) * r * 2.1;
+        const len = x * 0.85;
+        // series neighbours alternate direction (+ next to −), as in a real holder
+        const flip = pack ? groupOf(i) % 2 === 1 : i % 2 === 1;
+        const wrap = ["#2b7de9", "#21a366", "#e0413a", "#7a4ee0", "#e0a21b"][groupOf(i) % 5];
+        return (
+          <group key={i} position={[0, 0, zc]} rotation={[0, flip ? Math.PI : 0, 0]}>
+            {/* PVC wrap (colour = series group), label band, + cap with nub and white insulator ring, flat − end */}
+            <mesh rotation={[0, 0, Math.PI / 2]} castShadow>
+              <cylinderGeometry args={[r, r, len, 20]} />
+              <meshStandardMaterial color={wrap} metalness={0.3} roughness={0.4} emissive={emissive ?? "#000"} emissiveIntensity={emissive ? 0.4 : 0} />
+            </mesh>
+            <mesh rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[r * 1.005, r * 1.005, len * 0.38, 20]} />
+              <meshStandardMaterial color="#f1eee3" roughness={0.7} />
+            </mesh>
+            <mesh position={[len / 2 + 0.25 * MM, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[r * 0.82, r * 0.82, 0.5 * MM, 18]} />
+              <meshStandardMaterial color="#f5f5f5" roughness={0.6} />
+            </mesh>
+            <mesh position={[len / 2 + 0.9 * MM, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[r * 0.36, r * 0.4, 1.2 * MM, 14]} />
+              <meshStandardMaterial color="#c9ced4" metalness={0.9} roughness={0.25} />
+            </mesh>
+            <mesh position={[-len / 2 - 0.2 * MM, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[r * 0.9, r * 0.9, 0.4 * MM, 18]} />
+              <meshStandardMaterial color="#b9bec4" metalness={0.9} roughness={0.3} />
+            </mesh>
+          </group>
+        );
+      })}
+      {/* holder contacts and leads: red = pack +, black = pack − */}
+      <Box size={[1.2 * MM, y * 0.8, z * 0.95]} color="#c9ced4" pos={[x / 2 - 0.6 * MM, 0, 0]} />
+      <Box size={[1.2 * MM, y * 0.8, z * 0.95]} color="#c9ced4" pos={[-x / 2 + 0.6 * MM, 0, 0]} />
+      <mesh position={[x / 2 + 5 * MM, -y / 2 + 2 * MM, z * 0.2]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.9 * MM, 0.9 * MM, 10 * MM, 8]} />
+        <meshStandardMaterial color="#d42a2a" />
+      </mesh>
+      <mesh position={[x / 2 + 5 * MM, -y / 2 + 2 * MM, -z * 0.2]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.9 * MM, 0.9 * MM, 10 * MM, 8]} />
+        <meshStandardMaterial color="#151515" />
+      </mesh>
     </group>
   );
 }

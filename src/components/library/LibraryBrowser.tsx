@@ -6,7 +6,7 @@ import { allComponents, MASTER_LIST } from "@/lib/catalogue";
 import type { CompetitionId, ComponentRecord, SimStatus } from "@/lib/types";
 import { COMPETITIONS } from "@/lib/types";
 import { Badge, Button, SimBadge, SIM_STATUS_INFO, Tabs } from "@/components/ui";
-import { supportOf } from "@/lib/components/support";
+import { supportOf, supportStatus } from "@/lib/components/support";
 import { PinoutDiagram, pinColor, pinFunctionText } from "./PinoutDiagram";
 import type { PreviewView } from "./ComponentPreview";
 
@@ -44,7 +44,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
     return all.filter((c) => {
       if (f.section && c.categoryNumber !== f.section) return false;
       if (f.sub && c.subcategory !== f.sub) return false;
-      if (f.status !== "all" && c.simStatus !== f.status) return false;
+      if (f.status !== "all" && supportStatus(c) !== f.status) return false;
       if (f.cls !== "all" && c.functionalityClass !== f.cls) return false;
       if (f.competition !== "all" && !["required", "optional"].includes(c.competitions[f.competition])) return false;
       if (f.protocol && !(c.specs.protocols ?? []).some((p) => p.startsWith(f.protocol))) return false;
@@ -149,7 +149,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
             <div className="truncate text-sm font-medium">{c.name}</div>
             <div className="truncate text-[11px] text-dim">{c.model ?? c.subcategory ?? c.category}</div>
             <div className="mt-1 flex items-center gap-1.5">
-              <SimBadge status={c.simStatus} />
+              <SimBadge status={supportStatus(c)} />
               <span className="font-mono text-[9px] text-dim">CLASS {c.functionalityClass}</span>
               {competition && c.competitions[competition] === "required" && <span className="font-mono text-[9px] text-accent-ink">★ NEEDED</span>}
             </div>
@@ -186,7 +186,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
           {[sel.manufacturer, sel.model].filter(Boolean).join(" · ") || "Manufacturer / model not verified"}
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <SimBadge status={sel.simStatus} full />
+          <SimBadge status={supportStatus(sel)} full />
           <div className="mt-1 text-[11px] text-muted" data-testid="support-info">
             <span className="font-mono text-text">{supportOf(sel).label}</span> — {supportOf(sel).model}
             {supportOf(sel).limits.length > 0 && <span> Not modelled: {supportOf(sel).limits.join(" ")}</span>}

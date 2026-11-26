@@ -14,7 +14,7 @@ import type { ComponentRecord, PartInstance } from "@/lib/types";
 
 export interface DcElementResult {
   partUid: string;
-  kind: "resistor" | "led" | "pot";
+  kind: "resistor" | "led" | "pot" | "capacitor" | "ldr";
   /** current through the element in amps (positive A→K for LEDs, pin 1→2 for resistors) */
   current: number;
   /** voltage across the element */
@@ -26,6 +26,22 @@ export interface DcElementResult {
   overload?: string;
   /** LED channel (pin id of the anode) for multi-anode parts */
   channel?: string;
+  /** LDR: present resistance (Ω) */
+  ohms?: number;
+}
+
+export interface DcOptions {
+  /** time step (s) for capacitors; without it capacitors are open circuits (DC steady state) */
+  dt?: number;
+  /** capacitor voltages from the previous step, keyed by part uid (updated in place) */
+  capV?: Map<string, number>;
+  /** light level on each LDR (lux), keyed by part uid; default 300 lux (indoor room) */
+  lux?: Map<string, number>;
+}
+
+/** LDR resistance: R = R10 · (lux / 10)^−γ, γ ≈ 0.7 for GL55-series cells (typical, stated as an estimate). */
+export function ldrOhms(r10kOhm: number, lux: number): number {
+  return Math.min(5e6, Math.max(50, r10kOhm * 1000 * Math.pow(Math.max(0.01, lux) / 10, -0.7)));
 }
 
 export interface DcResult {
@@ -65,17 +81,19 @@ interface Elem {
   on: boolean;
   channel?: string;
   ratingW?: number;
+  vrating?: number;
+  polarised?: boolean;
 }
 
 /**
  * @param fixed potential of nets whose voltage is imposed (ground, supplies, GPIO outputs). Missing = unknown.
  */
-export function solveDc(g: CircuitGraph, fixed: Map<number, number>): DcResult {
+export function solveDc(g: CircuitGraph, fixed: Map<number, number>, opts: DcOptions = {}): DcResult {
   const elems: Elem[] = [];
   for (const p of g.parts) {
     const c = g.comps.get(p.uid)!;
     const net = (pin: string) => g.netOf.get(`${p.uid}.${pin}`);
-    if (c.kind === "resistor") {
+    if (c.kind === "resistor" && !c.pins.some((x) => x.id === "W")) {
       const r = resistorOhms(c, p);
       const a = net("1"), b = net("2");
       if (r && a && b && a !== b) elems.push({ part: p, kind: "resistor", a, b, r, vf: 0, on: true, ratingW: 0.25 });
@@ -85,6 +103,17 @@ export function solveDc(g: CircuitGraph, fixed: Map<number, number>): DcResult {
         const a = net(an.id), b = k && net(k.id);
         if (a && b && a !== b) elems.push({ part: p, kind: "led", a, b, r: LED_RD, vf: ledVf(c), on: true, channel: an.id });
       }
+    } else if (c.kind === "capacitor" && opts.dt && opts.dt > 0) {
+      // backward Euler: i = C/dt · (v − v_prev)  ⇔  an element with R = dt/C and offset v_prev
+      const uf = Number(optionValue(c, p, "uf") ?? 1);
+      const pins = c.pins.filter((x) => x.fn === "passive" || x.fn === "anode" || x.fn === "cathode");
+      const a = pins[0] && net(pins[0].id), b = pins[1] && net(pins[1].id);
+      const vprev = opts.capV?.get(p.uid) ?? 0;
+      if (a && b && a !== b) elems.push({ part: p, kind: "capacitor", a, b, r: opts.dt / Math.max(1e-12, uf * 1e-6), vf: vprev, on: true, vrating: Number(optionValue(c, p, "vrating") ?? 0) || undefined, polarised: pins.some((x) => x.fn === "anode") });
+    } else if (c.kind === "sensor" && /\bLDR\b|photoresistor/i.test(c.name) && c.pins.length === 2) {
+      const a = net(c.pins[0].id), b = net(c.pins[1].id);
+      const r = ldrOhms(Number(optionValue(c, p, "r10") ?? 10), opts.lux?.get(p.uid) ?? 300);
+      if (a && b && a !== b) elems.push({ part: p, kind: "ldr", a, b, r, vf: 0, on: true });
     } else if (/potentiometer/i.test(c.name) && c.pins.some((x) => x.id === "W")) {
       const total = Number(optionValue(c, p, "ohms") ?? 10000);
       const pos = Math.min(1, Math.max(0, Number(optionValue(c, p, "position") ?? 0.5)));
@@ -180,6 +209,12 @@ export function solveDc(g: CircuitGraph, fixed: Map<number, number>): DcResult {
       if (current > 0.03) res.overload = `${(current * 1000).toFixed(0)} mA through the LED (max ≈20 mA continuous) — it would burn out.`;
     }
     if (e.ratingW && res.power > e.ratingW) res.overload = `${res.power.toFixed(2)} W in a ${e.ratingW} W resistor — it would overheat.`;
+    if (e.kind === "ldr") res.ohms = e.r;
+    if (e.kind === "capacitor") {
+      opts.capV?.set(e.part.uid, v);
+      if (e.polarised && v < -0.5) res.overload = `${v.toFixed(1)} V across a polarised capacitor: it is connected backwards and can vent or short.`;
+      else if (e.vrating && Math.abs(v) > e.vrating) res.overload = `${Math.abs(v).toFixed(1)} V across a ${e.vrating} V capacitor: above its voltage rating.`;
+    }
     for (const [n, sign] of [[e.a, 1], [e.b, -1]] as const) if (fixed.has(n.id)) sourced.set(n.id, (sourced.get(n.id) ?? 0) + sign * current);
     return res;
   });

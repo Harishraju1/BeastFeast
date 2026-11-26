@@ -12,6 +12,7 @@
  * faked: if a part is not modelled it is listed in `notSimulated`, and a short circuit stops the bench.
  */
 import { ArduinoRuntime, compile, getBoard } from "@/lib/arduino";
+import type { DeviceObj } from "@/lib/arduino/interpreter";
 import type { CompileResult, RuntimeStatus } from "@/lib/arduino";
 import { RobotElectrical } from "@/lib/robot/bridge";
 import { motorParams } from "@/lib/robot/model";
@@ -38,10 +39,58 @@ export interface WireFlow {
   amps?: number;
 }
 
+export interface BenchServo {
+  angle: number;
+  target: number;
+  pin: number | null;
+  powered: boolean;
+  moving: boolean;
+}
+
+export interface BenchDisplay {
+  partUid: string | null;
+  kind: DeviceObj["kind"];
+  lines: string[];
+  runs: DeviceObj["runs"];
+  backlight: boolean;
+  on: boolean;
+  /** why nothing is shown (not wired, not powered …) */
+  reason?: string;
+}
+
+export interface BenchRegulator {
+  vin: number;
+  vout: number;
+  ioutA: number;
+  iinA: number;
+  efficiency: number;
+  heatW: number;
+  limitA: number | null;
+  warning?: string;
+}
+
+/** What the bench "environment" feeds each sensor (set by the student). */
+export interface BenchEnv {
+  temperature?: number;
+  humidity?: number;
+  lux?: number;
+}
+
 export interface BenchState {
   t: number;
   motors: Record<string, BenchMotor>;
-  battery: { uid: string; volts: number; soc: number; currentA: number; powerW: number; nominal: number; full: number; empty: number } | null;
+  battery: {
+    uid: string; volts: number; soc: number; currentA: number; powerW: number; nominal: number; full: number; empty: number;
+    capacity_mAh: number; maxA: number; rint: number; cells: number; parallel: number; energyWh: number;
+    /** estimated cell temperature (°C): 25 °C + I²R heating through ≈15 K/W, 2-minute time constant */
+    tempC: number;
+    /** remaining minutes at the present current (null = no load) */
+    runtimeMin: number | null;
+    warnings: string[];
+  } | null;
+  servos: Record<string, BenchServo>;
+  displays: BenchDisplay[];
+  regulators: Record<string, BenchRegulator>;
   dc: DcElementResult[];
   flows: Record<string, WireFlow>;
   netVolts: Record<number, number>;
@@ -108,10 +157,35 @@ export class BenchSim {
   readings: Record<string, SensorReading>;
   state: BenchState;
   private soc = 0.95;
+  private cellTemp = 25;
+  private capV = new Map<string, number>();
+  private staticLoad = 0;
+  private lastSolveT = 0;
+  env: Record<string, BenchEnv> = {};
 
-  constructor(private project: Project) {
+  constructor(readonly project: Project) {
     this.bridge = new RobotElectrical(project);
     this.graph = this.bridge.graph;
+    for (const p of this.graph.parts) {
+      const c = this.graph.comps.get(p.uid)!;
+      if (/^DHT/i.test(c.name)) this.env[p.uid] = { temperature: 25, humidity: 55 };
+      if (/\bLDR\b|photoresistor/i.test(c.name)) this.env[p.uid] = { lux: 300 };
+    }
+    // DHT11/22: a powered sensor whose DATA line is on the requested pin answers with the bench environment
+    this.bridge.dhtSource = (pin, type) => {
+      const ctrl = this.bridge.controller;
+      if (!ctrl) return null;
+      const cp = ctrl.comp.pins.find((x) => x.fn === "gpio" && x.arduinoPin === pin);
+      const net = cp && this.graph.netOf.get(`${ctrl.part.uid}.${cp.id}`);
+      const dht = net?.members.find((m) => /^DHT/i.test(m.comp.name) && m.pin.fn === "out-digital");
+      if (!dht || !this.graph.powered.has(dht.part.uid)) return null;
+      const e = this.env[dht.part.uid] ?? {};
+      const is11 = type === 11 || /DHT11/i.test(dht.comp.name);
+      // DHT11: 0–50 °C / 20–90 % in 1-unit steps; DHT22: −40–80 °C / 0–100 % in 0.1 steps
+      const t = Math.max(is11 ? 0 : -40, Math.min(is11 ? 50 : 80, e.temperature ?? 25));
+      const h = Math.max(is11 ? 20 : 0, Math.min(is11 ? 90 : 100, e.humidity ?? 55));
+      return is11 ? { temperature: Math.round(t), humidity: Math.round(h) } : { temperature: Math.round(t * 10) / 10, humidity: Math.round(h * 10) / 10 };
+    };
     this.faults = benchFaults(project, this.graph);
     this.readings = defaultReadings(this.graph);
     this.notSimulated = this.graph.parts
@@ -133,7 +207,9 @@ export class BenchSim {
       const mp = motorParams(p, c);
       motors[p.uid] = { volts: null, rpm: 0, currentA: 0, noLoadRpm: mp?.noLoadRpm ?? 0, trace: mp ? "not driven" : "no motor data — cannot spin" };
     }
-    this.state = { t: 0, motors, battery: null, dc: [], flows: {}, netVolts: {}, servo: {}, runtime: null, serial: "", warnings: [] };
+    const servos: Record<string, BenchServo> = {};
+    for (const p of this.graph.parts) if (this.graph.comps.get(p.uid)!.kind === "servo") servos[p.uid] = { angle: 90, target: 90, pin: null, powered: false, moving: false };
+    this.state = { t: 0, motors, battery: null, servos, displays: [], regulators: {}, dc: [], flows: {}, netVolts: {}, servo: {}, runtime: null, serial: "", warnings: [] };
     this.computeBattery(0, 0);
     this.computeFlows();
   }
@@ -143,7 +219,14 @@ export class BenchSim {
   }
 
   setReading(uid: string, r: SensorReading) {
+    // a distance beyond the sensor's own range is "nothing detected" — that is the detection threshold
+    const sp = this.graph.comps.get(uid)?.sensor;
+    if (r.kind === "distance" && r.distance !== null && sp?.maxRange_mm && r.distance * 1000 > sp.maxRange_mm) r = { kind: "distance", distance: null };
     this.readings[uid] = r;
+  }
+
+  setEnv(uid: string, e: BenchEnv) {
+    this.env[uid] = { ...this.env[uid], ...e };
   }
 
   private batteryPart() {
@@ -161,7 +244,17 @@ export class BenchSim {
     // open-circuit voltage: full at 100 %, nominal around 50 %, cut-off at 0 % (piecewise linear)
     const ocv = this.soc >= 0.5 ? pack.nominal + (pack.max - pack.nominal) * ((this.soc - 0.5) / 0.5) : pack.min + (pack.nominal - pack.min) * (this.soc / 0.5);
     const volts = Math.max(0, ocv - loadA * pack.rint);
-    this.state.battery = { uid: bp.uid, volts, soc: this.soc, currentA: loadA, powerW: volts * loadA, nominal: pack.nominal, full: pack.max, empty: pack.min };
+    if (dt > 0) this.cellTemp += ((25 + loadA * loadA * pack.rint * 15) - this.cellTemp) * Math.min(1, dt / 120);
+    const remainingAh = (pack.capacity / 1000) * this.soc;
+    const warnings: string[] = [];
+    if (volts < pack.min * 1.06) warnings.push(`Low voltage: ${volts.toFixed(2)} V is close to the ${pack.min.toFixed(1)} V cut-off — recharge the pack.`);
+    if (Number.isFinite(pack.maxA) && loadA > pack.maxA) warnings.push(`Over-current: ${loadA.toFixed(1)} A is above the pack's ${pack.maxA.toFixed(1)} A continuous rating.`);
+    if (this.cellTemp > 60) warnings.push(`Cells ≈${this.cellTemp.toFixed(0)} °C (estimate) — too hot.`);
+    this.state.battery = {
+      uid: bp.uid, volts, soc: this.soc, currentA: loadA, powerW: volts * loadA, nominal: pack.nominal, full: pack.max, empty: pack.min,
+      capacity_mAh: pack.capacity, maxA: pack.maxA, rint: pack.rint, cells: pack.cells, parallel: pack.parallel ?? 1, energyWh: (pack.nominal * pack.capacity) / 1000,
+      tempC: this.cellTemp, runtimeMin: loadA > 0.005 ? (remainingAh / loadA) * 60 : null, warnings,
+    };
   }
 
   /** Advance the bench by `seconds` of simulated time (1 ms steps for the code, motors integrated per step). */
@@ -170,7 +263,9 @@ export class BenchSim {
     const dt = 0.001;
     const n = Math.min(400, Math.round(seconds / dt));
     for (let i = 0; i < n; i++) this.step(dt);
+    this.updateServos(n * dt);
     this.solvePassives();
+    this.updateDisplays();
     this.computeFlows();
     if (this.runtime) {
       this.state.serial = this.runtime.serialLog.slice(-4000);
@@ -207,14 +302,112 @@ export class BenchSim {
       m.trace = this.bridge.motorTrace[uid] ?? "";
       load += Math.abs(i);
     }
-    const powered = this.graph.parts.filter((p) => this.graph.powered.has(p.uid));
-    load += powered.reduce((a, p) => a + (this.graph.comps.get(p.uid)!.kind === "controller" ? CONTROLLER_A : this.graph.comps.get(p.uid)!.kind === "motor-driver" ? LOGIC_A : 0.01), 0);
-    load += this.passiveLoad;
+    load += this.staticLoad;
     this.computeBattery(load, dt);
     this.state.t += dt;
   }
 
-  private passiveLoad = 0;
+  /** Servos move towards the angle the code commands, at their rated speed — only if wired to that pin and powered. */
+  private updateServos(dt: number) {
+    const ctrl = this.bridge.controller;
+    for (const [uid, sv] of Object.entries(this.state.servos)) {
+      const c = this.graph.comps.get(uid)!;
+      const sig = c.pins.find((x) => x.fn === "in-pwm") ?? c.pins.find((x) => /SIG|PWM|S\b/i.test(x.id));
+      const net = sig && this.graph.netOf.get(`${uid}.${sig.id}`);
+      const gp = net?.members.find((m) => ctrl && m.part.uid === ctrl.part.uid && m.pin.fn === "gpio");
+      sv.pin = gp?.pin.arduinoPin ?? null;
+      sv.powered = this.graph.powered.has(uid);
+      const cmd = sv.pin !== null ? this.bridge.servoAngles[sv.pin] : undefined;
+      if (cmd !== undefined && sv.powered) sv.target = cmd;
+      // SG90 ≈ 0.1 s / 60° (600 °/s), metal-gear MG99x ≈ 0.17 s / 60° (≈350 °/s)
+      const rate = /MG9|metal/i.test(c.name) ? 350 : 600;
+      const d = sv.target - sv.angle;
+      sv.moving = sv.powered && Math.abs(d) > 0.5;
+      if (sv.powered) sv.angle += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
+    }
+  }
+
+  /** Text shown on each wired, powered display, matched from the display objects the code declared. */
+  private updateDisplays() {
+    const devs = (this.runtime?.devices ?? []).filter((d) => d.kind !== "dht");
+    const ctrl = this.bridge.controller;
+    const used = new Set<string>();
+    const onCtrlPin = (uid: string, pinId: string, cap?: string, arduinoPin?: number) =>
+      !!this.graph.netOf.get(`${uid}.${pinId}`)?.members.some((m) => ctrl && m.part.uid === ctrl.part.uid && m.pin.fn === "gpio" && (cap ? (m.pin.caps ?? []).includes(cap as never) : m.pin.arduinoPin === arduinoPin));
+    this.state.displays = devs.map((d) => {
+      const want = d.kind === "oled" ? /OLED/i : /LCD/i;
+      const cands = this.graph.parts.filter((p) => {
+        const c = this.graph.comps.get(p.uid)!;
+        if (c.kind !== "display" || !want.test(c.name) || used.has(p.uid)) return false;
+        const hasI2c = c.pins.some((x) => x.fn === "i2c-sda");
+        return d.kind === "lcd" ? !hasI2c : hasI2c;
+      });
+      const wired = cands.find((p) => {
+        const c = this.graph.comps.get(p.uid)!;
+        if (d.kind === "lcd") return ["RS", "E", "D4", "D5", "D6", "D7"].every((id, i) => c.pins.some((x) => x.id === id) && onCtrlPin(p.uid, id, undefined, d.args[i]));
+        const sda = c.pins.find((x) => x.fn === "i2c-sda")!, scl = c.pins.find((x) => x.fn === "i2c-scl")!;
+        return onCtrlPin(p.uid, sda.id, "i2c-sda") && onCtrlPin(p.uid, scl.id, "i2c-scl");
+      });
+      const base = { kind: d.kind, lines: d.lines, runs: d.runs, backlight: d.backlight, on: d.on };
+      if (!wired) return { ...base, partUid: cands[0]?.uid ?? null, lines: [], runs: [], reason: cands.length ? (d.kind === "lcd" ? "RS, E and D4–D7 are not wired to the pins given in the LiquidCrystal(…) declaration." : "SDA and SCL are not on the controller's SDA/SCL pins.") : `Your code uses a ${d.kind === "oled" ? "OLED" : "LCD"}, but there is no matching display in the circuit.` };
+      used.add(wired.uid);
+      if (!this.graph.powered.has(wired.uid)) return { ...base, partUid: wired.uid, lines: [], runs: [], reason: "The display has no power (VCC/GND)." };
+      return { ...base, partUid: wired.uid };
+    });
+  }
+
+  /** Current drawn on each supply net by everything except the motors; regulators pass it on to their input. */
+  private supplyLoads(sourced: Map<number, number>) {
+    const g = this.graph;
+    const perNet = new Map<number, number>();
+    const addTo = (netId: number | undefined, a: number) => netId !== undefined && perNet.set(netId, (perNet.get(netId) ?? 0) + a);
+    for (const p of g.parts) {
+      if (!g.powered.has(p.uid)) continue;
+      const c = g.comps.get(p.uid)!;
+      if (c.kind === "regulator" || c.battery) continue;
+      const sp = c.pins.find((x) => (x.fn === "vin" || (x.fn === "vout" && x.vRange)) && g.netOf.get(`${p.uid}.${x.id}`)?.voltage != null && !g.netOf.get(`${p.uid}.${x.id}`)!.sources.some((s0) => s0.key === `${p.uid}.${x.id}`));
+      const sv = this.state.servos[p.uid];
+      const a = c.kind === "controller" ? CONTROLLER_A : c.kind === "motor-driver" ? LOGIC_A : c.kind === "servo" ? (sv?.moving ? (/MG9/i.test(c.name) ? 0.8 : 0.25) : 0.01) : c.kind === "display" ? 0.03 : 0.015;
+      addTo(sp && g.netOf.get(`${p.uid}.${sp.id}`)?.id, a);
+    }
+    for (const [nid, a] of sourced) {
+      const n = g.nets.find((x) => x.id === nid);
+      if (n && n.voltage !== null && !n.isGround && a > 0) addTo(nid, a);
+    }
+    // regulators: output current → input current (buck: power balance with efficiency; linear: same current, heat = ΔV·I)
+    const regs: Record<string, BenchRegulator> = {};
+    for (let pass = 0; pass < 3; pass++) {
+      for (const p of g.parts) {
+        const c = g.comps.get(p.uid)!;
+        if (c.kind !== "regulator" || !g.powered.has(p.uid)) continue;
+        const outPin = c.pins.find((x) => x.fn === "vout"), inPin = c.pins.find((x) => x.fn === "vin");
+        const outNet = outPin && g.netOf.get(`${p.uid}.${outPin.id}`), inNet = inPin && g.netOf.get(`${p.uid}.${inPin.id}`);
+        if (!outNet || !inNet || inNet.voltage == null) continue;
+        const iout = perNet.get(outNet.id) ?? 0;
+        const vin = inNet.voltage, vout = outNet.voltage ?? 0;
+        const buck = /buck|LM2596|XL40|MP1584|MP2307|TPS5430|switching/i.test(c.name);
+        const eff = buck ? 0.88 : vin > 0 ? Math.min(1, vout / vin) : 1;
+        const iin = buck ? (vout * iout) / Math.max(0.1, eff * vin) + 0.005 : iout + 0.005;
+        const heat = buck ? vout * iout * (1 / eff - 1) : (vin - vout) * iout;
+        const lim = Number(/([\d.]+)\s*A/.exec(c.specs.current ?? "")?.[1] ?? NaN);
+        const prev = regs[p.uid];
+        if (prev) addTo(inNet.id, -prev.iinA);
+        addTo(inNet.id, iin);
+        let warning: string | undefined;
+        if (Number.isFinite(lim) && iout > lim) warning = `${iout.toFixed(2)} A drawn, above its ${lim} A rating.`;
+        else if (!buck && heat > 1.5) warning = `≈${heat.toFixed(1)} W of heat in a linear regulator — it needs a heatsink or a buck converter.`;
+        regs[p.uid] = { vin, vout, ioutA: iout, iinA: iin, efficiency: eff, heatW: heat, limitA: Number.isFinite(lim) ? lim : null, warning };
+      }
+    }
+    this.state.regulators = regs;
+    // what the battery supplies directly
+    let fromBattery = 0;
+    for (const [nid, a] of perNet) {
+      const n = g.nets.find((x) => x.id === nid);
+      if (n?.sources.some((s0) => g.comps.get(s0.key.split(".")[0])?.battery)) fromBattery += a;
+    }
+    this.staticLoad = fromBattery;
+  }
 
   /** Fixed potentials for the DC solver: ground, live supplies, controller pins driven as OUTPUT (PWM = average). */
   private fixedPotentials(): Map<number, number> {
@@ -236,15 +429,17 @@ export class BenchSim {
 
   private solvePassives() {
     const fixed = this.fixedPotentials();
-    const res = solveDc(this.graph, fixed);
+    const dt = Math.max(1e-4, this.state.t - this.lastSolveT);
+    this.lastSolveT = this.state.t;
+    const lux = new Map(Object.entries(this.env).filter(([, e]) => e.lux !== undefined).map(([k, e]) => [k, e.lux!]));
+    const res = solveDc(this.graph, fixed, { dt, capV: this.capV, lux });
     this.state.dc = res.elements;
-    let drawn = 0;
-    for (const [nid, a] of res.sourced) {
-      const n = this.graph.nets[nid] ?? this.graph.nets.find((x) => x.id === nid);
-      if (n && n.voltage !== null && !n.isGround && a > 0) drawn += a;
-    }
-    this.passiveLoad = drawn;
+    this.supplyLoads(res.sourced);
     this.state.netVolts = Object.fromEntries(res.potential);
+    // analogRead/digitalRead on a divider or LDR see these voltages
+    const passive = new Map<number, number>();
+    for (const [nid, v] of res.potential) if (!fixed.has(nid)) passive.set(nid, v);
+    this.bridge.passiveVolts = passive;
   }
 
   /** Orientation and intensity of current on every wire. */

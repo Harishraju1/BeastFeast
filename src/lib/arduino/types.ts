@@ -62,6 +62,8 @@ export interface ArduinoHost {
   /** Pop one byte from Serial RX, -1 if none */
   serialRead(): number;
   tone?(pin: number, freq: number): void;
+  /** DHT sensor on this pin: the reading, or null when no powered sensor answers (the library then returns NaN) */
+  readDht?(pin: number, type: number): { temperature: number; humidity: number } | null;
   noTone?(pin: number): void;
 }
 

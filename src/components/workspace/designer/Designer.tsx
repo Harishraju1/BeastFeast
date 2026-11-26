@@ -1,15 +1,20 @@
 "use client";
+import { duplicateParts, removeParts } from "@/lib/robot/edit";
+import { supportStatus } from "@/lib/components/support";
+import { useBench } from "../circuit/BenchPanel";
+import { liveParts } from "@/lib/sim/live3d";
+import { LiveContext } from "@/components/three/models";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, GizmoHelper, GizmoViewport, Grid, OrbitControls, TransformControls } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Group, Object3D } from "three";
-import { Copy, Expand, Move3d, RotateCw, Shrink, Trash2 } from "lucide-react";
+import { Copy, Expand, Move3d, Pause, Play, RotateCw, Shrink, Square, Trash2 } from "lucide-react";
 import type { OrbitControls as OrbitImpl } from "three-stdlib";
 import { useApp } from "@/lib/store/app";
 import { useWorkspace } from "@/lib/store/workspace";
 import { getComponent, allComponents } from "@/lib/catalogue";
 import type { PartInstance, Project } from "@/lib/types";
-import { addPart, chassisFrom, uid } from "@/lib/robot/assembly";
+import { addPart, chassisFrom } from "@/lib/robot/assembly";
 import { massSummary, partDims } from "@/lib/mech/geometry";
 import { validateMechanics } from "@/lib/mech/validate";
 import { ASSEMBLY_ORDER, ChassisMesh, PartMesh, explodeOffset, toThree } from "@/components/three/RobotParts";
@@ -44,7 +49,7 @@ function CameraFocus({ target }: { target: [number, number, number] | null }) {
   return null;
 }
 
-function Scene({ project, exploded, mode, onCommit }: { project: Project; exploded: number; mode: "translate" | "rotate"; onCommit: (uid: string, pos: { x: number; y: number; z: number }, rotZ: number) => void }) {
+function Scene({ project, exploded, mode, onCommit, wheelAngles }: { project: Project; exploded: number; mode: "translate" | "rotate"; onCommit: (uid: string, pos: { x: number; y: number; z: number }, rotZ: number) => void; wheelAngles?: Record<string, number> }) {
   const { selected, select, focus, scanPart } = useWorkspace();
   const errors = useMemo(() => new Set(project.validation?.issues.filter((i) => i.severity === "critical" && i.partUid).map((i) => i.partUid!) ?? []), [project.validation]);
   const parts = project.parts.map((p) => ({ p, c: getComponent(p.componentId)! })).filter((x) => x.c && x.c.functionalityClass !== "C");
@@ -66,7 +71,7 @@ function Scene({ project, exploded, mode, onCommit }: { project: Project; explod
         </group>
         {parts.map(({ p, c }) =>
           p.uid === selected && exploded === 0 ? null : (
-            <PartMesh key={p.uid} part={p} comp={c} selected={p.uid === selected || p.uid === scanPart} error={errors.has(p.uid) || focus?.partUid === p.uid} offset={explodeOffset(c, p, exploded)} onSelect={(id) => select(id)} />
+            <PartMesh key={p.uid} part={p} comp={c} selected={p.uid === selected || p.uid === scanPart} error={errors.has(p.uid) || focus?.partUid === p.uid} offset={explodeOffset(c, p, exploded)} wheelAngle={wheelAngles?.[p.uid] ?? 0} onSelect={(id) => select(id)} />
           ),
         )}
         {sel && exploded === 0 && (
@@ -106,6 +111,9 @@ function Scene({ project, exploded, mode, onCommit }: { project: Project; explod
 }
 
 export default function Designer({ project }: { project: Project }) {
+  // live 3D: the same circuit-bench simulation as Circuit Studio (one engine, one loop)
+  const bench = useBench(project);
+  const live = bench.sim ? liveParts(bench.sim) : null;
   const { updateProject } = useApp();
   const { selected, select, focus } = useWorkspace();
   const [exploded, setExploded] = useState(0);
@@ -159,15 +167,17 @@ export default function Designer({ project }: { project: Project }) {
   };
 
   const remove = (uidv: string) => {
-    updateProject(project.id, (p) => ({ ...p, parts: p.parts.filter((x) => x.uid !== uidv).map((x) => (x.attachedTo === uidv ? { ...x, attachedTo: null } : x)), wires: p.wires.filter((w) => w.from.part !== uidv && w.to.part !== uidv) }));
+    updateProject(project.id, (p) => removeParts(p, [uidv]));
     select(null);
   };
   const duplicate = (uidv: string) => {
-    const src = project.parts.find((x) => x.uid === uidv);
-    if (!src) return;
-    const copy: PartInstance = { ...structuredClone(src), uid: uid(), label: `${src.label} copy`, position: { ...src.position, y: src.position.y - 20 }, attachedTo: null, schematic: { x: src.schematic.x + 40, y: src.schematic.y + 40 } };
-    updateProject(project.id, (p) => ({ ...p, parts: [...p.parts, copy] }));
-    select(copy.uid);
+    let created: string[] = [];
+    updateProject(project.id, (p) => {
+      const r = duplicateParts(p, [uidv]);
+      created = r.created;
+      return r.project;
+    });
+    if (created[0]) select(created[0]);
   };
 
   useEffect(() => {
@@ -215,8 +225,19 @@ export default function Designer({ project }: { project: Project }) {
           }}
         >
           <Canvas shadows camera={{ position: [0.32, 0.26, 0.32], fov: 40, near: 0.005, far: 20 }} dpr={[1, 2]} onPointerMissed={() => select(null)}>
-            <Scene project={project} exploded={exploded} mode={mode} onCommit={commit} />
+            <LiveContext.Provider value={live}>
+              <Scene project={project} exploded={exploded} mode={mode} onCommit={commit} wheelAngles={bench.wheelAngles} />
+            </LiveContext.Provider>
           </Canvas>
+          <div className="absolute bottom-3 left-3 flex items-center gap-1" role="toolbar" aria-label="Live simulation">
+            {bench.mode === "running" ? (
+              <Button size="sm" onClick={bench.pause} title="Pause the live simulation"><Pause size={13} /> Pause</Button>
+            ) : (
+              <Button size="sm" variant="primary" onClick={bench.run} title="Run your circuit and code: motors, wheels, LEDs, servos and displays move as simulated" data-testid="designer-run"><Play size={13} /> Run live</Button>
+            )}
+            <Button size="sm" onClick={bench.stop} disabled={bench.mode === "stopped"}><Square size={12} /> Stop</Button>
+            <span className="rounded bg-bg/80 px-2 py-0.5 font-mono text-[10px] text-muted">{bench.mode === "running" ? `LIVE · ${bench.sim?.state.t.toFixed(1)} s · same simulation as Circuit Studio` : bench.mode === "paused" ? "PAUSED" : "3D shows the design; press Run live to animate it from the circuit simulation"}</span>
+          </div>
           <div className="absolute left-3 top-3 flex gap-1">
             <Button size="sm" variant={mode === "translate" ? "secondary" : "outline"} onClick={() => setMode("translate")} title="Move (G)"><Move3d size={14} /> Move</Button>
             <Button size="sm" variant={mode === "rotate" ? "secondary" : "outline"} onClick={() => setMode("rotate")} title="Rotate (R)"><RotateCw size={14} /> Rotate</Button>
@@ -260,7 +281,7 @@ export default function Designer({ project }: { project: Project }) {
                       <button onClick={() => select(p.uid)} className={`flex w-full items-center gap-2 rounded px-2 py-0.5 text-left ${selected === p.uid ? "bg-accent/15 text-accent-ink" : "hover:bg-panel"}`}>
                         <span className="w-28 truncate font-mono">{p.label}</span>
                         <span className="flex-1 truncate text-muted">{c.name}{att ? ` → on ${att} shaft` : ""}</span>
-                        <SimBadge status={c.simStatus} />
+                        <SimBadge status={supportStatus(c)} />
                       </button>
                     </li>
                   );
@@ -287,7 +308,7 @@ export default function Designer({ project }: { project: Project }) {
             <div>
               <div className="bf-label">Selected part</div>
               <div className="font-display text-lg font-semibold">{selComp.name}</div>
-              <SimBadge status={selComp.simStatus} full />
+              <SimBadge status={supportStatus(selComp)} full />
               {(() => {
                 const m = modelKeyFor(selComp);
                 return <div className="mt-1 text-[11px] text-dim" data-testid="model-label">{m.exact ? `3D model: ${m.label}` : GENERIC_MODEL_NOTE}</div>;

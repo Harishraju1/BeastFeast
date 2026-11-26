@@ -92,13 +92,22 @@ describe("TEST 3 — incorrect motor driver wiring is identified", () => {
     const p = wire(reference2WD(), "SW1.2", "DRV1.GND", "red");
     expect(crit(p).map((i) => i.code)).toContain("E_SHORT_CIRCUIT");
   });
-  it("12 V into an L298N with the 5 V jumper is still fine, but 3S LiPo full charge is flagged", () => {
+  it("L298N 5 V jumper is judged by the 78M05's real limits (35 V, ≈1 W), not the 12 V seller guidance", () => {
     let p = reference2WD();
     const bat = p.parts.find((x) => x.label === "BAT1")!;
-    p = { ...p, parts: p.parts.map((x) => (x.uid === bat.uid ? { ...x, config: { ...x.config, series: 4 } } : x)) };
-    const c = codes(p);
-    expect(c).toContain("E_L298N_JUMPER_OVERVOLT");
-    expect(c).toContain("E_OVERVOLTAGE"); // 16.8 V into Uno VIN (max 12)
+    const setCells = (q: typeof p, n: number) => ({ ...q, parts: q.parts.map((x) => (x.label === bat.label ? { ...x, config: { ...x.config, series: n } } : x)) });
+    // 3S (12.6 V full): logic-only load → a warning with the heat figure, not a critical error
+    const three = validateProject(setCells(p, 3)).issues;
+    expect(three.find((i) => i.code === "W_L298N_REG_HEAT")?.severity).toBe("warning");
+    expect(three.some((i) => i.code === "E_L298N_JUMPER_OVERVOLT")).toBe(false);
+    // 4S + the Uno powered from the L298N +5V pin: (16.8 − 5) × 86 mA ≈ 1.0 W → critical
+    p = setCells(p, 4);
+    p = { ...p, wires: p.wires.filter((w) => !(w.to.pin === "VIN" || w.from.pin === "VIN")) };
+    p = wire(p, "DRV1.5V", "U1.5V");
+    expect(codes(p)).toContain("E_L298N_JUMPER_OVERVOLT");
+    // above 35 V the regulator's absolute maximum is exceeded whatever the load
+    expect(codes(setCells(reference2WD(), 9))).toContain("E_L298N_JUMPER_OVERVOLT");
+    expect(codes(setCells(reference2WD(), 4))).toContain("E_OVERVOLTAGE"); // 16.8 V into Uno VIN (max 12)
   });
   it("scores drop with critical errors (computed, not random)", () => {
     const good = validateProject(reference2WD(), "a");

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, GraduationCap, Grid3x3, Maximize, Minus, Pause, Play, Plus, PlusCircle, RotateCcw, ScanLine, Square, Trash2, Wrench } from "lucide-react";
+import { Contrast, Copy, Download, GraduationCap, Grid3x3, Maximize, Minus, Move, Palette, Pause, Play, Plus, PlusCircle, RotateCcw, RotateCw, ScanLine, SlidersHorizontal, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { useWorkspace } from "@/lib/store/workspace";
 import { getComponent } from "@/lib/catalogue";
@@ -10,6 +10,8 @@ import { addPart, uid } from "@/lib/robot/assembly";
 import { buildGraph } from "@/lib/circuit/nets";
 import { validateProject } from "@/lib/circuit/validate";
 import { REPAIRABLE, wireColorFor } from "@/lib/circuit/repair";
+import { ROLE_INFO, netRole, type WireRole } from "@/lib/circuit/wireRole";
+import { duplicateParts, moveSchematic, removeParts, rotateSchematic, wiresTouching } from "@/lib/robot/edit";
 import { LibraryBrowser } from "@/components/library/LibraryBrowser";
 import { pinColor, pinFunctionText } from "@/components/library/PinoutDiagram";
 import { Button, Field, Tabs } from "@/components/ui";
@@ -26,7 +28,25 @@ const W = 170;
 const PITCH = 16;
 const HEAD = 34;
 const WIRE_HEX: Record<WireColor, string> = THEME_WIRES;
-const FLOW_HEX = { power: "#ffd2c2", ground: "#c9d2cc", motor: "#ffc46b", signal: "#fff3a6" };
+const FLOW_HEX = { power: "#ffffff", ground: "#ffffff", motor: "#ffffff", signal: "#ffffff" };
+/** Light circuit canvas (kept light on purpose: wires and ground must never disappear into the background). */
+const CANVAS = { bg: "#F5F6F8", grid: "#E2E6EB", card: "#FFFFFF", ink: "#17212B", muted: "#5B6875", line: "#C3CBD4", well: "#E9EDF1", select: "#1976D2" };
+type Side = "L" | "R" | "T" | "B";
+const STUB: Record<Side, [number, number]> = { L: [-1, 0], R: [1, 0], T: [0, -1], B: [0, 1] };
+const ROT_SIDE: Record<number, Record<Side, Side>> = {
+  0: { L: "L", R: "R", T: "T", B: "B" },
+  90: { L: "T", T: "R", R: "B", B: "L" },
+  180: { L: "R", R: "L", T: "B", B: "T" },
+  270: { L: "B", B: "R", R: "T", T: "L" },
+};
+/** rotate a node-local point (x, y) by rot° clockwise about the node centre */
+function rotPt(x: number, y: number, rot: number, h: number) {
+  const cx = W / 2, cy = h / 2, dx = x - cx, dy = y - cy;
+  if (rot === 90) return { x: cx - dy, y: cy + dx };
+  if (rot === 180) return { x: cx - dx, y: cy - dy };
+  if (rot === 270) return { x: cx + dy, y: cy - dx };
+  return { x, y };
+}
 
 function layout(comp: ComponentRecord) {
   const left = comp.pins.filter((p) => p.side === "L" || p.side === "T");
@@ -45,7 +65,7 @@ interface ConnectFx {
 }
 
 export default function CircuitStudio({ project }: { project: Project }) {
-  const { updateProject, toast } = useApp();
+  const { updateProject, toast, undo } = useApp();
   const { selected, select, focus, clearFocus, scanPart, learning, set: setWs } = useWorkspace();
   const svgRef = useRef<SVGSVGElement>(null);
   const [view, setView] = useState({ x: 0, y: 0, k: 0.85 });
@@ -54,7 +74,16 @@ export default function CircuitStudio({ project }: { project: Project }) {
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [selWire, setSelWire] = useState<string | null>(null);
   const [hoverPin, setHoverPin] = useState<{ part: PartInstance; pin: PinDef } | null>(null);
-  const [drag, setDrag] = useState<{ kind: "pan" | "node"; uid?: string; sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const [drag, setDrag] = useState<{ kind: "pan" | "node"; uid?: string; sx: number; sy: number; ox: number; oy: number; group?: string[]; moved?: boolean } | null>(null);
+  // multi-selection (Shift + click / Shift + drag a box); `selected` stays the primary part for the inspector
+  const [multi, setMulti] = useState<string[]>([]);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [colorMode, setColorMode] = useState<"function" | "custom">("function");
+  const [contrast, setContrast] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
+  const [hoverWire, setHoverWire] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [confirmDel, setConfirmDel] = useState<{ uids: string[]; wires: number } | null>(null);
+  const [undoBar, setUndoBar] = useState<string | null>(null);
   const [bottom, setBottom] = useState<"connections" | "issues" | "bench">("connections");
   const [fx, setFx] = useState<ConnectFx | null>(null);
   const validate = useValidate(project);
@@ -76,8 +105,52 @@ export default function CircuitStudio({ project }: { project: Project }) {
     const l = layouts.get(partUid);
     const pp = l?.pos.get(pinId);
     if (!part || !pp) return null;
-    return { x: part.schematic.x + pp.x, y: part.schematic.y + pp.y, side: pp.side };
+    const rot = part.schematic.rot ?? 0;
+    const q = rotPt(pp.x, pp.y, rot, l!.h);
+    return { x: part.schematic.x + q.x, y: part.schematic.y + q.y, side: ROT_SIDE[rot][pp.side] };
   };
+  /** screen-independent bounding box of a (possibly rotated) node */
+  const nodeBox = (p: PartInstance) => {
+    const l = layouts.get(p.uid);
+    const h = l?.h ?? 60;
+    const rot = p.schematic.rot ?? 0;
+    const turned = rot === 90 || rot === 270;
+    const w2 = turned ? h : W, h2 = turned ? W : h;
+    return { x: p.schematic.x + W / 2 - w2 / 2, y: p.schematic.y + h / 2 - h2 / 2, w: w2, h: h2 };
+  };
+  const selectedSet = multi.length ? multi : selected ? [selected] : [];
+  const clearSelection = () => {
+    select(null);
+    setMulti([]);
+  };
+  const deleteParts = (uids: string[], confirmed = false) => {
+    if (!uids.length) return;
+    const n = wiresTouching(project, uids).length;
+    if (!confirmed && n >= 4) return setConfirmDel({ uids, wires: n });
+    const labels = project.parts.filter((p) => uids.includes(p.uid)).map((p) => p.label);
+    updateProject(project.id, (p) => removeParts(p, uids));
+    setConfirmDel(null);
+    clearSelection();
+    setSelWire(null);
+    setUndoBar(`Deleted ${labels.length > 2 ? `${labels.length} components` : labels.join(" and ")}${n ? ` and ${n} connection${n === 1 ? "" : "s"}` : ""}.`);
+  };
+  const duplicateSel = (uids: string[]) => {
+    if (!uids.length) return;
+    let created: string[] = [];
+    updateProject(project.id, (p) => {
+      const r = duplicateParts(p, uids);
+      created = r.created;
+      return r.project;
+    });
+    if (created.length === 1) {
+      select(created[0]);
+      setMulti([]);
+    } else {
+      select(created[0] ?? null);
+      setMulti(created);
+    }
+  };
+  const rotateSel = (uids: string[], dir: 1 | -1) => uids.length && updateProject(project.id, (p) => rotateSchematic(p, uids, dir));
   const toWorld = (cx: number, cy: number) => {
     const r = svgRef.current!.getBoundingClientRect();
     return { x: (cx - r.left - view.x) / view.k, y: (cy - r.top - view.y) / view.k };
@@ -111,16 +184,45 @@ export default function CircuitStudio({ project }: { project: Project }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
-      if (e.key === "Escape") setPending(null);
-      if ((e.key === "Delete" || e.key === "Backspace") && selWire) {
-        updateProject(project.id, (p) => ({ ...p, wires: p.wires.filter((w) => w.id !== selWire) }));
+      if (e.key === "Escape") {
+        setPending(null);
         setSelWire(null);
+        setConfirmDel(null);
+        select(null);
+        setMulti([]);
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selWire) {
+          updateProject(project.id, (p) => ({ ...p, wires: p.wires.filter((w) => w.id !== selWire) }));
+          setSelWire(null);
+        } else if (selectedSet.length) {
+          e.preventDefault();
+          deleteParts(selectedSet);
+        }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d" && selectedSet.length) {
+        e.preventDefault();
+        duplicateSel(selectedSet);
+        return;
+      }
+      if (selectedSet.length && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        const st = e.shiftKey ? 50 : 10;
+        const [dx, dy] = e.key === "ArrowLeft" ? [-st, 0] : e.key === "ArrowRight" ? [st, 0] : e.key === "ArrowUp" ? [0, -st] : [0, st];
+        updateProject(project.id, (p) => moveSchematic(p, selectedSet, dx, dy));
       }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [selWire, project.id, updateProject]);
+  });
 
+  useEffect(() => {
+    if (!undoBar) return;
+    const t = setTimeout(() => setUndoBar(null), 9000);
+    return () => clearTimeout(t);
+  }, [undoBar]);
   useEffect(() => {
     if (!fx) return;
     const t = setTimeout(() => setFx(null), 3800);
@@ -181,12 +283,11 @@ export default function CircuitStudio({ project }: { project: Project }) {
   const fit = () => {
     if (!parts.length || !svgRef.current) return;
     const r = svgRef.current.getBoundingClientRect();
-    const xs = parts.map(({ p }) => p.schematic.x),
-      ys = parts.map(({ p }) => p.schematic.y);
-    const maxX = Math.max(...xs) + W + 80,
-      maxY = Math.max(...parts.map(({ p }) => p.schematic.y + layouts.get(p.uid)!.h)) + 40;
-    const minX = Math.min(...xs) - 80,
-      minY = Math.min(...ys) - 40;
+    const bs = parts.map(({ p }) => nodeBox(p));
+    const maxX = Math.max(...bs.map((b) => b.x + b.w)) + 80,
+      maxY = Math.max(...bs.map((b) => b.y + b.h)) + 40;
+    const minX = Math.min(...bs.map((b) => b.x)) - 80,
+      minY = Math.min(...bs.map((b) => b.y)) - 40;
     const k = Math.min(1.5, Math.min(r.width / (maxX - minX), r.height / (maxY - minY)));
     setView({ k, x: -minX * k + (r.width - (maxX - minX) * k) / 2, y: -minY * k + 10 });
   };
@@ -202,10 +303,19 @@ export default function CircuitStudio({ project }: { project: Project }) {
     const a = pinXY(from.part, from.pin),
       b = pinXY(to.part, to.pin);
     if (!a || !b) return null;
-    const ax = a.x + (a.side === "L" ? -14 : 14),
-      bx = b.x + (b.side === "L" ? -14 : 14);
-    const mx = a.side === b.side ? (a.side === "L" ? Math.min(ax, bx) - 16 : Math.max(ax, bx) + 16) : (ax + bx) / 2;
-    return { d: `M${a.x},${a.y} H${ax} H${mx} V${b.y} H${bx} H${b.x}`, mid: { x: mx, y: (a.y + b.y) / 2 } };
+    const [sax, say] = STUB[a.side as Side], [sbx, sby] = STUB[b.side as Side];
+    const ax = a.x + sax * 14, ay = a.y + say * 14, bx = b.x + sbx * 14, by = b.y + sby * 14;
+    if (say === 0 && sby === 0) {
+      const mx = a.side === b.side ? (a.side === "L" ? Math.min(ax, bx) - 16 : Math.max(ax, bx) + 16) : (ax + bx) / 2;
+      return { d: `M${a.x},${a.y} H${ax} H${mx} V${b.y} H${bx} H${b.x}`, mid: { x: mx, y: (a.y + b.y) / 2 } };
+    }
+    if (sax === 0 && sbx === 0) {
+      const my = a.side === b.side ? (a.side === "T" ? Math.min(ay, by) - 16 : Math.max(ay, by) + 16) : (ay + by) / 2;
+      return { d: `M${a.x},${a.y} V${ay} V${my} H${b.x} V${by} V${b.y}`, mid: { x: (a.x + b.x) / 2, y: my } };
+    }
+    // one horizontal stub, one vertical: an L-shaped route through the corner
+    const corner = sax !== 0 ? { x: bx, y: ay } : { x: ax, y: by };
+    return { d: `M${a.x},${a.y} L${ax},${ay} L${corner.x},${corner.y} L${bx},${by} L${b.x},${b.y}`, mid: corner };
   };
   const wirePath = (w: Wire) => wirePathOf(w.from, w.to)?.d ?? null;
 
@@ -246,6 +356,31 @@ export default function CircuitStudio({ project }: { project: Project }) {
     return null;
   };
 
+  /** Actions for the selected component(s), floating above the selection. */
+  const renderSelectionToolbar = () => {
+    const sel = project.parts.filter((p) => selectedSet.includes(p.uid) && p.inCircuit);
+    if (!sel.length || plan || drag?.moved) return null;
+    const bs = sel.map(nodeBox);
+    const x = Math.min(...bs.map((b) => b.x)), y = Math.min(...bs.map((b) => b.y));
+    const yb = Math.max(...bs.map((b) => b.y + b.h));
+    const left = Math.max(4, view.x + x * view.k);
+    // above the selection — or below it when that would collide with the canvas toolbars at the top
+    const above = view.y + y * view.k - 38;
+    const top = above < 92 ? view.y + yb * view.k + 6 : above;
+    const ids = sel.map((p) => p.uid);
+    return (
+      <div className="absolute z-20 flex items-center gap-0.5 rounded-md border border-[#C3CBD4] bg-white p-0.5 text-[#17212B] shadow-lg" style={{ left, top }} role="toolbar" aria-label="Component actions" data-testid="part-toolbar">
+        <span className="px-1.5 font-mono text-[10px]">{sel.length === 1 ? sel[0].label : `${sel.length} selected`}</span>
+        <button className="rounded p-1 hover:bg-[#ECEFF2]" title="Move: drag the title bar, or use the arrow keys (Shift = 5 steps)" aria-label="Move"><Move size={14} /></button>
+        <button className="rounded p-1 hover:bg-[#ECEFF2]" title="Rotate anticlockwise" aria-label="Rotate anticlockwise" onClick={() => rotateSel(ids, -1)}><RotateCcw size={14} /></button>
+        <button className="rounded p-1 hover:bg-[#ECEFF2]" title="Rotate clockwise" aria-label="Rotate clockwise" onClick={() => rotateSel(ids, 1)}><RotateCw size={14} /></button>
+        <button className="rounded p-1 hover:bg-[#ECEFF2]" title="Duplicate (Ctrl+D)" aria-label="Duplicate" onClick={() => duplicateSel(ids)}><Copy size={14} /></button>
+        <button className="rounded p-1 text-[#C62828] hover:bg-[#FDECEA]" title="Delete (Delete key)" aria-label="Delete" onClick={() => deleteParts(ids)}><Trash2 size={14} /></button>
+        <button className="rounded p-1 hover:bg-[#ECEFF2]" title="Properties" aria-label="View properties" onClick={() => { select(ids[0]); document.getElementById("cs-inspector")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }}><SlidersHorizontal size={14} /></button>
+      </div>
+    );
+  };
+
   return (
     <div className="grid h-full grid-cols-1 md:grid-cols-[1fr_280px] xl:grid-cols-[260px_1fr_300px]">
       <aside className="hidden min-h-0 flex-col border-r border-line bg-bg2 xl:flex">
@@ -260,7 +395,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
 
       <div className="relative flex min-h-0 min-w-0 flex-col">
           {/* simulation toolbar */}
-          <div className="flex flex-wrap items-center gap-1 border-b border-line bg-bg2 p-1.5 md:absolute md:right-3 md:top-3 md:z-10 md:max-w-[70%] md:justify-end md:border-0 md:bg-transparent md:p-0" role="toolbar" aria-label="Simulation">
+          <div className="flex flex-wrap items-center gap-1 border-b border-line bg-bg2 p-1.5 md:absolute md:right-3 md:top-3 md:z-10 md:max-w-[70%] md:justify-end md:rounded-md md:border md:border-line md:bg-bg/95 md:p-1 md:shadow-lg" role="toolbar" aria-label="Simulation">
             {bench.mode === "running" ? (
               <Button size="sm" onClick={bench.pause} title="Pause the bench"><Pause size={14} /> Pause</Button>
             ) : (
@@ -272,14 +407,15 @@ export default function CircuitStudio({ project }: { project: Project }) {
             <Button size="sm" variant="secondary" onClick={fixIssues} title="Repair problems step by step" data-testid="fix-issues"><Wrench size={14} /><span className="hidden sm:inline"> Fix issues</span></Button>
             <Button size="sm" variant={learning ? "primary" : "outline"} aria-pressed={learning} onClick={() => setWs({ learning: !learning })} title="Learning mode: explain the selected component"><GraduationCap size={14} /><span className="hidden sm:inline"> Learn</span></Button>
           </div>
-          <div className="pointer-events-none flex items-center gap-1.5 bg-bg2 px-2 pb-1 font-mono text-[10px] md:absolute md:right-3 md:top-12 md:z-10 md:bg-transparent md:p-0" aria-live="polite">
+          <div className="pointer-events-none flex items-center gap-1.5 bg-bg2 px-2 pb-1 font-mono text-[10px] md:absolute md:right-3 md:top-[52px] md:z-10 md:rounded md:bg-bg/90 md:px-2 md:py-0.5" aria-live="polite">
             <span className={`h-2 w-2 rounded-full ${sim?.faults.length ? "bg-bad" : bench.mode === "running" ? "bg-ok" : bench.mode === "paused" ? "bg-warn" : "bg-dim"}`} />
             <span className="text-muted">{sim?.faults.length ? "BENCH HALTED · SHORT CIRCUIT" : bench.mode === "running" ?`BENCH RUNNING · ${st?.t.toFixed(1)} s${sim?.hasProgram ? " · code running" : " · no program"}` : bench.mode === "paused" ? "BENCH PAUSED" : "POWERED OFF"}</span>
           </div>
         <div className="relative min-h-[340px] flex-1 overflow-hidden md:min-h-0" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { const id = e.dataTransfer.getData("text/component-id"); if (id) add(id); }}>
           <svg
             ref={svgRef}
-            className="h-full w-full touch-none select-none bg-[var(--scene-bg)]"
+            className="h-full w-full touch-none select-none"
+            style={{ background: CANVAS.bg }}
             onWheel={(e) => {
               const r = svgRef.current!.getBoundingClientRect();
               const k = Math.max(0.25, Math.min(2.5, view.k * (e.deltaY < 0 ? 1.1 : 0.9)));
@@ -289,14 +425,21 @@ export default function CircuitStudio({ project }: { project: Project }) {
             }}
             onPointerDown={(e) => {
               if (e.target === svgRef.current || (e.target as Element).getAttribute("data-bg")) {
-                setDrag({ kind: "pan", sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y });
-                select(null);
                 setSelWire(null);
                 clearFocus();
+                if (e.shiftKey) {
+                  const w0 = toWorld(e.clientX, e.clientY);
+                  setBox({ x0: w0.x, y0: w0.y, x1: w0.x, y1: w0.y });
+                  return;
+                }
+                setDrag({ kind: "pan", sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y });
+                clearSelection();
               }
             }}
             onPointerMove={(e) => {
-              setMouse(toWorld(e.clientX, e.clientY));
+              const wpt = toWorld(e.clientX, e.clientY);
+              setMouse(wpt);
+              if (box) return setBox({ ...box, x1: wpt.x, y1: wpt.y });
               if (!drag) return;
               if (drag.kind === "pan") setView({ ...view, x: drag.ox + e.clientX - drag.sx, y: drag.oy + e.clientY - drag.sy });
               else if (drag.uid) {
@@ -306,17 +449,34 @@ export default function CircuitStudio({ project }: { project: Project }) {
                   nx = Math.round(nx / 10) * 10;
                   ny = Math.round(ny / 10) * 10;
                 }
-                updateProject(project.id, (p) => ({ ...p, parts: p.parts.map((x) => (x.uid === drag.uid ? { ...x, schematic: { ...x.schematic, x: nx, y: ny } } : x)) }), { history: false });
+                const ddx = nx - drag.ox, ddy = ny - drag.oy;
+                const group = drag.group ?? [drag.uid];
+                // one undo step per drag: the first move is recorded, the rest of the drag is not
+                updateProject(project.id, (p) => {
+                  const start = p.parts.find((x) => x.uid === drag.uid)!;
+                  return moveSchematic(p, group, ddx - (start.schematic.x - drag.ox), ddy - (start.schematic.y - drag.oy));
+                }, { history: !drag.moved });
+                if (!drag.moved) setDrag({ ...drag, moved: true });
               }
             }}
-            onPointerUp={() => setDrag(null)}
-            onPointerLeave={() => setDrag(null)}
+            onPointerUp={() => {
+              setDrag(null);
+              if (box) {
+                const [x0, x1] = [Math.min(box.x0, box.x1), Math.max(box.x0, box.x1)], [y0, y1] = [Math.min(box.y0, box.y1), Math.max(box.y0, box.y1)];
+                const hit = parts.filter(({ p }) => { const b = nodeBox(p); return b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0; }).map(({ p }) => p.uid);
+                const merged = [...new Set([...selectedSet, ...hit])];
+                setMulti(merged.length > 1 ? merged : []);
+                select(merged[0] ?? null);
+                setBox(null);
+              }
+            }}
+            onPointerLeave={() => { setDrag(null); setBox(null); setHoverWire(null); }}
           >
             <defs>
               <filter id="bf-node-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1.5" stdDeviation="2" floodColor="#141A16" floodOpacity="0.45" /></filter>
               <filter id="bf-led-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="3" /></filter>
               <pattern id="grid" width={20} height={20} patternUnits="userSpaceOnUse">
-                <path d="M 20 0 L 0 0 0 20" fill="none" stroke={THEME.gridMinor} strokeWidth={1} />
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke={CANVAS.grid} strokeWidth={1} />
               </pattern>
             </defs>
             <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
@@ -334,13 +494,14 @@ export default function CircuitStudio({ project }: { project: Project }) {
                 const cut = cutWires.has(w.id);
                 const fresh = fx?.wireId === w.id;
                 return (
-                  <g key={w.id} onPointerDown={(e) => { e.stopPropagation(); setSelWire(w.id); select(null); }} className="cursor-pointer" data-wire={w.id}>
+                  <g key={w.id} onPointerDown={(e) => { e.stopPropagation(); setSelWire(w.id); clearSelection(); }} onPointerMove={(e) => { const r = svgRef.current!.getBoundingClientRect(); setHoverWire({ id: w.id, x: e.clientX - r.left, y: e.clientY - r.top }); }} onPointerLeave={() => setHoverWire(null)} className="cursor-pointer" data-wire={w.id} data-role={netRole(graph, net)}>
                     <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
-                    <path d={d} pathLength={fresh ? 1 : undefined} className={fresh ? "bf-draw" : fault ? "bf-blink" : undefined} fill="none" stroke={fault ? THEME.accent : bad ? THEME.accent : WIRE_HEX[w.color]} strokeWidth={fault ? 4 : isSel || bad ? 3.5 : 2} strokeLinejoin="round" opacity={cut ? 0.25 : selWire && !isSel ? 0.55 : 1} />
+                    {(contrast || isSel) && <path d={d} fill="none" stroke={isSel ? CANVAS.select : "#000"} strokeWidth={(fault ? 4 : isSel || bad ? 3.5 : contrast ? 3 : 2) + 2.6} strokeLinejoin="round" opacity={isSel ? 0.35 : 0.9} />}
+                    <path d={d} pathLength={fresh ? 1 : undefined} className={fresh ? "bf-draw" : fault ? "bf-blink" : undefined} fill="none" stroke={fault ? THEME.accent : bad ? THEME.accent : colorMode === "function" ? ROLE_INFO[netRole(graph, net)].hex : WIRE_HEX[w.color]} strokeWidth={fault ? 4 : isSel || bad ? 3.5 : contrast ? 3 : 2.2} strokeLinejoin="round" opacity={cut ? 0.25 : selWire && !isSel ? 0.55 : 1} />
                     {flow && !cut ? (
                       <path d={d} fill="none" stroke={FLOW_HEX[flow.kind]} strokeWidth={flow.kind === "signal" ? 1.2 : 1.6} opacity={0.35 + 0.6 * flow.level} className={`bf-flow ${flow.dir < 0 ? "bf-flow-rev" : ""}`} style={{ animationDuration: `${Math.max(0.25, 1.1 - 0.8 * flow.level)}s`, animationPlayState: bench.mode === "paused" ? "paused" : "running" }} data-flow={flow.kind} />
                     ) : (
-                      !sim && potential && <path d={d} fill="none" stroke="#fff" strokeWidth={1} opacity={0.35} className="bf-flow" />
+                      !sim && potential && <path d={d} fill="none" stroke="#fff" strokeWidth={1} opacity={0.5} className="bf-flow" />
                     )}
                     {cut && <path d={d} fill="none" stroke={THEME.accent} strokeWidth={3.2} className="bf-cut" />}
                   </g>
@@ -360,35 +521,49 @@ export default function CircuitStudio({ project }: { project: Project }) {
               {/* rubber band */}
               {pending && (() => {
                 const a = pinXY(pending.part, pending.pin);
-                return a ? <line x1={a.x} y1={a.y} x2={mouse.x} y2={mouse.y} stroke={THEME.ivory} strokeWidth={2} strokeDasharray="6 4" /> : null;
+                return a ? <line x1={a.x} y1={a.y} x2={mouse.x} y2={mouse.y} stroke={CANVAS.ink} strokeWidth={2} strokeDasharray="6 4" /> : null;
               })()}
               {/* parts */}
               {parts.map(({ p, c }) => {
                 const l = layouts.get(p.uid)!;
-                const isSel = selected === p.uid;
+                const isSel = selectedSet.includes(p.uid);
                 const isFocus = focus?.partUid === p.uid;
+                const rot = p.schematic.rot ?? 0;
+                // text stays readable: upside-down positions are flipped back
+                const up = (tx: number, ty: number) => (rot === 180 || rot === 270 ? `rotate(180 ${tx} ${ty})` : undefined);
                 const motor = st?.motors[p.uid];
                 const led = st?.dc.find((e) => e.kind === "led" && e.partUid === p.uid);
                 const bat = st?.battery?.uid === p.uid ? st.battery : null;
                 return (
-                  <g key={p.uid} transform={`translate(${p.schematic.x},${p.schematic.y})`} data-part={p.label}>
+                  <g key={p.uid} transform={`translate(${p.schematic.x},${p.schematic.y})${rot ? ` rotate(${rot} ${W / 2} ${l.h / 2})` : ""}`} data-part={p.label} data-rot={rot}>
                     {repairPart === p.uid && <rect x={-8} y={-8} width={W + 16} height={l.h + 16} rx={10} fill="none" stroke={rstep?.kind === "configure" ? "#3FB37F" : THEME.accent} strokeWidth={2.5} strokeDasharray="8 5" className="bf-flow" />}
-                    <rect width={W} height={l.h} rx={6} fill={THEME.card} stroke={isFocus || isSel || scanPart === p.uid ? THEME.accent : THEME.cardLine} filter="url(#bf-node-shadow)" strokeWidth={isFocus || isSel ? 2 : 1} />
+                    <rect width={W} height={l.h} rx={6} fill={CANVAS.card} stroke={isFocus || scanPart === p.uid ? THEME.accent : isSel ? CANVAS.select : CANVAS.line} filter="url(#bf-node-shadow)" strokeWidth={isFocus || isSel ? 2.2 : 1} />
                     <rect
                       width={W}
                       height={26}
                       rx={6}
-                      fill={c.kind === "controller" ? "#D6E2DF" : c.kind === "motor-driver" ? "#F0D9D3" : c.kind === "battery" ? "#EDE1C5" : c.kind === "dc-motor" ? "#E7E1C3" : "#E4E0D2"}
+                      fill={c.kind === "controller" ? "#DCE8F5" : c.kind === "motor-driver" ? "#F8DDD6" : c.kind === "battery" ? "#F6E7C8" : c.kind === "dc-motor" ? "#EDE8CF" : "#ECEFF2"}
                       className="cursor-move"
                       onPointerDown={(e) => {
                         e.stopPropagation();
-                        select(p.uid);
                         setSelWire(null);
-                        setDrag({ kind: "node", uid: p.uid, sx: e.clientX, sy: e.clientY, ox: p.schematic.x, oy: p.schematic.y });
+                        if (e.shiftKey) {
+                          // Shift + click toggles the part in the multi-selection
+                          const base = selectedSet.includes(p.uid) ? selectedSet.filter((x) => x !== p.uid) : [...selectedSet, p.uid];
+                          setMulti(base.length > 1 ? base : []);
+                          select(base[base.length - 1] ?? null);
+                          return;
+                        }
+                        const group = selectedSet.includes(p.uid) && selectedSet.length > 1 ? selectedSet : [p.uid];
+                        if (group.length === 1) {
+                          select(p.uid);
+                          setMulti([]);
+                        }
+                        setDrag({ kind: "node", uid: p.uid, sx: e.clientX, sy: e.clientY, ox: p.schematic.x, oy: p.schematic.y, group });
                       }}
                     />
-                    <text x={8} y={12} fill={THEME.cardInk} fontSize={10} fontWeight={600} fontFamily="Space Grotesk" pointerEvents="none">{p.label}</text>
-                    <text x={8} y={22} fill={THEME.cardMuted} fontSize={8} fontFamily="JetBrains Mono" pointerEvents="none">{c.name.slice(0, motor || bat || led ? 20 : 30)}</text>
+                    <text x={8} y={12} transform={up(W / 2, 12)} textAnchor={rot === 180 || rot === 270 ? "end" : undefined} dx={rot === 180 || rot === 270 ? W - 16 : 0} fill={CANVAS.ink} fontSize={10} fontWeight={600} fontFamily="Space Grotesk" pointerEvents="none">{p.label}</text>
+                    <text x={8} y={22} transform={up(W / 2, 22)} textAnchor={rot === 180 || rot === 270 ? "end" : undefined} dx={rot === 180 || rot === 270 ? W - 16 : 0} fill={CANVAS.muted} fontSize={8} fontFamily="JetBrains Mono" pointerEvents="none">{c.name.slice(0, motor || bat || led ? 20 : 30)}</text>
                     {/* bench: motor rotor */}
                     {motor && (
                       <g pointerEvents="none" data-motor-rpm={Math.round(motor.rpm)}>
@@ -396,16 +571,62 @@ export default function CircuitStudio({ project }: { project: Project }) {
                         <g className={Math.abs(motor.rpm) > 1 ? "bf-spin" : undefined} style={{ animationDuration: `${Math.max(0.08, 60 / Math.max(1, Math.abs(motor.rpm)))}s`, animationDirection: motor.rpm < 0 ? "reverse" : "normal", animationPlayState: bench.mode === "paused" ? "paused" : "running" }}>
                           {[0, 120, 240].map((a) => <line key={a} x1={W - 14} y1={13} x2={W - 14 + 7 * Math.cos((a * Math.PI) / 180)} y2={13 + 7 * Math.sin((a * Math.PI) / 180)} stroke={THEME.accent} strokeWidth={1.8} />)}
                         </g>
-                        <text x={W - 26} y={22} textAnchor="end" fill={THEME.cardInk} fontSize={7.5} fontFamily="JetBrains Mono">{motor.volts === null ? "coast" : `${motor.volts.toFixed(1)}V ${Math.round(motor.rpm)}rpm`}</text>
+                        <text x={W - 26} y={22} transform={up(W - 50, 20)} textAnchor="end" fill={CANVAS.ink} fontSize={7.5} fontFamily="JetBrains Mono">{motor.volts === null ? "coast" : `${motor.volts.toFixed(1)}V ${Math.round(motor.rpm)}rpm`}</text>
                       </g>
                     )}
                     {bat && (
                       <g pointerEvents="none">
                         <rect x={W - 44} y={5} width={34} height={10} rx={2} fill="#fff" stroke={THEME.cardInk} strokeWidth={0.8} />
                         <rect x={W - 43} y={6} width={32 * bat.soc} height={8} rx={1.5} fill="#3FB37F" />
-                        <text x={W - 8} y={23} textAnchor="end" fill={THEME.cardInk} fontSize={7.5} fontFamily="JetBrains Mono">{bat.volts.toFixed(2)}V {bat.currentA.toFixed(2)}A</text>
+                        <text x={W - 8} y={23} transform={up(W - 30, 20)} textAnchor="end" fill={CANVAS.ink} fontSize={7.5} fontFamily="JetBrains Mono">{bat.volts.toFixed(2)}V {bat.currentA.toFixed(2)}A</text>
                       </g>
                     )}
+                    {/* bench: interactive switch — click the body to open / close it */}
+                    {sim && c.kind === "switch" && (
+                      <g className="cursor-pointer" onPointerDown={(e) => { e.stopPropagation(); updateProject(project.id, (pr) => ({ ...pr, parts: pr.parts.map((x) => (x.uid === p.uid ? { ...x, config: { ...x.config, closed: !Boolean(x.config.closed ?? c.options.find((o) => o.key === "closed")?.default) } } : x)) }), { history: false }); }} data-switch-toggle={p.label}>
+                        <rect x={W - 46} y={4} width={38} height={14} rx={7} fill={Boolean(p.config.closed ?? c.options.find((o) => o.key === "closed")?.default) ? "#2E9D58" : "#9AA5B1"} />
+                        <circle cx={Boolean(p.config.closed ?? c.options.find((o) => o.key === "closed")?.default) ? W - 15 : W - 39} cy={11} r={5.5} fill="#fff" />
+                        <text x={W - 27} y={26} transform={up(W - 27, 24)} textAnchor="middle" fontSize={6.5} fill={CANVAS.muted} fontFamily="JetBrains Mono">{Boolean(p.config.closed ?? c.options.find((o) => o.key === "closed")?.default) ? "CLOSED" : "OPEN"}</text>
+                      </g>
+                    )}
+                    {/* bench: servo horn at the simulated angle */}
+                    {st?.servos[p.uid] && (() => {
+                      const sv = st.servos[p.uid];
+                      const a = ((sv.angle - 90) * Math.PI) / 180;
+                      return (
+                        <g pointerEvents="none" data-servo-angle={Math.round(sv.angle)}>
+                          <circle cx={W - 16} cy={14} r={9} fill="#fff" stroke={CANVAS.ink} strokeWidth={0.8} />
+                          <line x1={W - 16} y1={14} x2={W - 16 + 8 * Math.sin(a)} y2={14 - 8 * Math.cos(a)} stroke={sv.powered ? "#1976D2" : "#9AA5B1"} strokeWidth={2.4} strokeLinecap="round" />
+                          <text x={W - 30} y={22} transform={up(W - 40, 20)} textAnchor="end" fontSize={7.5} fill={CANVAS.ink} fontFamily="JetBrains Mono">{sv.pin === null ? "no signal" : `${Math.round(sv.angle)}°`}</text>
+                        </g>
+                      );
+                    })()}
+                    {/* bench: sensor environment and capacitor voltage */}
+                    {sim && (() => {
+                      const env = sim.env[p.uid];
+                      const capE = st?.dc.find((e) => e.partUid === p.uid && (e.kind === "capacitor" || e.kind === "ldr"));
+                      const text = env?.temperature !== undefined ? `${env.temperature.toFixed(1)}°C ${Math.round(env.humidity ?? 0)}%` : capE?.kind === "ldr" ? `${Math.round(env?.lux ?? 300)} lux · ${capE.ohms! >= 1000 ? `${(capE.ohms! / 1000).toFixed(1)}k` : Math.round(capE.ohms!)}Ω` : capE?.kind === "capacitor" ? `${capE.voltage.toFixed(2)} V` : null;
+                      if (!text) return null;
+                      return <text x={W - 8} y={22} transform={up(W - 30, 20)} textAnchor="end" fontSize={7.5} fill={capE?.overload ? "#C62828" : CANVAS.ink} fontFamily="JetBrains Mono" pointerEvents="none">{capE?.overload ? "⚠ " : ""}{text}</text>;
+                    })()}
+                    {/* bench: what a wired display shows */}
+                    {st?.displays.filter((d) => d.partUid === p.uid).map((d, di) => {
+                      const oled = d.kind === "oled";
+                      const sc = W / 128;
+                      const hh = oled ? 64 * sc : 10 + 12 * Math.max(1, d.lines.length || 2);
+                      return (
+                        <g key={di} transform={`translate(0 ${l.h + 6})`} pointerEvents="none" data-display={p.label}>
+                          <rect width={W} height={hh} rx={3} fill={oled ? "#05080A" : d.backlight && d.on ? "#7FB3D5" : "#3D4F5C"} stroke={CANVAS.ink} strokeWidth={1} />
+                          {d.reason ? (
+                            <text x={6} y={14} fontSize={7} fill={oled ? "#8A97A3" : "#E8EEF2"} fontFamily="JetBrains Mono">{d.reason.slice(0, 44)}</text>
+                          ) : oled ? (
+                            d.runs.map((r, i) => <text key={i} x={r.x * sc + 1} y={(r.y + 7 * r.size) * sc + 1} fontSize={8 * r.size * sc} fill="#6FE3FF" fontFamily="JetBrains Mono">{r.ch}</text>)
+                          ) : (
+                            d.on && d.lines.map((ln, i) => <text key={i} x={6} y={16 + i * 12} fontSize={10} fill={d.backlight ? "#0B2233" : "#1d2a33"} fontFamily="JetBrains Mono" xmlSpace="preserve">{ln}</text>)
+                          )}
+                        </g>
+                      );
+                    })}
                     {led && (
                       <g pointerEvents="none">
                         <circle cx={W - 14} cy={13} r={8} fill={THEME.accent} opacity={0.25 + 0.75 * (led.brightness ?? 0)} filter={led.brightness ? "url(#bf-led-glow)" : undefined} />
@@ -435,7 +656,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
                       return (
                         <g key={pin.id} onPointerEnter={() => setHoverPin({ part: p, pin })} onPointerLeave={() => setHoverPin(null)}>
                           <line x1={pp.x} y1={pp.y} x2={pp.side === "L" ? pp.x + 8 : pp.x - 8} y2={pp.y} stroke={pinColor(pin)} strokeWidth={1.5} />
-                          <text x={pp.side === "L" ? 12 : W - 12} y={pp.y + 3} textAnchor={pp.side === "L" ? "start" : "end"} fill={hl || rk ? THEME.accentInk : THEME.cardInk} fontWeight={rk ? 700 : 400} fontSize={8.5} fontFamily="JetBrains Mono" pointerEvents="none">
+                          <text x={pp.side === "L" ? 12 : W - 12} y={pp.y + 3} transform={up(pp.side === "L" ? 12 : W - 12, pp.y)} textAnchor={(pp.side === "L") !== (rot === 180 || rot === 270) ? "start" : "end"} fill={hl || rk ? THEME.accentInk : CANVAS.ink} fontWeight={rk ? 700 : 400} fontSize={8.5} fontFamily="JetBrains Mono" pointerEvents="none">
                             {pin.label.length > 18 ? pin.label.slice(0, 18) + "…" : pin.label}
                           </text>
                           {(hl || rk || fxPin) && (
@@ -446,14 +667,14 @@ export default function CircuitStudio({ project }: { project: Project }) {
                           {tag && (
                             <g pointerEvents="none">
                               <rect x={pp.side === "L" ? pp.x - 44 : pp.x + 4} y={pp.y - 6} width={40} height={11} rx={2} fill="#1d2721" opacity={0.85} />
-                              <text x={pp.side === "L" ? pp.x - 24 : pp.x + 24} y={pp.y + 2.5} textAnchor="middle" fill="#ffe08a" fontSize={7} fontFamily="JetBrains Mono">{tag}</text>
+                              <text x={pp.side === "L" ? pp.x - 24 : pp.x + 24} y={pp.y + 2.5} transform={up(pp.side === "L" ? pp.x - 24 : pp.x + 24, pp.y)} textAnchor="middle" fill="#ffe08a" fontSize={7} fontFamily="JetBrains Mono">{tag}</text>
                             </g>
                           )}
                           <circle
                             cx={pp.x}
                             cy={pp.y}
                             r={isPending ? 6 : 4.2}
-                            fill={connected ? pinColor(pin) : THEME.cardWell}
+                            fill={connected ? pinColor(pin) : CANVAS.well}
                             stroke={issuePins.has(key) ? THEME.accent : pinColor(pin)}
                             strokeWidth={1.5}
                             className="cursor-crosshair"
@@ -471,14 +692,18 @@ export default function CircuitStudio({ project }: { project: Project }) {
                   </g>
                 );
               })}
+              {box && <rect x={Math.min(box.x0, box.x1)} y={Math.min(box.y0, box.y1)} width={Math.abs(box.x1 - box.x0)} height={Math.abs(box.y1 - box.y0)} fill={CANVAS.select} fillOpacity={0.08} stroke={CANVAS.select} strokeDasharray="5 4" pointerEvents="none" />}
             </g>
           </svg>
-          <div className="absolute left-3 top-3 flex gap-1">
+          {renderSelectionToolbar()}
+          <div className="absolute left-3 top-3 z-10 flex gap-1 rounded-md border border-line bg-bg/95 p-1 shadow-lg">
             <Button size="sm" onClick={() => setView({ ...view, k: Math.min(2.5, view.k * 1.2) })} title="Zoom in"><Plus size={14} /></Button>
             <Button size="sm" onClick={() => setView({ ...view, k: Math.max(0.25, view.k / 1.2) })} title="Zoom out"><Minus size={14} /></Button>
             <Button size="sm" onClick={fit} title="Fit"><Maximize size={14} /></Button>
             <Button size="sm" variant={snap ? "secondary" : "outline"} onClick={() => setSnap(!snap)} title="Grid snapping"><Grid3x3 size={14} /></Button>
             <Button size="sm" onClick={() => exportCircuit(project, graph)} title="Export netlist"><Download size={14} /><span className="hidden lg:inline">Export</span></Button>
+            <Button size="sm" variant={colorMode === "function" ? "secondary" : "outline"} onClick={() => setColorMode(colorMode === "function" ? "custom" : "function")} title={colorMode === "function" ? "Wires coloured by electrical function (click for your own colours)" : "Wires in your own colours (click to colour by function)"} aria-pressed={colorMode === "function"}><Palette size={14} /></Button>
+            <Button size="sm" variant={contrast ? "secondary" : "outline"} onClick={() => setContrast(!contrast)} title="High-contrast wires" aria-pressed={contrast}><Contrast size={14} /></Button>
           </div>
           {pending && <div className="absolute left-1/2 top-12 -translate-x-1/2 rounded border border-brand/50 bg-bg/90 px-3 py-1 text-xs text-brand">Wiring from {project.parts.find((p) => p.uid === pending.part)?.label}.{pending.pin} — click another pin (Esc to cancel)</div>}
           {fx && (
@@ -506,6 +731,51 @@ export default function CircuitStudio({ project }: { project: Project }) {
             </div>
           )}
           <RepairControls player={player} />
+          {colorMode === "function" && project.wires.length > 0 && !plan && (
+            <div className="absolute bottom-3 right-3 max-w-[230px] rounded border border-[#C3CBD4] bg-white/95 p-2 text-[10px] text-[#17212B] shadow" data-testid="wire-legend">
+              <button className="flex w-full items-center justify-between font-mono tracking-widest" onClick={() => setLegendOpen(!legendOpen)} aria-expanded={legendOpen}>WIRE COLOURS <span>{legendOpen ? "−" : "+"}</span></button>
+              {legendOpen && (
+                <ul className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5">
+                  {(Object.keys(ROLE_INFO) as WireRole[]).filter((r) => project.wires.some((w) => netRole(graph, graph.netOf.get(`${w.from.part}.${w.from.pin}`)) === r)).map((r) => (
+                    <li key={r} className="flex items-center gap-1"><span className="inline-block h-1.5 w-4 rounded" style={{ background: ROLE_INFO[r].hex }} />{ROLE_INFO[r].label}</li>
+                  ))}
+                </ul>
+              )}
+              {legendOpen && <div className="mt-1 text-[#5B6875]">Colour shows what the wire carries. Change it in the inspector only in “your colours” mode.</div>}
+            </div>
+          )}
+          {hoverWire && (() => {
+            const w = project.wires.find((x) => x.id === hoverWire.id);
+            if (!w) return null;
+            const net = graph.netOf.get(`${w.from.part}.${w.from.pin}`);
+            const role = netRole(graph, net);
+            const v = liveV(net) ?? net?.voltage ?? null;
+            const flow = st?.flows[w.id];
+            const a = project.parts.find((p) => p.uid === w.from.part)?.label, b = project.parts.find((p) => p.uid === w.to.part)?.label;
+            return (
+              <div className="pointer-events-none absolute z-20 rounded border border-[#C3CBD4] bg-white px-2 py-1 text-[11px] text-[#17212B] shadow" style={{ left: Math.min(hoverWire.x + 12, 9999), top: hoverWire.y + 12 }} role="tooltip" data-testid="wire-tooltip">
+                <div className="font-mono font-semibold">{a}.{w.from.pin} → {b}.{w.to.pin}</div>
+                <div className="flex items-center gap-1"><span className="inline-block h-1.5 w-3 rounded" style={{ background: ROLE_INFO[role].hex }} />{ROLE_INFO[role].label}{v !== null && !net?.isGround ? ` · ${v.toFixed(2)} V` : ""}{flow?.amps !== undefined ? ` · ≈${flow.amps.toFixed(2)} A` : ""}</div>
+              </div>
+            );
+          })()}
+          {confirmDel && (
+            <div className="absolute left-1/2 top-24 z-30 w-[min(420px,92%)] -translate-x-1/2 rounded-lg border border-bad/50 bg-bg/95 p-3 text-sm shadow-xl" role="alertdialog" aria-label="Confirm delete">
+              <div className="font-semibold">Delete {confirmDel.uids.length === 1 ? project.parts.find((p) => p.uid === confirmDel.uids[0])?.label : `${confirmDel.uids.length} components`} and its {confirmDel.wires} connections?</div>
+              <p className="text-xs text-muted">The wires to it are removed too. You can undo this.</p>
+              <div className="mt-2 flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setConfirmDel(null)}>Cancel</Button>
+                <Button size="sm" variant="danger" onClick={() => deleteParts(confirmDel.uids, true)} autoFocus><Trash2 size={12} /> Delete</Button>
+              </div>
+            </div>
+          )}
+          {undoBar && (
+            <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-line bg-bg/95 px-3 py-2 text-xs shadow-xl" role="status" data-testid="undo-bar">
+              {undoBar}
+              <Button size="sm" onClick={() => { undo(project.id); setUndoBar(null); }}><Undo2 size={12} /> Undo</Button>
+              <button onClick={() => setUndoBar(null)} aria-label="Dismiss" className="text-muted hover:text-text"><X size={13} /></button>
+            </div>
+          )}
           {!parts.length && <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted">Add electronic components from the library to start wiring.</div>}
         </div>
         <div className={`${bottom === "bench" ? "h-56" : "h-40"} border-t border-line bg-bg2`}>
@@ -533,7 +803,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
         </div>
       </div>
 
-      <aside className="min-h-0 overflow-auto border-l border-line bg-bg2 p-3 text-sm">
+      <aside id="cs-inspector" className="min-h-0 overflow-auto border-l border-line bg-bg2 p-3 text-sm">
         {learning && selComp && !selectedWire && (
           <div className="mb-4 border-b border-line pb-3">
             <LearnPanel comp={selComp} />
@@ -573,6 +843,11 @@ export default function CircuitStudio({ project }: { project: Project }) {
                 <input type="checkbox" checked={Boolean(selPart.config[o.key] ?? o.default)} onChange={(e) => updateProject(project.id, (p) => ({ ...p, parts: p.parts.map((x) => (x.uid === selPart.uid ? { ...x, config: { ...x.config, [o.key]: e.target.checked } } : x)) }))} />
                 {o.label}
               </label>
+            ))}
+            {selComp.options.filter((o) => o.type === "number").map((o) => (
+              <Field key={o.key} label={`${o.label}${o.unit ? ` (${o.unit})` : ""}`}>
+                <input className="bf-input" type="number" min={o.min} max={o.max} step={o.step} value={Number(selPart.config[o.key] ?? o.default)} onChange={(e) => { const v = Number(e.target.value); if (!Number.isFinite(v)) return; const cl = Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, v)); updateProject(project.id, (p) => ({ ...p, parts: p.parts.map((x) => (x.uid === selPart.uid ? { ...x, config: { ...x.config, [o.key]: cl } } : x)) })); }} />
+              </Field>
             ))}
             {selComp.options.filter((o) => o.type === "select").map((o) => (
               <Field key={o.key} label={o.label}>

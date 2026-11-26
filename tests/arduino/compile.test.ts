@@ -45,7 +45,7 @@ void loop() {}`);
       `void setup() { start: goto start; } void loop() {}`,
       `template <typename T> T id(T x) { return x; } void setup() {} void loop() {}`,
       `void setup() { long long x = 1; } void loop() {}`,
-      `#include <LiquidCrystal.h>\nvoid setup() {} void loop() {}`,
+      `#include <Adafruit_NeoPixel.h>\nvoid setup() {} void loop() {}`,
       `void setup() { std::vector<int> v; } void loop() {}`,
     ]) {
       const { result } = build(src);

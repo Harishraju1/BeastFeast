@@ -1,4 +1,5 @@
 "use client";
+import { LiveContext } from "./live";
 /**
  * DC gear motors and servos.
  *
@@ -7,7 +8,7 @@
  * local −z (three.js) = robot +y before yaw; the wheel is mounted 6 mm beyond that face. So every geared model
  * puts the output of its gearbox at the origin, and every model stays inside the part's dimension box.
  */
-import { useMemo } from "react";
+import { useMemo, useContext } from "react";
 import { B, COL, Cyl, G, Mm, dShaftGeometry } from "./prims";
 import type { ModelProps } from "./types";
 
@@ -227,7 +228,7 @@ function GenericMotor({ L, W, H }: Dim) {
 
 // ───────────────────────────── servos ─────────────────────────────
 
-function Servo({ L, W, H, variant }: Dim & { variant: "sg90" | "mg90s" | "mg99x" | "ds32" | "generic" }) {
+function Servo({ L, W, H, variant, angle = 90 }: Dim & { variant: "sg90" | "mg90s" | "mg99x" | "ds32" | "generic"; angle?: number }) {
   const micro = variant === "sg90" || variant === "mg90s";
   const hb = H * 0.74; // body height (rest = gear tower + horn)
   const yb = -H / 2 + hb / 2;
@@ -247,10 +248,12 @@ function Servo({ L, W, H, variant }: Dim & { variant: "sg90" | "mg90s" | "mg99x"
       <Cyl p={[xo, -H / 2 + hb + towerH / 2, 0]} rad={W * 0.47} len={towerH} c={variant === "mg99x" || variant === "mg90s" ? "#2b2d31" : body} rough={0.5} seg={20} />
       <Cyl p={[-L * 0.05, -H / 2 + hb + towerH * 0.3, 0]} rad={W * 0.22} len={towerH * 0.6} c={body} rough={0.5} seg={14} />
       <Cyl p={[xo, -H / 2 + hb + towerH + 1, 0]} rad={W * 0.14} len={2} c={variant === "sg90" ? COL.white : COL.brass} metal={0.6} seg={10} hl={false} />
-      {/* white horn: hub + two-arm (micro) or cross (standard) */}
-      <Cyl p={[xo, H / 2 - 1.2, 0]} rad={micro ? 3.5 : 5.5} len={2.4} c={COL.white} rough={0.6} seg={16} />
-      <B p={[xo, H / 2 - 0.8, 0]} s={[micro ? L * 0.95 : L * 0.9, 1.6, micro ? 4.5 : 6]} c={COL.white} rough={0.6} />
-      {!micro && <B p={[xo, H / 2 - 0.8, 0]} s={[6, 1.6, W * 1.4]} c={COL.white} rough={0.6} />}
+      {/* white horn: hub + two-arm (micro) or cross (standard) — turned to the simulated angle (90° = centred) */}
+      <group position={[xo, 0, 0]} rotation={[0, ((angle - 90) * Math.PI) / 180, 0]}>
+        <Cyl p={[0, H / 2 - 1.2, 0]} rad={micro ? 3.5 : 5.5} len={2.4} c={COL.white} rough={0.6} seg={16} />
+        <B p={[0, H / 2 - 0.8, 0]} s={[micro ? L * 0.95 : L * 0.9, 1.6, micro ? 4.5 : 6]} c={COL.white} rough={0.6} />
+        {!micro && <B p={[0, H / 2 - 0.8, 0]} s={[6, 1.6, W * 1.4]} c={COL.white} rough={0.6} />}
+      </group>
       {/* lead: brown / red / orange */}
       {["#5a3a22", "#c62828", "#f39c12"].map((c, i) => <Cyl key={c} p={[L / 2 + 3, -H / 2 + 2.5, (i - 1) * 1.1]} rad={0.5} len={6} ax="x" c={c} seg={6} hl={false} />)}
     </>
@@ -298,12 +301,13 @@ export function MotorModel({ comp, d, info }: ModelProps) {
   return <Mm>{body}</Mm>;
 }
 
-export function ServoModel({ comp, d }: ModelProps) {
+export function ServoModel({ part, comp, d }: ModelProps) {
+  const live = useContext(LiveContext)?.[part.uid];
   const t = comp.id;
   const variant = t === "sg90" ? "sg90" : t === "mg90s" ? "mg90s" : /mg99/.test(t) ? "mg99x" : /ds32/.test(t) ? "ds32" : "generic";
   return (
     <Mm>
-      <Servo L={d.x} W={d.y} H={d.z} variant={variant} />
+      <Servo L={d.x} W={d.y} H={d.z} variant={variant} angle={live?.servoAngle ?? 90} />
     </Mm>
   );
 }

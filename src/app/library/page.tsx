@@ -1,7 +1,11 @@
 "use client";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { LibraryBrowser } from "@/components/library/LibraryBrowser";
+
+// the audit table (≈560 rows) is only loaded when its tab is opened
+const SimCoverage = dynamic(() => import("@/components/library/SimCoverage"), { ssr: false });
 import { Badge, PageHeader, Panel, Tabs } from "@/components/ui";
 import { MASTER_LIST, MASTER_LIST_SHA256, allComponents } from "@/lib/catalogue";
 import { compareCatalogue } from "@/lib/catalogue/report";
@@ -98,15 +102,16 @@ function Completeness() {
 
 function Inner() {
   const sp = useSearchParams();
-  const [tab, setTab] = useState<"browse" | "workshop" | "report">(sp.get("tab") === "report" ? "report" : "browse");
+  const [tab, setTab] = useState<"browse" | "workshop" | "report" | "coverage">(sp.get("tab") === "report" ? "report" : sp.get("tab") === "coverage" ? "coverage" : "browse");
   return (
     <div className="mx-auto max-w-[1600px] px-5 py-8">
-      <PageHeader kicker="COMPLETE ROBOTICS COMPONENTS MASTER LIST" title="Component Library" actions={<Tabs value={tab} onChange={setTab} items={[{ value: "browse", label: "Browse" }, { value: "workshop", label: "Workshop equipment" }, { value: "report", label: "Completeness report" }]} />}>
+      <PageHeader kicker="COMPLETE ROBOTICS COMPONENTS MASTER LIST" title="Component Library" actions={<Tabs value={tab} onChange={setTab} items={[{ value: "browse", label: "Browse" }, { value: "workshop", label: "Workshop equipment" }, { value: "report", label: "Completeness report" }, { value: "coverage", label: "Simulation coverage" }]} />}>
         Every numbered entry from the club&apos;s master list, with honest simulation status. GREEN parts are used by the simulator, BLUE parts support design and wiring, YELLOW are visual/mechanical, GREY are pending verification.
       </PageHeader>
       {tab === "browse" && <LibraryBrowser initialId={sp.get("c")} />}
       {tab === "workshop" && <WorkshopList />}
       {tab === "report" && <Completeness />}
+      {tab === "coverage" && <SimCoverage />}
     </div>
   );
 }

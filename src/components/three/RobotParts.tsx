@@ -5,13 +5,13 @@
  * are not specific to the part are labelled as generic in the designer. The catalogue has no CAD models yet.
  * Robot frame (mm): x forward, y left, z up  →  three.js (m): (x, z, -y).
  */
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useContext } from "react";
 import type { ThreeEvent } from "@react-three/fiber";
 import { modelKeyFor } from "@/lib/models/modelKey";
 import { getComponent } from "@/lib/catalogue";
 import type { ComponentRecord, PartInstance, Project } from "@/lib/types";
 import { partBox, partDims } from "@/lib/mech/geometry";
-import { EmissiveContext, PartModel } from "./models";
+import { EmissiveContext, LiveContext, PartModel } from "./models";
 import { CORNERS, type Drivetrain4WD, HUB_GAP_MM, find4WD } from "@/lib/robot/drivetrain4wd";
 
 const MM = 0.001;
@@ -191,6 +191,7 @@ export function PartMesh({ part, comp, selected, error, offset = [0, 0, 0], whee
       } : undefined}
     >
       <EmissiveContext.Provider value={emissive}>{isWheel ? <PartModel part={part} comp={comp} d={{ x: d.x, y: d.y, z: d.z }} info={info} wheelAngle={wheelAngle} /> : body}</EmissiveContext.Provider>
+      <LiveIndicators uid={part.uid} comp={comp} x={x} y={y} z={z} />
       {error && (
         <mesh>
           <sphereGeometry args={[Math.max(x, y, z) * 0.8, 16, 16]} />
@@ -199,6 +200,33 @@ export function PartMesh({ part, comp, selected, error, offset = [0, 0, 0], whee
       )}
     </group>
   );
+}
+
+/** Simulation-driven indicators: a charge bar over batteries, one LED per active motor-driver channel. */
+function LiveIndicators({ uid, comp, x, y, z }: { uid: string; comp: ComponentRecord; x: number; y: number; z: number }) {
+  const live = useContext(LiveContext)?.[uid];
+  if (!live) return null;
+  if (comp.battery && live.soc !== undefined) {
+    const w = x * 0.8;
+    return (
+      <group position={[0, y / 2 + 0.006, 0]}>
+        <mesh><boxGeometry args={[w, 0.003, 0.006]} /><meshBasicMaterial color="#2a2f2c" /></mesh>
+        <mesh position={[(-w / 2) * (1 - live.soc), 0.0005, 0]}><boxGeometry args={[w * live.soc, 0.0035, 0.0065]} /><meshBasicMaterial color={live.soc > 0.3 ? "#3FB37F" : "#E0A21B"} /></mesh>
+      </group>
+    );
+  }
+  if (live.channels?.length)
+    return (
+      <group position={[0, y / 2 + 0.003, 0]}>
+        {live.channels.map((c, i) => (
+          <mesh key={i} position={[x * 0.35, 0, (i - (live.channels!.length - 1) / 2) * z * 0.4]}>
+            <sphereGeometry args={[0.0018, 8, 8]} />
+            <meshBasicMaterial color={c > 0.02 ? "#ff3b30" : "#3a1d1d"} transparent opacity={0.4 + 0.6 * Math.min(1, c)} />
+          </mesh>
+        ))}
+      </group>
+    );
+  return null;
 }
 
 /** Exploded-view offsets (metres) by part kind, plus the assembly order they are shown in. */

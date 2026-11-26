@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { registerCustomComponents } from "@/lib/catalogue/custom";
+import { useBench3 } from "@/lib/store/bench";
 import { History, Maximize2, Minimize2, Redo2, RotateCcw, Save, ScanLine, Undo2 } from "lucide-react";
 import { InlineNotice, NotificationBell } from "@/components/shell/Notifications";
 import { RequireAuth } from "@/components/shell/AppShell";
@@ -112,6 +113,16 @@ function WorkspaceInner() {
   const { id, tab } = useParams<{ id: string; tab: string }>();
   const { getProject, undo, redo, saveNow, history, saveState, updateProject } = useApp();
   const project = getProject(id);
+  // one live simulation per open project: stop it when leaving this workspace (or switching project)
+  // (switching tabs remounts this page, so check where we went before stopping)
+  useEffect(
+    () => () => {
+      setTimeout(() => {
+        if (!window.location.pathname.startsWith(`/workspace/${id}/`)) useBench3.getState().stop();
+      }, 0);
+    },
+    [id],
+  );
   // student-defined parts must be registered before any tab looks them up
   useMemo(() => registerCustomComponents(project?.customComponents), [project?.customComponents]);
   const validate = useValidate(project);

@@ -9,11 +9,13 @@ import { ControllerModel, DriverModel } from "./boards";
 import { SensorModel } from "./sensors";
 import { WheelModel } from "./wheels";
 import { BatteryModel, CasterModel } from "./power";
+import { BreadboardModel, CapacitorModel, DhtModel, DisplayModel, LdrModel, LedModel, RegulatorModel, ResistorModel, SwitchModel, To92Model } from "./electronics";
 import { EmissiveContext, MM } from "./prims";
 import type { ModelProps } from "./types";
 import type { ComponentRecord } from "@/lib/types";
 
 export { EmissiveContext } from "./prims";
+export { LiveContext, type LivePart } from "./live";
 export type { ModelProps } from "./types";
 
 /** Block representation for every other kind (regulators, wireless modules, switches…), as before. */
@@ -37,6 +39,18 @@ function GenericModel({ part, comp, d }: ModelProps) {
 }
 
 export function PartModel(props: ModelProps & { wheelAngle?: number }) {
+  switch (props.info.key) {
+    case "resistor": return <ResistorModel {...props} />;
+    case "capacitor": return <CapacitorModel {...props} />;
+    case "led": return <LedModel {...props} />;
+    case "switch": return <SwitchModel {...props} />;
+    case "breadboard": return <BreadboardModel {...props} />;
+    case "ldr": return <LdrModel />;
+    case "dht": return <DhtModel {...props} />;
+    case "to92": return <To92Model />;
+    case "display": return <DisplayModel {...props} />;
+    case "regulator": return <RegulatorModel {...props} />;
+  }
   switch (props.comp.kind) {
     case "dc-motor":
       return <MotorModel {...props} />;

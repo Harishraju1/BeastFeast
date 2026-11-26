@@ -10,7 +10,7 @@ class ParseError extends Error {}
 
 const BASE_TYPE_WORDS = new Set([
   "void", "bool", "boolean", "char", "byte", "int", "long", "short", "float", "double", "word", "String",
-  "Servo", "SoftwareSerial", "size_t", "uint8_t", "int8_t", "uint16_t", "int16_t", "uint32_t", "int32_t",
+  "Servo", "SoftwareSerial", "LiquidCrystal_I2C", "LiquidCrystal", "Adafruit_SSD1306", "DHT", "size_t", "uint8_t", "int8_t", "uint16_t", "int16_t", "uint32_t", "int32_t",
   "uint64_t", "int64_t", "unsigned", "signed",
 ]);
 const QUALIFIERS = new Set(["const", "static", "volatile", "constexpr", "inline", "register", "extern"]);
@@ -180,7 +180,8 @@ class Parser {
     const nameTok = this.t;
     if (nameTok.type !== "ident") this.failAt(nameTok, `Expected a name after the type but found '${nameTok.value}'`);
     this.checkUnsupported(nameTok);
-    if (this.isP("(", this.peek())) {
+    // "LiquidCrystal_I2C lcd(0x27, 16, 2);" is an object with constructor arguments, not a function
+    if (this.isP("(", this.peek()) && !["SoftwareSerial", "LiquidCrystal_I2C", "LiquidCrystal", "Adafruit_SSD1306", "DHT"].includes(type.base)) {
       return [this.funcDecl(type, t)];
     }
     if (this.isP("::", this.peek())) this.unsupported(this.peek(), "Scope resolution (::) is not supported — classes and namespaces are not available.");
@@ -290,6 +291,7 @@ class Parser {
       int32_t: "long", uint32_t: "unsigned long",
       float: "float", double: "double", "long double": "double",
       String: "String", Servo: "Servo", SoftwareSerial: "SoftwareSerial",
+      LiquidCrystal_I2C: "LiquidCrystal_I2C", LiquidCrystal: "LiquidCrystal", Adafruit_SSD1306: "Adafruit_SSD1306", DHT: "DHT",
     };
     if (map[w]) return map[w];
     if (words.length === 1 && this.enumNames.has(w)) return `enum:${w}`;
@@ -540,7 +542,7 @@ class Parser {
       if (this.isTypeStart() && !(this.isP("(", this.peek()) && BASE_TYPE_WORDS.has(t.value))) {
         const type = this.typeSpec();
         if (this.isP("(") ) this.failAt(this.t, "Functions cannot be defined inside other functions");
-        if (this.t.type === "ident" && this.isP("(", this.peek()) && !["Servo", "SoftwareSerial", "String"].includes(type.base)) {
+        if (this.t.type === "ident" && this.isP("(", this.peek()) && !["Servo", "SoftwareSerial", "String", "LiquidCrystal_I2C", "LiquidCrystal", "Adafruit_SSD1306", "DHT"].includes(type.base)) {
           // a function definition inside a function: usually a missing '}' further up
           let depth = 0;
           let k = this.pos + 1;
@@ -629,6 +631,12 @@ class Parser {
           return { kind: "unary", op: t.value, arg, loc: this.locFrom(t) };
         }
         case "&":
+          // the only address the simulator accepts: &Wire in display constructors, e.g. Adafruit_SSD1306 d(128, 64, &Wire, -1)
+          if (this.peek().type === "ident" && this.peek().value === "Wire") {
+            this.next();
+            const w = this.next();
+            return { kind: "num", value: 0, isFloat: false, suffix: "", radix: 10, text: "0", loc: this.locFrom(w) } as Expr;
+          }
           this.unsupported(t, "Taking an address (&variable) needs pointers, which are not supported.");
           break;
         case "&&":

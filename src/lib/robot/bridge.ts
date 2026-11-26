@@ -38,6 +38,10 @@ export class RobotElectrical implements ArduinoHost {
   encoderOverride = new Map<string, number>();
   /** human-readable explanation of why each motor got its voltage */
   motorTrace: Record<string, string> = {};
+  /** voltages of passive networks (dividers, LDRs, RC) solved by the circuit bench, keyed by net id */
+  passiveVolts: Map<number, number> | null = null;
+  /** DHT sensors: who answers on a pin (set by the circuit bench; in the arena no DHT answers → NaN) */
+  dhtSource: ((pin: number, type: number) => { temperature: number; humidity: number } | null) | null = null;
 
   constructor(project: Project, private opts: BridgeOptions = { adcMax: 1023, vRef: 5 }) {
     this.graph = buildGraph(project);
@@ -150,6 +154,9 @@ export class RobotElectrical implements ArduinoHost {
     }
     return 0;
   }
+  readDht(pin: number, type: number) {
+    return this.dhtSource?.(pin, type) ?? null;
+  }
   servoWrite(pin: number, angle: number) {
     this.servoAngles[pin] = angle;
   }
@@ -198,7 +205,7 @@ export class RobotElectrical implements ArduinoHost {
   }
 
   private sensorPart(m: { part: PartInstance; comp: ComponentRecord; pin: PinDef }) {
-    return m.comp.kind === "sensor" || m.comp.kind === "rc-input" || m.comp.kind === "wireless";
+    return m.comp.kind === "sensor" || m.comp.kind === "rc-input" || m.comp.kind === "wireless" || m.comp.sensor?.kind === "bumper";
   }
 
   /** Voltage driven onto a net by a sensor output, or by a supply; null = floating. */
@@ -234,6 +241,9 @@ export class RobotElectrical implements ArduinoHost {
       }
       if (r.kind === "encoder") return quadLevel(this.encoderOverride.get(m.part.uid) ?? r.count, /B|C2/.test(m.pin.id)) * supply;
     }
+    // a passive network (voltage divider, LDR, RC) solved by the bench
+    const pv = this.passiveVolts?.get(net.id);
+    if (pv !== undefined) return pv;
     return null;
   }
 

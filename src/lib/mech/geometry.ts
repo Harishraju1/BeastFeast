@@ -19,6 +19,10 @@ const DEFAULT_DIMS: Partial<Record<ComponentRecord["kind"], Dimensions>> = {
   wireless: { x: 37, y: 16, z: 6 },
   switch: { x: 20, y: 12, z: 12 },
   display: { x: 27, y: 27, z: 4 },
+  resistor: { x: 18, y: 3, z: 3 },
+  capacitor: { x: 7, y: 7, z: 12 },
+  led: { x: 6, y: 6, z: 9 },
+  pcb: { x: 83, y: 55, z: 9 },
 };
 const DEFAULT_MASS: Partial<Record<ComponentRecord["kind"], number>> = {
   controller: 25, "motor-driver": 30, "dc-motor": 30, servo: 20, sensor: 5, battery: 100, regulator: 10, wheel: 20, caster: 10, wireless: 5, switch: 5, display: 8, mechanical: 5,
@@ -37,6 +41,9 @@ export function partDims(part: PartInstance, comp: ComponentRecord): Dimensions 
     return { x: len + 12, y: dia * n + 4, z: dia + 2, estimated: false };
   }
   const d = comp.specs.dimensions;
+  if (!d && comp.kind === "display" && /LCD/i.test(comp.name)) return { ...(/20x4|20×4/i.test(comp.name) ? { x: 98, y: 60, z: 14 } : { x: 80, y: 36, z: 14 }), estimated: true };
+  if (!d && comp.kind === "pcb" && /mini/i.test(comp.name)) return { x: 46, y: 35, z: 9, estimated: true };
+  if (!d && comp.kind === "pcb" && /full/i.test(comp.name)) return { x: 165, y: 55, z: 9, estimated: true };
   // distance sensors face along their local +x: the board's long side (dims.x) runs across
   if (d && ["ultrasonic", "ir-distance-analog"].includes(comp.sensor?.kind ?? "")) return { x: d.y, y: d.x, z: d.z, estimated: false };
   if (d) return { ...d, estimated: false };

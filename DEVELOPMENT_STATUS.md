@@ -1,8 +1,47 @@
 # DEVELOPMENT STATUS — BEAST FEAST
 
-Last updated: 2026-11-27 (circuit bench, FIX IT repair assistant, recommendation engine, custom components, support registry, learning mode, 18650 packs, L298N logic fix, auth hardening, workshop load test)
+Last updated: 2026-11-27 (component management, light canvas with function-coloured wires, functional models + self-test for every supported part, live 3D, coverage dashboard)
 
 ## Completed modules
+
+> **2026-11-27 (later), component management + functional simulation for every supported part:**
+> - **Circuit Studio editing:** selection toolbar (move, rotate ±90°, duplicate, delete, properties); Shift+click and
+>   Shift+drag box multi-select; group drag; Delete/Backspace, Ctrl+D, Escape and arrow keys. Deleting a part with
+>   4 or more wires asks first, and every delete shows an Undo bar. Deleting removes the part's wires and wheel
+>   attachments (`src/lib/robot/edit.ts`, also used by the Robot Designer), so the netlist, validator and
+>   simulator update at once.
+> - **Light circuit canvas** (#F5F6F8). Wires are coloured by their electrical role, derived from the net
+>   (`src/lib/circuit/wireRole.ts`: battery +, 5 V, 3.3 V, GND, PWM, analog, digital, I²C, UART, SPI, motor).
+>   It also has a legend, a wire tooltip (ends, role, live V/A), high-contrast mode and a "my colours" switch.
+> - **New models:**
+>   - capacitors (RC, polarity, voltage rating)
+>   - LDR (lux → resistance, read through dividers)
+>   - potentiometers (wiper position)
+>   - servos (slew to the commanded angle)
+>   - regulators and buck converters (efficiency, current limit, heat)
+>   - DHT11/22 through an emulated DHT library
+>   - character LCDs (LiquidCrystal and LiquidCrystal_I2C) and OLEDs (Adafruit_SSD1306, text only), shown on the
+>     wired display
+>   - battery temperature, runtime, low-voltage and over-current warnings
+>   - switches that can be clicked while the bench runs
+> - **One shared simulation** (`src/lib/store/bench.ts`) for Circuit Studio and the Robot Designer. "Run live" in
+>   the Designer spins the wheels at the simulated rpm and lights LEDs. Servo horns, display text, battery charge
+>   bars and driver channel LEDs also follow the simulation (`src/lib/sim/live3d.ts`).
+> - **New procedural 3D models** (`components/three/models/electronics.tsx`): resistor (real colour bands),
+>   capacitors, LED, push button, toggle, breadboard, LDR, DHT, TO-92, OLED/LCD with live text, buck/TO-220/AMS1117
+>   regulators. The 18650 cells now have terminals, insulator rings, labels and holder leads.
+> - **Coverage audit:** `npm run sim:coverage` writes `SIM_COVERAGE_REPORT.md` and the Library → "Simulation
+>   coverage" tab. Every component gets a functional self-test (`src/lib/sim/selftest.ts`). Result: 195 fully
+>   supported, 306 partial, 57 not yet; 153 self-tests pass, 0 fail. Wheels, casters and chassis are covered by
+>   the physics tests.
+> - **Fixes found by the audit:**
+>   - switch-type bumpers and limit switches ignored presses (also in the arena)
+>   - potentiometers were never solved
+>   - LM317, DIP and rotary switches and rheostats were wrongly marked fully simulated
+>   - ESP32, NodeMCU and Pico boards run code but were marked limited
+> - **L298N:** the 5 V-jumper rule now uses the 78M05's real limits (35 V input, ≈1 W of heat), so 3S LiPo +
+>   jumper is a warning that shows the heat figure. Unwired 4WD motors say they came from the drivetrain, and FIX IT
+>   wires them in parallel with the motor on that side. Brushless motors get "needs an ESC".
 
 > **2026-11-27, intelligent mentor upgrade** (details: DEPLOYMENT_CHECKLIST.md for auth/email):
 > - **Circuit bench** (Circuit Studio → Run / Pause / Stop / Reset): the student's code runs against the real
