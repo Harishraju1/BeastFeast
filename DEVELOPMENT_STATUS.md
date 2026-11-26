@@ -1,8 +1,44 @@
 # DEVELOPMENT STATUS — BEAST FEAST
 
-Last updated: 2026-11-18 (BEAST FEAST rebrand, Forest Sage theme, sign-up with +91 mobile / NIAT ID / profile picture, private details, admin User Management, rate limits, security headers; earlier the same day: XP ledger, daily reset, 16 ranks, leaderboard filter, exam-style quizzes, performance analysis, XP histories, grouped navigation; see AUDIT_REPORT.md)
+Last updated: 2026-11-27 (circuit bench, FIX IT repair assistant, recommendation engine, custom components, support registry, learning mode, 18650 packs, L298N logic fix, auth hardening, workshop load test)
 
 ## Completed modules
+
+> **2026-11-27, intelligent mentor upgrade** (details: DEPLOYMENT_CHECKLIST.md for auth/email):
+> - **Circuit bench** (Circuit Studio → Run / Pause / Stop / Reset): the student's code runs against the real
+>   electrical bridge with no chassis. Motors spin with speed, direction and current from their data. The battery
+>   sags with load and drains. LEDs and resistors are solved by a DC nodal solver (`src/lib/sim/dc.ts`). Wires
+>   show the direction of conventional current. Pins show live voltages and HIGH/LOW/PWM levels. Students set
+>   sensor inputs with sliders. A short circuit halts the bench and offers the fix.
+>   Code: `src/lib/sim/bench.ts`, `components/workspace/circuit/BenchPanel.tsx`.
+> - **FIX IT repair assistant** (`src/lib/circuit/repair.ts`, `RepairPlayer.tsx`). It has 21 repairable
+>   rules, including enable/PWM/IN pins, grounds, supplies, L298N logic, jumpers, polarity, shorts, half-wired
+>   motors, analog pins, I²C/UART swaps, LED resistors and BMS. Each repair is an animated plan (Identify →
+>   Disconnect → Select pin → Connect → Test) with Play / Pause / Next / Previous / Restart / Skip. The repair is
+>   applied, re-validated, reported and can be undone with Ctrl+Z. Pins already defined in the code
+>   (`#define ENA 5`) are reused.
+> - **Recommendation engine** (`src/lib/circuit/recommend.ts`). It sorts each part into one of six categories:
+>   compatible, compatible with limitations, needs extras, not recommended, unsafe, unsupported. The checks use
+>   real numbers: voltage, per-channel current with parallel motors summed, stall vs peak, drop, heat, logic
+>   supply and PWM. Right-sized alternatives come from the catalogue, with a fallback to "Create custom component".
+> - **Custom components** (`src/lib/catalogue/custom.ts`, saved in `project.customComponents`). Generic parts
+>   get wiring and voltage checks. Motor and dual H-bridge templates are fully simulated with the student's values.
+> - **Support registry** (`src/lib/components/support.ts`). Every part is fully simulated, limited or not yet
+>   supported, each with an explanation and an alternative. There is no "PENDING" any more. Limited and
+>   unsupported parts in a circuit are named by the validator.
+> - **Learning mode** (`src/lib/components/learn.ts`, `LearnPanel.tsx`) gives beginner lessons. They are
+>   hand-written for the L298N, TB6612FNG, Arduino, DC motor, 18650 packs, IR sensor, ultrasonic, LED, resistor,
+>   switch and buck converter, and generated from the pin data for every other part.
+> - **18650 packs, 1–5 cells**: series, parallel and series-parallel arrangements from the student's cell ratings;
+>   BMS warning for series packs; a switch is optional (platform additions: 552 + 6).
+> - **L298N**: the simulator now agrees with the validator when the logic supply is missing (jumper removed or VS
+>   too low for the 78M05). 16 scenario tests: `tests/robot/l298n.test.ts`.
+> - **Validation report** now has four levels: critical, warning, improvement suggestion, and passed check groups.
+>   Each issue has Explain / FIX IT / Better alternative.
+> - **Auth**: per-device email cooldowns, duplicate sign-up detection, resend confirmation, messages for expired
+>   links, sign-in back-off on per-network limits, optional Google sign-in (`NEXT_PUBLIC_AUTH_GOOGLE=1`), and
+>   `npm run accounts:bulk` (confirmed accounts with no email). The 2/hour email limit itself is Supabase's
+>   built-in mailer and needs a custom SMTP in the dashboard.
 
 > **2026-11-20, 4WD and off-road upgrade:**
 > - 4WD skid-steer is the default for Robo Race and Sumo (4WD drivetrain helper and designer panel).

@@ -1,4 +1,5 @@
 "use client";
+import { AuthLinkErrors } from "./AuthLinkErrors";
 import Image from "next/image";
 import Link from "next/link";
 import mark from "@/assets/brand/beast-feast-mark.webp";
@@ -111,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         { href: workspaceHref(lastProjectId, "code"), label: "Code Studio", icon: Code2, match: "/code", hint: "Write the Arduino program" },
         { href: workspaceHref(lastProjectId, "arena"), label: "Simulation Arena", icon: Gauge, match: "/arena", hint: "Run your robot on a track" },
         { href: "/tracks", label: "Track Designer", icon: Map, hint: "Design your own tracks" },
-        { href: "/library", label: "Component Library", icon: Cpu, hint: "553 parts with pinouts (incl. club additions)" },
+        { href: "/library", label: "Component Library", icon: Cpu, hint: "558 parts with pinouts (incl. club additions)" },
       ],
     },
     {
@@ -137,6 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      <AuthLinkErrors />
       {/* tap outside the open mobile drawer to close it */}
       {mobileOpen && <div className="fixed inset-0 z-30 bg-[rgba(20,26,22,.55)] md:hidden" onClick={() => setMobileOpen(false)} aria-hidden />}
       {/* sidebar */}

@@ -1,6 +1,8 @@
 "use client";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Lightbulb, ShieldAlert, Wrench, X } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, Lightbulb, Repeat2, ShieldAlert, Wrench, X } from "lucide-react";
+import { planRepair, REPAIRABLE } from "@/lib/circuit/repair";
 import { useApp } from "@/lib/store/app";
 import { useWorkspace } from "@/lib/store/workspace";
 import { validateProject } from "@/lib/circuit/validate";
@@ -46,12 +48,23 @@ export function ScanOverlay() {
 const SEV = {
   critical: { icon: ShieldAlert, cls: "border-bad/50 bg-bad/10", text: "text-bad", label: "CRITICAL ERROR" },
   warning: { icon: AlertTriangle, cls: "border-warn/40 bg-warn/5", text: "text-warn", label: "WARNING" },
-  suggestion: { icon: Lightbulb, cls: "border-info/40 bg-info/5", text: "text-info", label: "SUGGESTION" },
+  suggestion: { icon: Lightbulb, cls: "border-info/40 bg-info/5", text: "text-info", label: "IMPROVEMENT SUGGESTION" },
 };
 
-export function IssueCard({ issue, n, onFix }: { issue: ValidationIssue; n: number; onFix?: () => void }) {
+/** The workspace action that starts the animated repair (or falls back to highlighting the faulty part). */
+export function startFix(issue: ValidationIssue, queue: ValidationIssue[] = []) {
+  const ws = useWorkspace.getState();
+  if (REPAIRABLE.has(issue.code)) ws.set({ repair: { issue, at: Date.now(), queue }, reportOpen: false, explain: null });
+  else ws.focusIssue(issue);
+}
+
+export function IssueCard({ issue, n, onFix, project, compact = false }: { issue: ValidationIssue; n: number; onFix?: () => void; project?: Project; compact?: boolean }) {
   const s = SEV[issue.severity];
   const Icon = s.icon;
+  const [open, setOpen] = useState(false);
+  const plan = useMemo(() => (open && project && REPAIRABLE.has(issue.code) ? planRepair(project, issue) : null), [open, project, issue]);
+  const part = project?.parts.find((p) => p.uid === issue.partUid);
+  const canRepair = REPAIRABLE.has(issue.code) && !!project;
   return (
     <div className={`rounded-lg border p-3 ${s.cls}`}>
       <div className="flex items-start gap-3">
@@ -70,13 +83,33 @@ export function IssueCard({ issue, n, onFix }: { issue: ValidationIssue; n: numb
               <span className="font-mono">{issue.incorrect}</span>
             </div>
           )}
-          <div className="text-xs text-muted">{issue.explanation}</div>
+          {!compact && <div className="text-xs text-muted">{issue.explanation}</div>}
           <div className="text-xs">
             <span className="text-ok">Fix: </span>
             {issue.fix}
           </div>
+          {open && (
+            <div className="mt-2 space-y-1.5 rounded border border-line bg-bg/60 p-2 text-xs" data-testid="issue-explain">
+              <div><span className="bf-label">What is wrong</span><div>{issue.incorrect ?? issue.title}</div></div>
+              <div><span className="bf-label">Why it matters</span><div className="text-muted">{issue.explanation}</div></div>
+              {(part || issue.pinId) && <div><span className="bf-label">Affected</span><div className="font-mono">{part?.label ?? "—"}{issue.pinId ? ` · pin ${issue.pinId}` : ""}</div></div>}
+              <div><span className="bf-label">Recommended solution</span><div>{issue.fix}</div></div>
+              {plan ? (
+                <div><span className="bf-label">Automatic repair</span><ol className="list-decimal pl-4 text-muted">{plan.steps.map((st, i) => <li key={i}>{st.title}</li>)}</ol></div>
+              ) : canRepair ? null : project && <div className="text-dim">This one needs your decision, so it is not repaired automatically. FIX IT shows you exactly where it is.</div>}
+            </div>
+          )}
+          {project && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <Button size="sm" variant="ghost" onClick={() => setOpen(!open)} aria-expanded={open}><BookOpen size={12} /> {open ? "Hide explanation" : "Explain problem"}</Button>
+              {issue.area !== "mechanical" && (
+                <Button size="sm" variant="primary" onClick={onFix ?? (() => startFix(issue))}><Wrench size={12} /> FIX IT</Button>
+              )}
+              {issue.partUid && <Button size="sm" variant="secondary" data-alt="1" onClick={() => useWorkspace.getState().set({ recommendFor: issue.partUid!, reportOpen: false })}><Repeat2 size={12} /> Better alternative</Button>}
+            </div>
+          )}
         </div>
-        {onFix && (issue.partUid || issue.pinId) && (
+        {!project && onFix && (issue.partUid || issue.pinId) && (
           <Button size="sm" variant="primary" onClick={onFix}>
             <Wrench size={12} /> FIX IT
           </Button>
@@ -94,10 +127,14 @@ export function ValidationReportModal({ project }: { project: Project }) {
   if (!ws.reportOpen || !rep) return null;
   const crit = rep.issues.filter((i) => i.severity === "critical");
   const fix = (i: ValidationIssue) => {
-    ws.focusIssue(i);
-    // mechanical issues are shown in 3D, electrical ones on the schematic
+    // mechanical issues are shown in 3D; electrical ones are repaired (animated) or highlighted on the schematic
+    if (i.area === "mechanical") ws.focusIssue(i);
+    else startFix(i);
     const tab = i.area === "mechanical" ? "design" : "circuit";
     if (!location.pathname.endsWith(`/${tab}`)) router.push(`/workspace/${project.id}/${tab}`);
+  };
+  const goCircuit = () => {
+    if (!location.pathname.endsWith("/circuit")) router.push(`/workspace/${project.id}/circuit`);
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-sage-900/45 p-4 backdrop-blur-sm" onMouseDown={() => ws.set({ reportOpen: false })}>
@@ -108,7 +145,7 @@ export function ValidationReportModal({ project }: { project: Project }) {
             <div>
               <div className="font-display text-xl font-bold">{rep.passed ? "ROBOT SYSTEMS VERIFIED!" : `HEY ${(user?.name ?? "ENGINEER").toUpperCase()}! YOUR ROBOT NEEDS SOME FIXES!`}</div>
               <div className="text-xs text-muted">
-                {rep.checksRun} checks · {crit.length} critical · {rep.issues.filter((i) => i.severity === "warning").length} warnings · {rep.issues.filter((i) => i.severity === "suggestion").length} suggestions
+                {rep.checksRun} checks · {crit.length} critical · {rep.issues.filter((i) => i.severity === "warning").length} warnings · {rep.issues.filter((i) => i.severity === "suggestion").length} improvement suggestions · {rep.passedChecks?.length ?? 0} groups passed
               </div>
             </div>
           </div>
@@ -127,11 +164,19 @@ export function ValidationReportModal({ project }: { project: Project }) {
         <div className="max-h-[52vh] space-y-2 overflow-auto p-5">
           {rep.issues.length === 0 && <div className="text-center text-sm text-ok">No issues found. Your robot is ready for Code Studio.</div>}
           {rep.issues.map((i, n) => (
-            <IssueCard key={i.id} issue={i} n={n + 1} onFix={() => fix(i)} />
+            <div key={i.id} onClickCapture={(e) => { if ((e.target as HTMLElement).closest("[data-alt]")) goCircuit(); }}>
+              <IssueCard issue={i} n={n + 1} onFix={() => fix(i)} project={project} />
+            </div>
           ))}
+          {(rep.passedChecks?.length ?? 0) > 0 && (
+            <div className="rounded-lg border border-ok/40 bg-ok/5 p-3 text-sm" data-testid="passed-checks">
+              <div className="mb-1 flex items-center gap-2 font-mono text-[10px] tracking-widest text-ok"><CheckCircle2 size={14} /> PASSED</div>
+              <ul className="grid gap-x-4 text-xs sm:grid-cols-2">{rep.passedChecks!.map((c) => <li key={c}>✓ {c}</li>)}</ul>
+            </div>
+          )}
         </div>
         <footer className="flex justify-between gap-2 border-t border-line px-5 py-3">
-          <span className="self-center text-[11px] text-dim">Scores are computed from the issues above: −30 per critical, −10 per warning, −2 per suggestion in each area. Your design is never changed automatically.</span>
+          <span className="self-center text-[11px] text-dim">Scores are computed from the issues above: −30 per critical, −10 per warning, −2 per suggestion in each area. Your design only changes when you run a FIX IT repair (Ctrl+Z undoes it).</span>
           {rep.passed && (
             <Button variant="primary" onClick={() => { ws.set({ reportOpen: false }); router.push(`/workspace/${project.id}/code`); }}>
               Continue to Code Studio →

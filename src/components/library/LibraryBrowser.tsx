@@ -6,6 +6,7 @@ import { allComponents, MASTER_LIST } from "@/lib/catalogue";
 import type { CompetitionId, ComponentRecord, SimStatus } from "@/lib/types";
 import { COMPETITIONS } from "@/lib/types";
 import { Badge, Button, SimBadge, SIM_STATUS_INFO, Tabs } from "@/components/ui";
+import { supportOf } from "@/lib/components/support";
 import { PinoutDiagram, pinColor, pinFunctionText } from "./PinoutDiagram";
 import type { PreviewView } from "./ComponentPreview";
 
@@ -186,6 +187,11 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <SimBadge status={sel.simStatus} full />
+          <div className="mt-1 text-[11px] text-muted" data-testid="support-info">
+            <span className="font-mono text-text">{supportOf(sel).label}</span> — {supportOf(sel).model}
+            {supportOf(sel).limits.length > 0 && <span> Not modelled: {supportOf(sel).limits.join(" ")}</span>}
+            {supportOf(sel).alternative && supportOf(sel).level !== "full" && <span> Fully simulated alternative: <b>{supportOf(sel).alternative!.name}</b>.</span>}
+          </div>
           <Badge tone={sel.verification === "unverified" ? "warn" : "brand"}>{sel.verification.replace("-", " ")}</Badge>
           <Badge>Class {sel.functionalityClass}</Badge>
         </div>
@@ -215,7 +221,7 @@ export function LibraryBrowser({ onAdd, compact = false, initialId, competition 
               <PinoutDiagram comp={sel} compact={compact} />
             </div>
           ) : (
-            <div className="p-6 text-center text-xs text-muted">No pinout entered yet{sel.functionalityClass === "A" ? " — pending verification by an administrator." : " (mechanical / workshop item)."}</div>
+            <div className="p-6 text-center text-xs text-muted">{sel.functionalityClass === "A" ? `Not yet supported in the simulator: no verified pinout yet.${supportOf(sel).alternative ? ` Use the ${supportOf(sel).alternative!.name} instead, or create a custom component in Circuit Studio.` : " You can create a custom component in Circuit Studio."}` : "No pins: this is a mechanical / workshop item."}</div>
           )
         ) : (
           <div className="h-48">{sel.functionalityClass === "C" ? <div className="flex h-full items-center justify-center text-xs text-muted">No 3D model — workshop equipment.</div> : <ComponentPreview comp={sel} view={view} />}</div>

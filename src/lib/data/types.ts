@@ -274,6 +274,10 @@ export interface Backend {
   signIn(email: string, password: string): Promise<Profile>;
   /** Emails a password-reset link (cloud mode). Never reveals whether the email is registered. */
   requestPasswordReset(email: string): Promise<void>;
+  /** Sends the sign-up confirmation email again (cloud mode). */
+  resendConfirmation(email: string): Promise<void>;
+  /** Starts "Sign in with Google" (cloud mode, only when the provider is enabled); redirects the page. */
+  signInWithGoogle(next: string): Promise<void>;
   /** Sets a new password for the signed-in (or link-verified) user. */
   updatePassword(newPassword: string): Promise<void>;
   /** True when a reset link has signed the user in and they may choose a new password. */

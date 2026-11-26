@@ -7,6 +7,7 @@
  *   npm run load:test -- --students=500 --sustain=30 --site=https://beast-feast-pi.vercel.app
  *   npm run load:test -- --skip-heavy          # leave out the 1000 × 180 KB stage
  *   npm run load:test -- --cleanup             # remove any leftover load-test accounts
+ *   npm run load:test -- --auth                # also: 100/250/500/1000 simultaneous sign-ins from this one IP
  *
  * Safety:
  *  - creates a few temporary accounts (loadtest-<run>-<n>@example.com, name "LOADTEST …", no NIAT/phone)
@@ -82,7 +83,7 @@ function report(s: Stage) {
 const errorRate = (s: Stage) => s.fail / Math.max(1, s.ok + s.fail);
 
 // ─────────────────────────────── accounts ───────────────────────────────
-interface TestUser { id: string; client: SupabaseClient }
+interface TestUser { id: string; client: SupabaseClient; email: string; password: string }
 const created: string[] = [];
 
 async function createUsers(n: number): Promise<TestUser[]> {
@@ -101,7 +102,7 @@ async function createUsers(n: number): Promise<TestUser[]> {
       console.log(`  sign-in ${i} rate-limited (${e.message}) — waiting 20 s`);
       await new Promise((r) => setTimeout(r, 20000));
     }
-    users.push({ id: data.user.id, client });
+    users.push({ id: data.user.id, client, email, password });
   }
   return users;
 }
@@ -198,6 +199,26 @@ async function reads(name: string, students: Student[]) {
   return s;
 }
 
+/** n students pressing SIGN IN at the same instant, all from this one machine — i.e. one shared public IP,
+ *  like a classroom behind one Wi-Fi router. Auth limits sign-ins per IP, so this measures that limit. */
+async function signIns(name: string, n: number, users: TestUser[]) {
+  const s = newStage(name);
+  const t = performance.now();
+  await Promise.all(
+    Array.from({ length: n }, (_, i) =>
+      timed(s, async () => {
+        const u = users[i % users.length];
+        const c = createClient(SB_URL!, ANON!, { auth: { persistSession: false, autoRefreshToken: false } });
+        const { error } = await c.auth.signInWithPassword({ email: u.email, password: u.password });
+        return { error: error ? { code: String(error.status ?? ""), message: error.message } : null };
+      }),
+    ),
+  );
+  s.wallMs = performance.now() - t;
+  report(s);
+  return s;
+}
+
 async function pages(name: string, n: number, concurrency: number) {
   const s = newStage(name);
   const urls = ["/", "/garage", "/learn", "/login"];
@@ -274,6 +295,16 @@ async function main() {
         // worst case: big projects (versions + replays); upload only, nothing is downloaded
         for (const st of students) st.project = payload(st.user.id, Number(st.project.id.split("-p")[1]), true);
         await burst(`burst: ${STUDENTS} HEAVY (~180 KB) saves at once`, students);
+      }
+    }
+
+    if (process.argv.includes("--auth")) {
+      for (const n of DRY ? [20] : [100, 250, 500, 1000].filter((x) => x <= STUDENTS)) {
+        const s = await signIns(`auth: ${n} sign-ins at once (one shared IP)`, n, users);
+        if (errorRate(s) > 0.9) {
+          console.log("  >90% rejected — the per-IP sign-in limit is reached; not ramping further");
+          break;
+        }
       }
     }
 

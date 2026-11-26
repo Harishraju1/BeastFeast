@@ -184,6 +184,12 @@ export interface BatterySimParams {
   maxContinuousA: number;
   /** Cell-based entries let the student choose how many cells are in series. */
   perCell?: boolean;
+  /**
+   * Multi-cell packs with a fixed number of cells (e.g. the 18650 2-cell holder). The student picks the
+   * arrangement (series × parallel, option "arrangement" like "2S1P") and the cell ratings; nominalVoltage etc.
+   * above are PER CELL for these records.
+   */
+  cellCount?: number;
   estimated: boolean;
 }
 
@@ -358,6 +364,8 @@ export interface ValidationReport {
   scores: { electrical: number; mechanical: number; power: number; compatibility: number; overall: number };
   passed: boolean; // no critical issues
   checksRun: number;
+  /** check groups that found no critical error or warning (the "Passed" level of the report) */
+  passedChecks?: string[];
   /** fingerprint of chassis+parts+wires at validation time (stale if the design changes) */
   fingerprint?: string;
 }
@@ -408,6 +416,8 @@ export interface Project {
   origin?: ProjectOrigin;
   /** Simulation defaults (control mode, opponent, live-tunable parameters …). */
   simConfig?: ProjectSimConfig;
+  /** Student-defined components used by this project (validated with CustomComponentSchema on load). */
+  customComponents?: unknown[];
 }
 
 export interface ProjectOrigin {

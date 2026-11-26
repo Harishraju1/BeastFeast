@@ -30,8 +30,38 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
   return res.data;
 }
 
-import { EMAIL_LIMIT_REACHED, TEMPORARILY_UNAVAILABLE } from "@/lib/messages";
+import { EMAIL_LIMIT_REACHED, SIGNIN_NETWORK_LIMIT, TEMPORARILY_UNAVAILABLE, emailRecentlySent } from "@/lib/messages";
 export { EMAIL_LIMIT_REACHED, TEMPORARILY_UNAVAILABLE };
+
+/**
+ * One email of each kind per address per device per minute: double clicks, impatient retries and
+ * "sign up again" never spend the club's email allowance twice. The server keeps its own limits as well.
+ */
+const EMAIL_COOLDOWN_S = 60;
+function emailGuard(kind: "signup" | "reset", email: string) {
+  if (typeof window === "undefined") return { check() {}, mark() {} };
+  const key = `bf.emailSent.${kind}.${email.trim().toLowerCase()}`;
+  return {
+    check() {
+      let at = 0;
+      try {
+        at = Number(localStorage.getItem(key) ?? 0);
+      } catch {
+        /* storage blocked: rely on the server limits */
+      }
+      const ago = (Date.now() - at) / 1000;
+      if (at && ago < EMAIL_COOLDOWN_S) throw new Error(emailRecentlySent(ago));
+    },
+    mark() {
+      try {
+        localStorage.setItem(key, String(Date.now()));
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+}
+const authRedirect = (path: string) => (typeof window === "undefined" ? undefined : `${window.location.origin}${path}`);
 
 /**
  * Messages raised by our database functions are written for users and pass through; known low-level ones
@@ -94,14 +124,21 @@ export class SupabaseBackend implements Backend {
     return row ? toProfile(row as ProfileRow) : null;
   }
   async signUp(input: SignUpInput) {
-    const res = await this.sb.auth.signUp({ email: input.email.trim(), password: input.password, options: { data: { name: input.name.trim(), phone: input.phone, niat_id: input.niatId } } });
+    const guard = emailGuard("signup", input.email);
+    guard.check();
+    const res = await this.sb.auth.signUp({ email: input.email.trim(), password: input.password, options: { emailRedirectTo: authRedirect("/login?confirmed=1"), data: { name: input.name.trim(), phone: input.phone, niat_id: input.niatId } } });
     if (res.error) {
       // the database trigger rejects invalid or duplicate NIAT IDs / phones; Auth reports that generically
       if (/database error/i.test(res.error.message)) throw new Error("We couldn't create the account. Check your NIAT ID and mobile number — the NIAT ID may already be registered.");
       if (/already registered|already been registered/i.test(res.error.message)) throw new Error("An account with this email already exists. Sign in instead.");
       throw new Error(friendlyError(res.error.message));
     }
-    if (!res.data.session) throw new Error("Check your email to confirm your account, then sign in.");
+    // an already-confirmed address comes back with no identities and no email is sent
+    if (res.data.user && Array.isArray(res.data.user.identities) && res.data.user.identities.length === 0) throw new Error("An account with this email already exists. Sign in instead (or use “Forgot password?”).");
+    if (!res.data.session) {
+      guard.mark();
+      throw new Error("Check your email to confirm your account, then sign in.");
+    }
     const p = await this.currentUser();
     if (!p) throw new Error("Your account was created, but your profile isn't ready yet. Please sign in again in a minute.");
     return p;
@@ -110,7 +147,8 @@ export class SupabaseBackend implements Backend {
     const res = await this.sb.auth.signInWithPassword({ email, password });
     if (res.error) {
       if (/invalid login credentials/i.test(res.error.message)) throw new Error("Incorrect email or password.");
-      if (/email not confirmed/i.test(res.error.message)) throw new Error("Confirm your email first — open the link we sent you (check spam too), then sign in.");
+      if (/email not confirmed/i.test(res.error.message)) throw new Error("EMAIL_NOT_CONFIRMED: Confirm your email first — open the link we sent you (check spam too), then sign in.");
+      if (/rate limit|too many requests/i.test(res.error.message) && !/email/i.test(res.error.message)) throw new Error(SIGNIN_NETWORK_LIMIT);
       throw new Error(friendlyError(res.error.message));
     }
     const p = await this.currentUser();
@@ -121,13 +159,29 @@ export class SupabaseBackend implements Backend {
     await this.sb.auth.signOut();
   }
   async requestPasswordReset(email: string) {
+    const guard = emailGuard("reset", email);
+    guard.check();
     const redirectTo = `${window.location.origin}/reset-password`;
     const { error } = await this.sb.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-    if (!error) return;
+    if (!error) return guard.mark();
     if (/over_email_send_rate_limit|email rate limit/i.test(error.message)) throw new Error(EMAIL_LIMIT_REACHED);
     if (/rate limit|security purposes|only request this/i.test(error.message)) throw new Error("A reset link was sent recently. Please wait a minute before asking for another.");
     if (/invalid.*email|validate email/i.test(error.message)) throw new Error("Enter a valid email address.");
     throw new Error(friendlyError(error.message));
+  }
+  async resendConfirmation(email: string) {
+    const guard = emailGuard("signup", email);
+    guard.check();
+    const { error } = await this.sb.auth.resend({ type: "signup", email: email.trim(), options: { emailRedirectTo: authRedirect("/login?confirmed=1") } });
+    if (!error) return guard.mark();
+    if (/over_email_send_rate_limit|email rate limit/i.test(error.message)) throw new Error(EMAIL_LIMIT_REACHED);
+    if (/rate limit|security purposes|only request this/i.test(error.message)) throw new Error("A confirmation email was sent recently. Please wait a minute before asking for another.");
+    if (/already confirmed|already registered/i.test(error.message)) throw new Error("This email is already confirmed — you can sign in.");
+    throw new Error(friendlyError(error.message));
+  }
+  async signInWithGoogle(next: string) {
+    const { error } = await this.sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: authRedirect(`/login?oauth=1&next=${encodeURIComponent(next)}`) } });
+    if (error) throw new Error(/provider is not enabled|unsupported provider/i.test(error.message) ? "Google sign-in is not switched on for this site yet. Use your email and password." : friendlyError(error.message));
   }
   async updatePassword(newPassword: string) {
     const { error } = await this.sb.auth.updateUser({ password: newPassword });

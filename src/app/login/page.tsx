@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import logo from "@/assets/brand/beast-feast-logo.webp";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useMemo } from "react";
 import { Camera, CheckCircle2, X } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { BACKEND_MODE, getBackend } from "@/lib/data";
@@ -71,6 +71,47 @@ function LoginInner() {
   const router = useRouter();
   const next = params.get("next") ?? "/";
   const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  // "resend confirmation email" (after sign-up, an unconfirmed sign-in, or an expired link) with its own cooldown
+  const [resendFor, setResendFor] = useState<string | null>(null);
+  const [resendWait, setResendWait] = useState(0);
+  const [signinWait, setSigninWait] = useState(0);
+  useEffect(() => {
+    if (resendWait <= 0 && signinWait <= 0) return;
+    const t = setTimeout(() => {
+      setResendWait((c) => Math.max(0, c - 1));
+      setSigninWait((c) => Math.max(0, c - 1));
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [resendWait, signinWait]);
+  const googleOn = BACKEND_MODE === "supabase" && process.env.NEXT_PUBLIC_AUTH_GOOGLE === "1";
+
+  // links coming back from emails / Google: confirmed, expired or already used
+  // (errors that arrive in the URL hash are moved into ?link_error= by <AuthLinkErrors /> in the app shell)
+  const linkNote = useMemo<{ kind: "ok" | "err"; text: string } | null>(() => {
+    const code = params.get("error_code") ?? params.get("link_error");
+    if (code) return { kind: "err", text: /expired/i.test(code) ? "That email link has expired or was already used. Enter your email and press “Resend confirmation email”, or sign in if you already confirmed." : "That sign-in link could not be used. Please sign in again." };
+    if (params.get("confirmed") === "1") return { kind: "ok", text: "Email confirmed! Sign in with your email and password — you'll stay signed in on this device." };
+    return null;
+  }, [params]);
+  useEffect(() => {
+    if (params.get("oauth") !== "1") return;
+    // the auth client finishes the Google sign-in from the URL; then load the profile and continue
+    void refreshUser().then(() => router.replace(safeNext));
+  }, [params, refreshUser, router, safeNext]);
+
+  async function resend() {
+    const email = (resendFor ?? f.email).trim();
+    if (!email || resendWait > 0) return;
+    setErr(null);
+    try {
+      await (await getBackend()).resendConfirmation(email);
+      setInfo(`A new confirmation link is on its way to ${email}. Open it in this browser; check your spam folder too.`);
+      setResendWait(60);
+    } catch (x) {
+      setErr((x as Error).message);
+      setResendWait(30);
+    }
+  }
 
   const errors = validate(f, mode);
   if (mode === "up" && niatTaken && !errors.niatId) errors.niatId = "This NIAT ID is already registered.";
@@ -128,6 +169,7 @@ function LoginInner() {
         return;
       }
       if (mode === "in") {
+        if (signinWait > 0) return;
         await signIn(f.email.trim(), f.password);
         router.replace(safeNext);
         return;
@@ -149,7 +191,16 @@ function LoginInner() {
       if (/check your email/i.test(msg)) {
         setInfo("Account created. Check your email to confirm it, then sign in. You can add a profile picture from your profile.");
         setMode("in");
-      } else setErr(msg);
+        setResendFor(f.email.trim());
+        setResendWait(60);
+      } else if (msg.startsWith("EMAIL_NOT_CONFIRMED: ")) {
+        setErr(msg.slice("EMAIL_NOT_CONFIRMED: ".length));
+        setResendFor(f.email.trim());
+      } else {
+        setErr(msg);
+        if (/signing in at once/i.test(msg)) setSigninWait(45);
+        if (/already sent you an email/i.test(msg) && mode === "up") setResendFor(f.email.trim());
+      }
     } finally {
       setBusy(false);
     }
@@ -244,13 +295,24 @@ function LoginInner() {
             </div>
           </>
         )}
+        {linkNote && !err && !info && <div role={linkNote.kind === "err" ? "alert" : "status"} className={`rounded border px-3 py-2 text-sm ${linkNote.kind === "err" ? "border-accent/50 bg-accent/10 text-accent-ink" : "border-[#2f7a46]/40 bg-[#2f7a46]/10 text-[#215c34]"}`}>{linkNote.text}</div>}
         {err && <div role="alert" className="rounded border border-accent/50 bg-accent/10 px-3 py-2 text-sm text-accent-ink">{err}</div>}
+        {BACKEND_MODE === "supabase" && (resendFor || linkNote?.kind === "err") && mode !== "forgot" && (
+          <button type="button" className="w-full rounded-md border border-line2 px-3 py-2 text-sm hover:border-accent disabled:opacity-50" disabled={resendWait > 0 || !(resendFor ?? f.email).trim()} onClick={() => void resend()} data-testid="resend-confirmation">
+            {resendWait > 0 ? `Resend confirmation email in ${resendWait}s` : `Resend confirmation email${(resendFor ?? f.email).trim() ? ` to ${(resendFor ?? f.email).trim()}` : ""}`}
+          </button>
+        )}
         {info && <div role="status" className="rounded border border-[#2f7a46]/40 bg-[#2f7a46]/10 px-3 py-2 text-sm text-[#215c34]">{info}</div>}
-        <Button variant="primary" size="lg" className="w-full" disabled={busy || (mode === "forgot" && sent && cooldown > 0)}>
+        <Button variant="primary" size="lg" className="w-full" disabled={busy || (mode === "forgot" && sent && cooldown > 0) || (mode === "in" && signinWait > 0)}>
           {busy
             ? mode === "in" ? "Signing in…" : mode === "forgot" ? "Sending…" : "Creating account…"
-            : mode === "in" ? "SIGN IN" : mode === "forgot" ? (sent ? (cooldown > 0 ? `SEND AGAIN IN ${cooldown}s` : "SEND AGAIN") : "SEND RESET LINK") : "CREATE ACCOUNT"}
+            : mode === "in" ? (signinWait > 0 ? `TRY AGAIN IN ${signinWait}s` : "SIGN IN") : mode === "forgot" ? (sent ? (cooldown > 0 ? `SEND AGAIN IN ${cooldown}s` : "SEND AGAIN") : "SEND RESET LINK") : "CREATE ACCOUNT"}
         </Button>
+        {googleOn && mode !== "forgot" && (
+          <button type="button" className="w-full rounded-md border border-line2 px-3 py-2 text-sm font-medium hover:border-accent" onClick={() => void getBackend().then((b) => b.signInWithGoogle(safeNext)).catch((x) => setErr((x as Error).message))}>
+            Continue with Google
+          </button>
+        )}
         <button
           type="button"
           className="w-full text-center text-sm text-brand hover:underline"

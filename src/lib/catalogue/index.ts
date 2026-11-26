@@ -24,8 +24,17 @@ export function setCatalogueOverrides(o: Record<string, Partial<ComponentRecord>
   extra = added;
 }
 
+/** Student-defined components (see ./custom.ts), registered when a project that uses them is opened. */
+const custom = new Map<string, ComponentRecord>();
+export function registerCustomRecords(recs: ComponentRecord[]) {
+  for (const r of recs) custom.set(r.id, r);
+}
+export function customRecords(): ComponentRecord[] {
+  return [...custom.values()];
+}
+
 export function getComponent(id: string): ComponentRecord | undefined {
-  const base = byId.get(id) ?? extra.find((r) => r.id === id);
+  const base = byId.get(id) ?? extra.find((r) => r.id === id) ?? custom.get(id);
   if (!base) return undefined;
   const o = overrides[id];
   return o ? { ...base, ...o } : base;

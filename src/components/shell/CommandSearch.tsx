@@ -41,7 +41,7 @@ export function CommandSearch({ open, onClose }: { open: boolean; onClose: () =>
               onClose();
             }
           }}
-          placeholder="Search 553 components, 84 topics and your projects…"
+          placeholder="Search 558 components, 84 topics and your projects…"
           className="w-full border-b border-line bg-transparent px-4 py-3 text-base outline-none"
         />
         <ul className="max-h-[50vh] overflow-auto">

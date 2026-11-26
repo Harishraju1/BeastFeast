@@ -43,14 +43,30 @@ export interface CircuitGraph {
   wires: Wire[];
 }
 
+/** Parses an arrangement such as "2S2P" → { s: 2, p: 2 }. */
+export function parseArrangement(a: unknown, cells: number): { s: number; p: number } {
+  const m = /^(\d+)S(\d+)P$/i.exec(String(a ?? ""));
+  if (m && Number(m[1]) * Number(m[2]) === cells) return { s: Number(m[1]), p: Number(m[2]) };
+  return { s: cells, p: 1 };
+}
+
 export function batteryPack(comp: ComponentRecord, part: PartInstance) {
   const b = comp.battery;
   if (!b) return null;
+  if (b.cellCount) {
+    // fixed-count multi-cell pack: series × parallel chosen by the student, ratings per cell
+    const { s, p } = parseArrangement(optionValue(comp, part, "arrangement"), b.cellCount);
+    const cellV = Number(optionValue(comp, part, "cellNominal") ?? b.nominalVoltage);
+    const cellMax = Number(optionValue(comp, part, "cellMax") ?? b.maxVoltage);
+    const cellCap = Number(optionValue(comp, part, "capacity") ?? b.capacity_mAh);
+    const cellA = Number(optionValue(comp, part, "cellMaxA") ?? b.maxContinuousA);
+    return { nominal: cellV * s, max: cellMax * s, min: b.minVoltage * s, capacity: cellCap * p, rint: (b.internalResistance_ohm * s) / p, maxA: cellA * p, cells: s, parallel: p };
+  }
   const n = b.perCell ? Number(part.config.series ?? comp.options.find((o) => o.key === "series")?.default ?? 1) : 1;
   const cap = Number(part.config.capacity ?? b.capacity_mAh);
   // fixed packs (e.g. "LiPo 3S") report their own series cell count; cell-based parts use the instance option
   const cells = b.perCell ? n : (seriesCellsOf(comp) ?? 1);
-  return { nominal: b.nominalVoltage * n, max: b.maxVoltage * n, min: b.minVoltage * n, capacity: cap, rint: b.internalResistance_ohm * n, maxA: b.maxContinuousA, cells };
+  return { nominal: b.nominalVoltage * n, max: b.maxVoltage * n, min: b.minVoltage * n, capacity: cap, rint: b.internalResistance_ohm * n, maxA: b.maxContinuousA, cells, parallel: 1 };
 }
 
 export function optionValue(comp: ComponentRecord, part: PartInstance, key: string) {

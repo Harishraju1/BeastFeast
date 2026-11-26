@@ -67,8 +67,9 @@ describe("11.1V 2100mAh LiPo Battery (3S)", () => {
     expect(rep.missing).toEqual([]);
     expect(rep.duplicateIds).toEqual([]);
     expect(rep.complete).toBe(true);
-    expect(rep.platformAdditions).toEqual([{ id: LIPO_3S_2100_ID, name: bat.name }]);
-    expect(reportToMarkdown(rep, CATALOGUE, "x".repeat(64))).toContain("Platform additions (not in the master list, counted separately) | 1");
+    expect(rep.platformAdditions).toContainEqual({ id: LIPO_3S_2100_ID, name: bat.name });
+    expect(rep.platformAdditions).toHaveLength(6); // 3S LiPo + five 18650 packs (1–5 cells)
+    expect(reportToMarkdown(rep, CATALOGUE, "x".repeat(64))).toContain("Platform additions (not in the master list, counted separately) | 6");
   });
 
   it("is placed on the chassis and powers the simulator", () => {

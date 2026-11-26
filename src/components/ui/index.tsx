@@ -38,9 +38,9 @@ export function Panel({ title, actions, children, className = "", bodyClass = "p
 
 const STATUS: Record<SimStatus, { label: string; cls: string; full: string }> = {
   green: { label: "SIMULATED", cls: "bg-ok/15 text-ok border-ok/40", full: "Fully simulated" },
-  blue: { label: "DESIGN", cls: "bg-info/15 text-info border-info/40", full: "Design & connection supported" },
+  blue: { label: "LIMITED SIM", cls: "bg-info/15 text-info border-info/40", full: "Supported with limited simulation (wiring, power and pins are checked)" },
   yellow: { label: "VISUAL", cls: "bg-warn/15 text-warn border-warn/40", full: "Visual / mechanical representation only" },
-  grey: { label: "PENDING", cls: "bg-dim/15 text-muted border-dim/40", full: "Under development / unverified" },
+  grey: { label: "NOT YET SUPPORTED", cls: "bg-dim/15 text-muted border-dim/40", full: "Not yet supported by the simulator (no verified pinout or model) — see the suggested alternative" },
 };
 export function SimBadge({ status, full = false }: { status: SimStatus; full?: boolean }) {
   const s = STATUS[status];

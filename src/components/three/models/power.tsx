@@ -80,7 +80,11 @@ function LipoPack({ part, comp, x, y, z, emissive }: { part: PartInstance; comp:
 
 /** 18650 / 21700 / 26650 holder: black base and the cells side by side. Unchanged design. */
 function CellHolder({ part, comp, x, y, z, emissive }: { part: PartInstance; comp: ComponentRecord; x: number; y: number; z: number; emissive?: string }) {
-  const n = Number(part.config.series ?? 1);
+  const fixed = comp.battery?.cellCount;
+  const n = fixed ?? Number(part.config.series ?? 1);
+  // multi-cell packs: cells in the same parallel group share a colour so the S×P arrangement is visible
+  const pack = fixed ? batteryPack(comp, part) : null;
+  const groupOf = (i: number) => (pack ? Math.floor(i / (pack.parallel ?? 1)) : i);
   const r = (/21700/.test(comp.name) ? 21 : /26650/.test(comp.name) ? 26 : 18) * MM * 0.5;
   return (
     <group>
@@ -88,7 +92,7 @@ function CellHolder({ part, comp, x, y, z, emissive }: { part: PartInstance; com
       {Array.from({ length: n }, (_, i) => (
         <mesh key={i} position={[0, 0, (i - (n - 1) / 2) * r * 2.1]} rotation={[0, 0, Math.PI / 2]} castShadow>
           <cylinderGeometry args={[r, r, x * 0.85, 20]} />
-          <meshStandardMaterial color={["#2b7de9", "#21a366", "#e0413a", "#7a4ee0"][i % 4]} metalness={0.3} roughness={0.4} />
+          <meshStandardMaterial color={["#2b7de9", "#21a366", "#e0413a", "#7a4ee0", "#e0a21b"][groupOf(i) % 5]} metalness={0.3} roughness={0.4} />
         </mesh>
       ))}
     </group>

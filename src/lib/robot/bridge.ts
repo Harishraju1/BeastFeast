@@ -278,7 +278,10 @@ export class RobotElectrical implements ArduinoHost {
       const c = this.graph.comps.get(d.uid)!;
       const wiring = DRIVER_WIRING[c.id];
       if (!wiring || !c.driver) continue;
-      const powered = this.graph.powered.has(d.uid);
+      // logic must be powered too: L298N +5V (on-board regulator or fed externally), TB6612/L293D VCC
+      const logicPin = c.id === "l298n" ? "5V" : wiring.logicSupply;
+      const logicOk = !logicPin || (this.graph.netOf.get(`${d.uid}.${logicPin}`)?.voltage ?? null) !== null;
+      const powered = this.graph.powered.has(d.uid) && logicOk;
       const vs = this.liveSupply(this.graph.netOf.get(`${d.uid}.${wiring.motorSupply}`));
       const veff = Math.max(0, vs - c.driver.dropV);
       for (const ch of wiring.channels) {

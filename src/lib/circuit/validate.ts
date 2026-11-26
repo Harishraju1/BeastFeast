@@ -7,6 +7,7 @@ import { type CircuitGraph, type Net, type NetMember, batteryPack, buildGraph, i
 import { DRIVER_WIRING } from "@/lib/robot/drivers";
 import { type SumoLimits, validateMechanics } from "@/lib/mech/validate";
 import { LINEAR_VIN_RECOMMENDED_MAX } from "@/lib/catalogue/specs/controllers";
+import { supportOf } from "@/lib/components/support";
 
 type Issue = Omit<ValidationIssue, "id">;
 
@@ -20,24 +21,31 @@ export function validateProject(project: Project, studentName = "ENGINEER", sumo
   const add = (i: Issue) => issues.push(i);
   const NAME = studentName.toUpperCase();
 
-  checks += ruleMissingComponents(project, g, add, NAME);
-  checks += ruleShortsAndConflicts(g, add);
-  checks += rulePowerAndGround(g, add, NAME);
-  checks += ruleMotors(g, add, NAME);
-  checks += ruleDrivers(g, add, NAME);
-  checks += ruleSignals(g, add, NAME);
-  checks += ruleBuses(g, add);
-  checks += ruleCurrent(g, add);
-  checks += ruleSuggestions(g, add);
+  const passed: string[] = [];
+  const group = (name: string, run: () => number) => {
+    const before = issues.length;
+    checks += run();
+    if (!issues.slice(before).some((i) => i.severity !== "suggestion")) passed.push(name);
+  };
+  group("Required components", () => ruleMissingComponents(project, g, add, NAME));
+  group("No short circuits or supply conflicts", () => ruleShortsAndConflicts(g, add));
+  group("Power, voltage ranges and ground", () => rulePowerAndGround(g, add, NAME));
+  group("Motor connections", () => ruleMotors(g, add, NAME));
+  group("Motor driver inputs, enables and PWM", () => ruleDrivers(g, add, NAME));
+  group("Controller pins and logic levels", () => ruleSignals(g, add, NAME));
+  group("I²C / SPI / UART wiring", () => ruleBuses(g, add));
+  group("Current limits", () => ruleCurrent(g, add));
+  group("Battery protection and simulation support", () => ruleSuggestions(g, add));
 
   const mech = validateMechanics(project, NAME, sumoLimits);
   checks += mech.checks;
   issues.push(...mech.issues);
+  if (!mech.issues.some((i) => i.severity !== "suggestion")) passed.push("Mechanical assembly");
 
   const withIds: ValidationIssue[] = issues.map((i, n) => ({ ...i, id: `${i.code}-${n}` }));
   const order = { critical: 0, warning: 1, suggestion: 2 };
   withIds.sort((a, b) => order[a.severity] - order[b.severity]);
-  return { at: new Date().toISOString(), issues: withIds, scores: score(withIds), passed: !withIds.some((i) => i.severity === "critical"), checksRun: checks };
+  return { at: new Date().toISOString(), issues: withIds, scores: score(withIds), passed: !withIds.some((i) => i.severity === "critical"), checksRun: checks, passedChecks: passed };
 }
 
 export function score(issues: ValidationIssue[]) {
@@ -259,7 +267,10 @@ function ruleDrivers(g: CircuitGraph, add: (i: Issue) => void, NAME: string): nu
       const vsMax = vs?.vMax ?? vs?.voltage ?? 0;
       if (jumper && vsMax > 12.05)
         add({ severity: "critical", area: "power", code: "E_L298N_JUMPER_OVERVOLT", title: "POWER SYSTEM WARNING! L298N 5V JUMPER WITH >12 V!", partUid: d.uid, pinId: "VS", incorrect: `VS reaches ${vsMax.toFixed(1)} V with the 5V-regulator jumper fitted.`, explanation: "The on-board 78M05 regulator is only meant for up to 12 V. Above that it overheats.", fix: "Remove the 5V-regulator jumper and feed 5 V into the +5V pin from your controller or a buck converter." });
-      if (jumper && vs?.voltage != null && vs.voltage < 7)
+      const fiveNet = g.netOf.get(key(d, "5V"));
+      if (jumper && vs?.voltage != null && !fiveNet?.voltage)
+        add({ severity: "critical", area: "power", code: "E_L298N_NO_LOGIC", title: `HEY ${NAME}! THE L298N LOGIC HAS NO 5 V!`, partUid: d.uid, pinId: "5V", incorrect: `VS is only ${vs.voltage.toFixed(1)} V: the on-board 78M05 regulator needs about 7 V to make 5 V.`, explanation: "With the regulator jumper fitted the L298N makes its own 5 V logic supply from VS. Below ≈6.5 V it cannot, so the driver ignores IN1–IN4 and the motors never move.", fix: "Use a higher-voltage battery (2S or more), or remove the jumper and feed the +5V pin from the controller's 5V pin." });
+      else if (jumper && vs?.voltage != null && vs.voltage < 7)
         add({ severity: "warning", area: "power", code: "W_L298N_LOW_VS", title: "L298N LOGIC MAY NOT GET 5 V", partUid: d.uid, pinId: "5V", incorrect: `VS is only ${vs.voltage.toFixed(1)} V.`, explanation: "The 78M05 needs about 7 V in to produce a stable 5 V for the L298N logic.", fix: "Use a higher-voltage battery, or remove the jumper and supply 5 V to the +5V pin." });
       if (!jumper) {
         const five = g.netOf.get(key(d, "5V"));
@@ -491,13 +502,34 @@ function ruleSuggestions(g: CircuitGraph, add: (i: Issue) => void): number {
   const batteries = partsOf(g, (c) => !!c.battery);
   if (!batteries.length) return 1;
   const hasSwitch = g.parts.some((p) => g.comps.get(p.uid)!.kind === "switch" || /Emergency|Toggle|Rocker/.test(g.comps.get(p.uid)!.name));
-  if (!hasSwitch) add({ severity: "suggestion", area: "power", code: "S_POWER_SWITCH", title: "ADD A POWER / EMERGENCY SWITCH", explanation: "Most competition rules require a way to cut power quickly, and it saves your battery between runs.", fix: "Put a toggle or emergency-stop switch in series with battery +." });
+  if (!hasSwitch) add({ severity: "suggestion", area: "power", code: "S_POWER_SWITCH", title: "ADD A POWER / EMERGENCY SWITCH", explanation: "Optional for the simulator — the battery works without one. On a real robot most competition rules require a way to cut power quickly, and it saves your battery between runs.", fix: "Put a toggle or emergency-stop switch in series with battery +." });
   const lithium = batteries.some((b) => /Li|LiPo|18650|21700|26650/.test(g.comps.get(b.uid)!.name));
-  if (lithium && !g.parts.some((p) => /Fuse|Protection|BMS/.test(g.comps.get(p.uid)!.name)))
+  if (lithium && !g.parts.some((p) => /Fuse|Protection|BMS/.test(g.comps.get(p.uid)!.name)) && !batteries.some((b) => g.comps.get(b.uid)!.battery?.cellCount))
     add({ severity: "suggestion", area: "power", code: "S_FUSE", title: "PROTECT YOUR LITHIUM BATTERY", explanation: "Lithium packs can deliver huge short-circuit currents.", fix: "Add an inline fuse or a protection/BMS board." });
   for (const d of partsOf(g, (c) => c.id === "l298n")) {
     const vs = g.netOf.get(key(d, "VS"))?.voltage;
     if (vs && vs <= 8.5) add({ severity: "suggestion", area: "compatibility", code: "S_L298N_DROP", title: "YOUR L298N WASTES A LOT OF YOUR BATTERY VOLTAGE", partUid: d.uid, explanation: `The L298N's bipolar transistors drop ≈2 V, so of ${vs.toFixed(1)} V only ≈${(vs - 2).toFixed(1)} V reaches the motors.`, fix: "A MOSFET driver such as the TB6612FNG or DRV8833 loses only a few tenths of a volt." });
+  }
+  for (const b of batteries) {
+    const c = g.comps.get(b.uid)!;
+    const pack = batteryPack(c, b)!;
+    if (c.battery?.cellCount) {
+      const bms = Boolean(optionValue(c, b, "bms"));
+      if (pack.cells >= 2 && !bms)
+        add({ severity: "warning", area: "power", code: "W_PACK_NO_BMS", title: "YOUR MULTI-CELL LITHIUM PACK HAS NO PROTECTION", partUid: b.uid, incorrect: `${b.label}: ${pack.cells}S${pack.parallel}P lithium pack without a BMS.`, explanation: "In series, cells drift apart: without a BMS one cell can be over-charged or over-discharged (fire risk), and a short circuit has nothing to stop it. The simulator does not make an unprotected pack safe.", fix: `Fit a ${pack.cells}S BMS / protection board rated above your motors' current (and use matched cells).` });
+      if (pack.cells === 1 && !bms)
+        add({ severity: "suggestion", area: "power", code: "S_CELL_PROTECTION", title: "USE A PROTECTED 18650 CELL", partUid: b.uid, explanation: "A bare Li-ion cell has no over-discharge or short-circuit protection.", fix: "Use a protected cell or add a 1S protection board." });
+      if ((pack.parallel ?? 1) > 1)
+        add({ severity: "suggestion", area: "power", code: "S_PARALLEL_MATCHED", title: "PARALLEL CELLS MUST BE MATCHED", partUid: b.uid, explanation: "Cells connected in parallel push current into each other if their voltages differ.", fix: "Only connect cells in parallel when they are the same model and charged to the same voltage." });
+    }
+  }
+  // parts the simulator cannot fully model are named, never silently ignored
+  for (const p of g.parts) {
+    const c = g.comps.get(p.uid)!;
+    const s = supportOf(c);
+    if (s.level === "full") continue;
+    if (!["controller", "motor-driver", "dc-motor", "sensor", "servo", "display", "wireless", "rc-input", "stepper-driver", "stepper-motor", "esc"].includes(c.kind)) continue;
+    add({ severity: "suggestion", area: "compatibility", code: s.level === "unsupported" ? "S_NOT_SUPPORTED" : "S_LIMITED_SIM", title: s.level === "unsupported" ? `${p.label.toUpperCase()} IS NOT SUPPORTED BY THE SIMULATOR YET` : `${p.label.toUpperCase()} HAS LIMITED SIMULATION`, partUid: p.uid, incorrect: s.limits.join(" "), explanation: s.summary, fix: s.alternative ? `To simulate it fully, use the ${s.alternative.name} instead (open "Show better alternative").` : "Keep it in your design; it is checked for wiring and power only." });
   }
   const enc = partsOf(g, (c) => c.sensor?.kind === "encoder");
   for (const e of enc) {

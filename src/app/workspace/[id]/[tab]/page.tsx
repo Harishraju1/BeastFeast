@@ -2,7 +2,8 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { registerCustomComponents } from "@/lib/catalogue/custom";
 import { History, Maximize2, Minimize2, Redo2, RotateCcw, Save, ScanLine, Undo2 } from "lucide-react";
 import { InlineNotice, NotificationBell } from "@/components/shell/Notifications";
 import { RequireAuth } from "@/components/shell/AppShell";
@@ -111,6 +112,8 @@ function WorkspaceInner() {
   const { id, tab } = useParams<{ id: string; tab: string }>();
   const { getProject, undo, redo, saveNow, history, saveState, updateProject } = useApp();
   const project = getProject(id);
+  // student-defined parts must be registered before any tab looks them up
+  useMemo(() => registerCustomComponents(project?.customComponents), [project?.customComponents]);
   const validate = useValidate(project);
   const scanning = useWorkspace((s) => s.scanning);
   const [versionsOpen, setVersionsOpen] = useState(false);

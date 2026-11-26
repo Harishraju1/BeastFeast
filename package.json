@@ -25,7 +25,9 @@
     "profile:smoke": "tsx scripts/profile-smoke.ts",
     "secret:scan": "tsx scripts/secret-scan.ts",
     "quiz-xp:smoke": "tsx scripts/quiz-xp-smoke.ts",
-    "xp:audit": "tsx scripts/xp-duplicate-audit.ts"
+    "xp:audit": "tsx scripts/xp-duplicate-audit.ts",
+    "accounts:bulk": "tsx scripts/bulk-accounts.ts",
+    "sim:bench": "tsx scripts/sim-benchmark.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

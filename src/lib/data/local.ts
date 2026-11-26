@@ -162,6 +162,12 @@ export class LocalBackend implements Backend {
   async requestPasswordReset(): Promise<void> {
     throw new Error("Local mode has no email service. Ask this device's Super Admin, or create a new local account.");
   }
+  async resendConfirmation(): Promise<void> {
+    throw new Error("Local mode accounts do not need email confirmation.");
+  }
+  async signInWithGoogle(): Promise<void> {
+    throw new Error("Google sign-in is only available in cloud mode.");
+  }
   async updatePassword(newPassword: string) {
     const accounts = this.accounts();
     const a = accounts.find((x) => x.profile.id === this.me().profile.id)!;

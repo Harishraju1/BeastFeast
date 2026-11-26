@@ -285,6 +285,56 @@
   stroke-dasharray: 6 4;
   animation: bf-dash 0.6s linear infinite;
 }
+/* conventional current flowing from wire.to back to wire.from */
+.bf-flow-rev {
+  animation-direction: reverse;
+}
+/* repair assistant: a new wire being drawn from source to destination (path has pathLength="1") */
+@keyframes bf-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.bf-draw {
+  stroke-dasharray: 1 1;
+  animation: bf-draw 1.2s ease-out forwards;
+}
+/* repair assistant: an incorrect wire being disconnected */
+@keyframes bf-cut {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.12;
+  }
+}
+.bf-cut {
+  stroke-dasharray: 5 4;
+  animation: bf-dash 0.4s linear infinite, bf-cut 1.8s ease-in forwards;
+}
+/* motor rotor on the circuit bench (duration and direction set inline from the simulated rpm) */
+@keyframes bf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.bf-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bf-spin 1s linear infinite;
+}
+@keyframes bf-blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+.bf-blink {
+  animation: bf-blink 0.6s steps(1) infinite;
+}
 
 @keyframes bf-rise {
   from {
@@ -321,9 +371,16 @@
   .bf-grid,
   .bf-scanline,
   .bf-flow,
+  .bf-cut,
+  .bf-spin,
+  .bf-blink,
   .bf-pulse-error,
   .bf-rise {
     animation: none !important;
+  }
+  .bf-draw {
+    animation: none !important;
+    stroke-dasharray: none;
   }
   .bf-lift:hover {
     transform: none;
