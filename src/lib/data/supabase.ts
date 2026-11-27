@@ -437,6 +437,10 @@ export class SupabaseBackend implements Backend {
   }
 
   async getContent(): Promise<AdminContent> {
+    // shared content is readable by signed-in users only (RLS); a signed-out visitor would just get a 401
+    // on every page load, so skip the request (getSession reads the local cookie, no network call)
+    const { data: s } = await this.sb.auth.getSession();
+    if (!s.session) return { ...EMPTY_CONTENT };
     const row = check(await this.sb.from("app_content").select("value").eq("key", "content").maybeSingle()) as { value: Partial<AdminContent> } | null;
     const content = { ...EMPTY_CONTENT, ...(row?.value ?? {}) };
     // the video library table (migration 0016) replaces the list kept in app_content once it exists
