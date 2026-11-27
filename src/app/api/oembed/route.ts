@@ -23,8 +23,8 @@ export async function GET(req: Request) {
     if (!userId) return json(401, { error: "Your session has expired. Please sign in again." });
     if (!isStaff(role)) return json(403, { error: "Administrator access required." });
     const now = Date.now();
-    const recent = (hits.get(userId) ?? []).filter((t) => now - t < 60_000);
-    if (recent.length >= 30) return json(429, { error: "Too many lookups. Wait a minute." });
+    const recent = (hits.get(userId) ?? []).filter((t) => now - t < 3_600_000);
+    if (recent.length >= 1000) return json(429, { error: "Too many lookups this hour. Please try again later." });
     hits.set(userId, [...recent, now]);
   }
   const raw = new URL(req.url).searchParams.get("url") ?? "";

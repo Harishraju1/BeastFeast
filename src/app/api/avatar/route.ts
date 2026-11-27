@@ -17,7 +17,7 @@ export const runtime = "nodejs";
 const ALLOWED = new Set(["jpeg", "png", "webp"]);
 const json = (status: number, body: Record<string, unknown>, headers: Record<string, string> = {}) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
 
-/** Seconds until the avatar limiter's hourly window (rl_hit 'avatar', 10 per 3600 s) starts again. */
+/** Seconds until the hourly rate-limit window (rl_hit: 1000 per user per clock hour, migration 0018) starts again. */
 const retryAfterS = () => String(3600 - (Math.floor(Date.now() / 1000) % 3600));
 
 /** Signed-in requests always carry the session cookie; without it there is nothing to check, so no work is done. */

@@ -160,12 +160,11 @@ async function main() {
   check("removing the picture clears the profile and deletes the file", del.status === 200 && after?.avatar === null && left.length === 0, `${del.status}, ${left.length} files left`);
 
   // ── rate limiting (database-backed) ──
-  let limited = false;
-  for (let i = 0; i < 40 && !limited; i++) {
-    const r = await anon.rpc("niat_id_available", { p_niat: niat(50 + i) });
-    if (r.error && /Too many requests/.test(r.error.message)) limited = true;
-  }
-  check("repeated anonymous NIAT checks hit the rate limit", limited);
+  // checks the limiter's setting without using the limit up (exhausting it would block this network for an hour)
+  await anon.rpc("niat_id_available", { p_niat: niat(50) });
+  const hour = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000).toISOString();
+  const lim = (await service.from("rate_limits").select("hits, limit_max, window_start").eq("bucket", "niat-check").gte("window_start", hour)).data ?? [];
+  check("anonymous NIAT checks are counted against a 1000-per-hour limit", lim.length > 0 && lim.every((r) => r.limit_max === 1000), JSON.stringify(lim.map((r) => ({ hits: r.hits, limit: r.limit_max }))));
 }
 
 async function cleanup() {
