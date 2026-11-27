@@ -24,9 +24,13 @@ const tag = Date.now().toString().slice(-5);
 // test NIAT IDs are generated per run so reruns never collide; they are deleted with the accounts
 const niat = (n: number) => `N99H01Q${String((Number(tag) * 7 + n) % 10000).padStart(4, "0")}`;
 
+/**
+ * An email sign-up that goes through the same database rules as the form, created through the admin API with the
+ * email already confirmed: no confirmation email is sent, so the club's hourly email allowance is never used by
+ * these checks (public sign-ups spend it even when the database then rejects them). No skip flag is set.
+ */
 async function signUpViaApi(email: string, password: string, data: Record<string, unknown>) {
-  const sb = createClient(URL_, PUB, { auth: { persistSession: false } });
-  const r = await sb.auth.signUp({ email, password, options: { data } });
+  const r = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: data });
   if (r.data.user) made.push(r.data.user.id);
   return r;
 }
@@ -163,7 +167,7 @@ async function main() {
   // checks the limiter's setting without using the limit up (exhausting it would block this network for an hour)
   await anon.rpc("niat_id_available", { p_niat: niat(50) });
   const hour = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000).toISOString();
-  const lim = (await service.from("rate_limits").select("hits, limit_max, window_start").eq("bucket", "niat-check").gte("window_start", hour)).data ?? [];
+  const lim = (await service.from("rate_limits").select("hits, limit_max, window_start").eq("bucket", "niat-check").eq("window_start", hour)).data ?? [];
   check("anonymous NIAT checks are counted against a 1000-per-hour limit", lim.length > 0 && lim.every((r) => r.limit_max === 1000), JSON.stringify(lim.map((r) => ({ hits: r.hits, limit: r.limit_max }))));
 }
 
