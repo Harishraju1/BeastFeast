@@ -7,7 +7,27 @@ import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { createBrowserClient } from "@supabase/ssr";
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Backend, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig, type SignUpInput, type PrivateDetails, type AdminUserQuery, type AdminUserRow } from "./types";
+import { type AdminContent, type Backend, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig, type SignUpInput, type PrivateDetails, type AdminUserQuery, type AdminUserRow, type NiatReviewRow, type StreakInfo } from "./types";
+import { computeStreak } from "@/lib/streak";
+import type { Video } from "./types";
+import { type UploadOptions, storageName, xhrUpload } from "@/lib/video/upload";
+import type { VideoProvider } from "@/lib/video/providers";
+
+const VIDEO_BUCKET = "lesson-videos";
+const toVideo = (r: Record<string, unknown>): Video => ({
+  id: String(r.id), title: String(r.title), description: String(r.description ?? ""), url: String(r.url ?? ""),
+  source: r.source as Video["source"], provider: r.provider as VideoProvider, storagePath: (r.storage_path as string) ?? undefined,
+  thumbnail: (r.thumbnail_url as string) ?? undefined, thumbnailPath: (r.thumbnail_path as string) ?? undefined, mime: (r.mime as string) ?? undefined,
+  sizeBytes: r.size_bytes == null ? undefined : Number(r.size_bytes), vertical: Boolean(r.vertical),
+  category: r.category as Video["category"], competition: r.competition as Video["competition"], difficulty: r.difficulty as Video["difficulty"],
+  topicId: (r.topic_id as string) ?? undefined, published: Boolean(r.published), createdAt: String(r.created_at), updatedAt: String(r.updated_at),
+});
+const fromVideo = (v: Video) => ({
+  id: v.id, title: v.title.trim(), description: v.description ?? "", source: v.source ?? "url", provider: v.provider ?? "youtube", url: v.url ?? "",
+  provider_id: null, storage_path: v.storagePath ?? null, thumbnail_url: v.thumbnail ?? null, thumbnail_path: v.thumbnailPath ?? null,
+  mime: v.mime ?? null, size_bytes: v.sizeBytes ?? null, vertical: !!v.vertical, category: v.category, competition: v.competition,
+  difficulty: v.difficulty, topic_id: v.topicId ?? null, published: v.published !== false,
+});
 import { EMPTY_CONTENT } from "./local";
 import { squareImage } from "@/lib/avatar-client";
 
@@ -99,7 +119,11 @@ export class SupabaseBackend implements Backend {
     if (error) throw new Error(friendlyError(error.message));
     return data as T;
   }
+  private readonly url: string;
+  private readonly anonKey: string;
   constructor(url: string, anonKey: string) {
+    this.url = url.replace(/\/$/, "");
+    this.anonKey = anonKey;
     // Session lives in cookies (not localStorage) so the server can verify who is signed in — the /admin
     // layout checks the user's role on the server before rendering anything.
     // Outside a browser (tests, scripts, pre-rendering) there are no cookies: use a session-less client.
@@ -126,10 +150,10 @@ export class SupabaseBackend implements Backend {
   async signUp(input: SignUpInput) {
     const guard = emailGuard("signup", input.email);
     guard.check();
-    const res = await this.sb.auth.signUp({ email: input.email.trim(), password: input.password, options: { emailRedirectTo: authRedirect("/login?confirmed=1"), data: { name: input.name.trim(), phone: input.phone, niat_id: input.niatId } } });
+    const res = await this.sb.auth.signUp({ email: input.email.trim(), password: input.password, options: { emailRedirectTo: authRedirect("/login?confirmed=1"), data: { name: input.name.trim(), phone: input.phone, niat_id: input.niatId, campus: input.campus.trim() } } });
     if (res.error) {
       // the database trigger rejects invalid or duplicate NIAT IDs / phones; Auth reports that generically
-      if (/database error/i.test(res.error.message)) throw new Error("We couldn't create the account. Check your NIAT ID and mobile number — the NIAT ID may already be registered.");
+      if (/database error/i.test(res.error.message)) throw new Error("We couldn't create the account. Check your NIAT Student ID, campus name and mobile number — the NIAT ID may already be registered.");
       if (/already registered|already been registered/i.test(res.error.message)) throw new Error("An account with this email already exists. Sign in instead.");
       throw new Error(friendlyError(res.error.message));
     }
@@ -245,6 +269,8 @@ export class SupabaseBackend implements Backend {
       await this.sb.rpc("admin_list_users", {
         p_search: q.search?.trim() || null, p_role: q.role || null, p_status: q.status || null,
         p_min_rank: q.minRank ?? null, p_max_rank: q.maxRank ?? null, p_limit: q.limit, p_offset: q.offset,
+        // only sent when filtering, so this also works against a database without the campus filter yet
+        ...(q.campus?.trim() ? { p_campus: q.campus.trim() } : {}),
       }),
     ) as Record<string, unknown>[];
     return {
@@ -253,9 +279,34 @@ export class SupabaseBackend implements Backend {
         id: String(r.id), name: String(r.name), email: String(r.email ?? ""), phone: (r.phone as string) ?? null, niatId: (r.niat_id as string) ?? null,
         legacyStudentId: (r.legacy_student_id as string) ?? null, avatar: (r.avatar as string) ?? null, role: r.role as Profile["role"],
         xp: Number(r.xp), dailyXp: Number(r.daily_xp ?? 0), rankLevel: Number(r.rank_level ?? 1), createdAt: String(r.created_at),
-        lastSignInAt: (r.last_sign_in_at as string) ?? null, status: r.status as AdminUserRow["status"],
+        lastSignInAt: (r.last_sign_in_at as string) ?? null, status: r.status as AdminUserRow["status"], campus: String(r.campus ?? ""),
       })),
     };
+  }
+  async adminSetCampus(userId: string, campus: string) {
+    return String(check(await this.sb.rpc("admin_set_campus", { p_user: userId, p_campus: campus })));
+  }
+  async adminSetNiat(userId: string, niatId: string) {
+    return String(check(await this.sb.rpc("admin_set_niat", { p_user: userId, p_niat: niatId })));
+  }
+  async adminNiatReview(): Promise<NiatReviewRow[]> {
+    const rows = check(await this.sb.rpc("admin_niat_review")) as Record<string, unknown>[];
+    return rows.map((r) => ({ id: String(r.id), name: String(r.name), email: String(r.email ?? ""), campus: String(r.campus ?? ""), niatId: (r.niat_id as string) ?? null, legacyStudentId: (r.legacy_student_id as string) ?? null, issue: r.issue as NiatReviewRow["issue"], createdAt: String(r.created_at) }));
+  }
+  async adminCampuses() {
+    const rows = check(await this.sb.rpc("admin_campuses")) as { campus: string; students: number }[];
+    return rows.map((r) => ({ campus: r.campus, students: Number(r.students) }));
+  }
+  async myStreak(): Promise<StreakInfo | null> {
+    const { data: auth } = await this.sb.auth.getUser();
+    if (!auth.user) return null;
+    const { data, error } = await this.sb.rpc("my_streak");
+    if (!error && Array.isArray(data) && data[0]) {
+      const r = data[0] as Record<string, unknown>;
+      return { current: Number(r.current_streak), longest: Number(r.longest_streak), activeToday: Boolean(r.active_today), lastActive: (r.last_active as string) ?? null, today: String(r.today), timezone: String(r.timezone) };
+    }
+    // database without the streak table yet: the same rules applied to the student's own XP ledger
+    return computeStreak(await this.listXpEvents(auth.user.id));
   }
   async listProfiles() {
     return (check(await this.sb.from("profiles").select("*")) as ProfileRow[]).map(toProfile);
@@ -387,11 +438,43 @@ export class SupabaseBackend implements Backend {
 
   async getContent(): Promise<AdminContent> {
     const row = check(await this.sb.from("app_content").select("value").eq("key", "content").maybeSingle()) as { value: Partial<AdminContent> } | null;
-    return { ...EMPTY_CONTENT, ...(row?.value ?? {}) };
+    const content = { ...EMPTY_CONTENT, ...(row?.value ?? {}) };
+    // the video library table (migration 0016) replaces the list kept in app_content once it exists
+    const { data, error } = await this.sb.from("video_items").select("*").eq("published", true).order("created_at", { ascending: false }).limit(500);
+    if (!error && data) content.videos = (data as Record<string, unknown>[]).map(toVideo);
+    return content;
+  }
+  async adminListVideos() {
+    const rows = check(await this.sb.from("video_items").select("*").order("created_at", { ascending: false }).limit(1000)) as Record<string, unknown>[];
+    return rows.map(toVideo);
+  }
+  async saveVideo(v: Video) {
+    const row = check(await this.sb.from("video_items").upsert(fromVideo(v)).select("*").single()) as Record<string, unknown>;
+    return toVideo(row);
+  }
+  async deleteVideo(v: Video) {
+    check(await this.sb.from("video_items").delete().eq("id", v.id));
+    const paths = [v.storagePath, v.thumbnailPath].filter((p): p is string => !!p);
+    if (paths.length) await this.sb.storage.from(VIDEO_BUCKET).remove(paths); // the row is gone either way; a leftover file is unreadable
+  }
+  async uploadVideoAsset(kind: "video" | "thumb", videoId: string, file: File, opts?: UploadOptions) {
+    const { data } = await this.sb.auth.getSession();
+    if (!data.session) throw new Error("Your session has expired. Please sign in again.");
+    const path = `${kind === "video" ? "videos" : "thumbs"}/${videoId}/${storageName(file.name)}`;
+    await xhrUpload(`${this.url}/storage/v1/object/${VIDEO_BUCKET}/${path}`, file, {
+      authorization: `Bearer ${data.session.access_token}`, apikey: this.anonKey, "content-type": file.type || "application/octet-stream", "x-upsert": "false", "cache-control": "3600",
+    }, opts);
+    return path;
+  }
+  async videoAssetUrl(path: string) {
+    const { data, error } = await this.sb.storage.from(VIDEO_BUCKET).createSignedUrl(path, 3600);
+    return error ? null : data.signedUrl;
   }
   async saveContent(c: Partial<AdminContent>) {
-    const next = { ...(await this.getContent()), ...c };
+    // merge into the stored row itself (not getContent(), whose video list comes from video_items)
+    const row = check(await this.sb.from("app_content").select("value").eq("key", "content").maybeSingle()) as { value: Partial<AdminContent> } | null;
+    const next = { ...EMPTY_CONTENT, ...(row?.value ?? {}), ...c };
     check(await this.sb.from("app_content").upsert({ key: "content", value: next, updated_at: new Date().toISOString() }));
-    return next;
+    return this.getContent();
   }
 }

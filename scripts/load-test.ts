@@ -91,7 +91,7 @@ async function createUsers(n: number): Promise<TestUser[]> {
   for (let i = 0; i < n; i++) {
     const email = `${PREFIX}${RUN}-${i}@${EMAIL_DOMAIN}`;
     const password = `${randomBytes(18).toString("base64url")}Aa1!`;
-    const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: `LOADTEST ${RUN} ${i}` } });
+    const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { skip_profile_checks: true }, user_metadata: { name: `LOADTEST ${RUN} ${i}` } });
     if (error || !data.user) throw new Error(`could not create test account ${i}: ${error?.message}`);
     created.push(data.user.id);
     const client = createClient(SB_URL!, ANON!, { auth: { persistSession: false, autoRefreshToken: false } });

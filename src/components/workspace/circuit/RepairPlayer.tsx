@@ -79,19 +79,23 @@ export function useRepairPlayer(project: Project) {
     setResult(null);
   };
 
-  /** Move to a step; reaching the last ("test") step applies the repair and re-runs validation. */
+  /** Move between the explanation steps. The last ("test") step is only reached by approving the fix. */
   const goTo = useCallback(
     (i: number) => {
-      const n = Math.max(0, Math.min(last, i));
-      setIdx(n);
-      if (n === last) apply();
+      setIdx(Math.max(0, Math.min(result ? last : last - 1, i)));
     },
-    [last, apply],
+    [last, result],
   );
+  /** The student approved: apply exactly the shown change, then test it. */
+  const approve = useCallback(() => {
+    apply();
+    setIdx(last);
+    setPlaying(false);
+  }, [apply, last]);
 
   // auto-advance (the timer callback moves the step)
   useEffect(() => {
-    if (!plan || !playing || idx >= last) return;
+    if (!plan || !playing || idx >= last - 1) return;
     const t = setTimeout(() => goTo(idx + 1), STEP_MS[plan.steps[idx].kind]);
     return () => clearTimeout(t);
   }, [plan, playing, idx, last, goTo]);
@@ -111,8 +115,9 @@ export function useRepairPlayer(project: Project) {
     },
     skip: () => {
       setPlaying(false);
-      goTo(last);
+      goTo(last - 1);
     },
+    approve,
     close: () => set({ repair: null }),
     /** continue with the next repairable problem (re-validated on the current circuit) */
     nextIssue: () => {
@@ -153,6 +158,7 @@ export function RepairControls({ player }: { player: ReturnType<typeof useRepair
         </div>
         {state.idx === 0 && <div className="font-display text-sm font-semibold">{state.plan.intro}</div>}
         <p className="text-sm" aria-live="polite">{s.explanation}</p>
+        {state.idx === n - 2 && !state.result && <p className="text-xs text-muted">Nothing has changed yet. Press <b>Apply this fix</b> to make exactly this change (Ctrl+Z undoes it), or close to keep your circuit as it is.</p>}
         {s.kind === "connect" && state.plan.codeHint && <div className="bf-code rounded px-2 py-1 font-mono text-[11px]">{state.plan.codeHint}</div>}
         {s.kind === "test" && state.result && (
           <div className={`flex items-start gap-2 rounded border px-2 py-1.5 text-sm ${state.result.resolved ? "border-ok/50 bg-ok/10 text-ok" : "border-bad/50 bg-bad/10 text-bad"}`} data-testid="repair-result">
@@ -165,15 +171,18 @@ export function RepairControls({ player }: { player: ReturnType<typeof useRepair
           </div>
         )}
         <div className="flex flex-wrap items-center gap-1">
-          {state.playing && state.idx < n - 1 ? (
+          {state.playing && state.idx < n - 2 ? (
             <Button size="sm" onClick={controls.pause} aria-label="Pause"><Pause size={13} /> Pause</Button>
           ) : (
-            <Button size="sm" onClick={controls.play} disabled={state.idx >= n - 1} aria-label="Play"><Play size={13} /> Play</Button>
+            <Button size="sm" onClick={controls.play} disabled={state.idx >= n - 2} aria-label="Play"><Play size={13} /> Play</Button>
           )}
           <Button size="sm" onClick={controls.prev} disabled={state.idx === 0} aria-label="Previous step"><ChevronLeft size={13} /> Previous</Button>
-          <Button size="sm" onClick={controls.next} disabled={state.idx >= n - 1} aria-label="Next step">Next <ChevronRight size={13} /></Button>
+          <Button size="sm" onClick={controls.next} disabled={state.idx >= n - 2 || (state.idx === n - 1)} aria-label="Next step">Next <ChevronRight size={13} /></Button>
           <Button size="sm" onClick={controls.restart} aria-label="Restart"><RotateCcw size={13} /> Restart</Button>
-          {state.idx < n - 1 && <Button size="sm" onClick={controls.skip} aria-label="Skip animation"><FastForward size={13} /> Skip animation</Button>}
+          {state.idx < n - 2 && <Button size="sm" onClick={controls.skip} aria-label="Skip animation"><FastForward size={13} /> Skip animation</Button>}
+          {state.idx === n - 2 && !state.result && (
+            <Button size="sm" variant="primary" className="ml-auto" onClick={controls.approve} data-testid="repair-apply"><CheckCircle2 size={13} /> Apply this fix</Button>
+          )}
           {state.result && <Button size="sm" variant="primary" className="ml-auto" onClick={controls.nextIssue}>Next problem →</Button>}
         </div>
         <div className="flex gap-1" aria-hidden>

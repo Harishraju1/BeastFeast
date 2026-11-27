@@ -1,13 +1,13 @@
 "use client";
+import { VideoPlayer, VideoThumb } from "@/components/video/VideoPlayer";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Bookmark, CheckCircle2, PlayCircle } from "lucide-react";
+import { Bookmark, CheckCircle2 } from "lucide-react";
 import { LEARNING_PATHS, TOPICS, getTopicsForPath, type PathId } from "@/lib/learning";
 import { useApp } from "@/lib/store/app";
 import { Badge, LinkButton, PageHeader, Panel, Progress, Tabs } from "@/components/ui";
 import { History } from "lucide-react";
-import { embedUrl, youtubeId } from "@/lib/youtube";
 
 function Inner() {
   const sp = useSearchParams();
@@ -82,9 +82,9 @@ function Inner() {
               <button key={c} onClick={() => setVcat(c)} className={`rounded-full border px-3 py-1 text-xs ${vcat === c ? "border-accent text-accent-ink" : "border-line text-muted"}`}>{c}</button>
             ))}
           </div>
-          {playingVideo && youtubeId(playingVideo.url) && (
+          {playingVideo && (
             <div className="overflow-hidden rounded-xl border border-line">
-              <iframe className="aspect-video w-full" src={embedUrl(youtubeId(playingVideo.url)!)} title={playingVideo.title} allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+              <VideoPlayer key={playingVideo.id} video={playingVideo} />
               <div className="p-3">
                 <div className="font-semibold">{playingVideo.title}</div>
                 <div className="text-xs text-muted">{playingVideo.description}</div>
@@ -107,10 +107,7 @@ function Inner() {
                   }}
                   className="overflow-hidden rounded-lg border border-line text-left hover:border-accent"
                 >
-                  <div className="relative aspect-video bg-bg2">
-                    {youtubeId(v.url) && <img src={v.thumbnail || `https://i.ytimg.com/vi/${youtubeId(v.url)}/hqdefault.jpg`} alt="" className="h-full w-full object-cover" />}
-                    <PlayCircle className="absolute inset-0 m-auto text-white/90" size={34} />
-                  </div>
+                  <VideoThumb video={v} className="aspect-video" />
                   <div className="space-y-1 p-2">
                     <div className="text-sm font-medium">{v.title}</div>
                     <div className="flex gap-1"><Badge>{v.category}</Badge><Badge tone="brand">{v.difficulty}</Badge>{progress?.watchedVideos.includes(v.id) && <Badge tone="ok">watched</Badge>}</div>

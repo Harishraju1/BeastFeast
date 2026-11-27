@@ -347,7 +347,8 @@ export interface ChassisConfig {
 export interface ValidationIssue {
   id: string;
   severity: "critical" | "warning" | "suggestion";
-  area: "electrical" | "mechanical" | "power" | "compatibility" | "code";
+  /** report category; "safety" and "simulation" are shown separately (safety counts towards the power score) */
+  area: "electrical" | "mechanical" | "power" | "compatibility" | "code" | "safety" | "simulation";
   code: string; // rule id, e.g. "E_NO_COMMON_GROUND"
   title: string; // shouting headline, e.g. "YOUR MOTOR DRIVER HAS NO COMMON GROUND!"
   partUid?: string;

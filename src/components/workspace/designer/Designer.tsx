@@ -1,4 +1,5 @@
 "use client";
+import { withOption } from "@/lib/circuit/options";
 import { duplicateParts, removeParts } from "@/lib/robot/edit";
 import { supportStatus } from "@/lib/components/support";
 import { useBench } from "../circuit/BenchPanel";
@@ -224,11 +225,24 @@ export default function Designer({ project }: { project: Project }) {
             if (id) add(id);
           }}
         >
-          <Canvas shadows camera={{ position: [0.32, 0.26, 0.32], fov: 40, near: 0.005, far: 20 }} dpr={[1, 2]} onPointerMissed={() => select(null)}>
+          <Canvas shadows={!bench.lowPerf} camera={{ position: [0.32, 0.26, 0.32], fov: 40, near: 0.005, far: 20 }} dpr={bench.lowPerf ? 1 : [1, 2]} onPointerMissed={() => select(null)}>
             <LiveContext.Provider value={live}>
               <Scene project={project} exploded={exploded} mode={mode} onCommit={commit} wheelAngles={bench.wheelAngles} />
             </LiveContext.Provider>
           </Canvas>
+          {sel && selComp && selComp.pins.length > 0 && (
+            <div className="pointer-events-none absolute left-2 top-12 z-10 w-[250px] rounded border border-line bg-bg/90 px-2 py-1.5 text-[10px] leading-tight shadow backdrop-blur" data-testid="pin-card">
+              <div className="mb-0.5 font-semibold">{sel.label} — {selComp.name}</div>
+              <div className="flex flex-wrap gap-x-2 gap-y-0.5 font-mono">
+                {selComp.pins.slice(0, 48).map((pin) => {
+                  const wired = project.wires.some((w) => (w.from.part === sel.uid && w.from.pin === pin.id) || (w.to.part === sel.uid && w.to.pin === pin.id));
+                  return <span key={pin.id} className={`whitespace-nowrap ${wired ? "text-accent-ink" : "text-muted"}`} title={wired ? "wired" : "not wired"}>{pin.label}{wired ? "•" : ""}</span>;
+                })}
+                {selComp.pins.length > 48 && <span className="text-muted">+{selComp.pins.length - 48} more</span>}
+              </div>
+              <div className="mt-0.5 text-[9px] text-dim">• = wired in Circuit Studio</div>
+            </div>
+          )}
           <div className="absolute bottom-3 left-3 flex items-center gap-1" role="toolbar" aria-label="Live simulation">
             {bench.mode === "running" ? (
               <Button size="sm" onClick={bench.pause} title="Pause the live simulation"><Pause size={13} /> Pause</Button>
@@ -236,6 +250,7 @@ export default function Designer({ project }: { project: Project }) {
               <Button size="sm" variant="primary" onClick={bench.run} title="Run your circuit and code: motors, wheels, LEDs, servos and displays move as simulated" data-testid="designer-run"><Play size={13} /> Run live</Button>
             )}
             <Button size="sm" onClick={bench.stop} disabled={bench.mode === "stopped"}><Square size={12} /> Stop</Button>
+            <Button size="sm" variant={bench.lowPerf ? "primary" : "outline"} aria-pressed={bench.lowPerf} onClick={() => bench.setLowPerf(!bench.lowPerf)} title="Low-performance mode: 1× resolution, no shadows, fewer updates">Lite</Button>
             <span className="rounded bg-bg/80 px-2 py-0.5 font-mono text-[10px] text-muted">{bench.mode === "running" ? `LIVE · ${bench.sim?.state.t.toFixed(1)} s · same simulation as Circuit Studio` : bench.mode === "paused" ? "PAUSED" : "3D shows the design; press Run live to animate it from the circuit simulation"}</span>
           </div>
           <div className="absolute left-3 top-3 flex gap-1">
@@ -347,7 +362,7 @@ export default function Designer({ project }: { project: Project }) {
                 {o.type === "boolean" ? (
                   <input type="checkbox" checked={Boolean(sel.config[o.key] ?? o.default)} onChange={(e) => patchPart(sel.uid, { config: { ...sel.config, [o.key]: e.target.checked } })} />
                 ) : o.type === "select" ? (
-                  <select className="bf-input" value={String(sel.config[o.key] ?? o.default)} onChange={(e) => patchPart(sel.uid, { config: { ...sel.config, [o.key]: e.target.value } })}>
+                  <select className="bf-input" value={String(sel.config[o.key] ?? o.default)} onChange={(e) => patchPart(sel.uid, { config: withOption(selComp, sel.config, o.key, e.target.value) as typeof sel.config })}>
                     {o.choices?.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 ) : (

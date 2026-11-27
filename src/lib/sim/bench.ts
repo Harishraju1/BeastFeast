@@ -156,12 +156,17 @@ export class BenchSim {
   private runtime: ArduinoRuntime | null = null;
   readings: Record<string, SensorReading>;
   state: BenchState;
-  private soc = 0.95;
+  private soc = -1; // set from the pack's starting charge on the first battery update
   private cellTemp = 25;
   private capV = new Map<string, number>();
   private staticLoad = 0;
   private lastSolveT = 0;
   env: Record<string, BenchEnv> = {};
+  /**
+   * Manual pin control, used only while no firmware runs (no code, a compile error, or a board whose code is not
+   * executed): each listed controller pin is driven as set here, so the hardware can still be tried out.
+   */
+  manualPins = new Map<number, { level: 0 | 1 } | { duty: number }>();
 
   constructor(readonly project: Project) {
     this.bridge = new RobotElectrical(project);
@@ -225,6 +230,11 @@ export class BenchSim {
     this.readings[uid] = r;
   }
 
+  setManualPin(pin: number, v: "input" | 0 | 1 | { duty: number }) {
+    if (v === "input") this.manualPins.delete(pin);
+    else this.manualPins.set(pin, typeof v === "number" ? { level: v } : v);
+  }
+
   setEnv(uid: string, e: BenchEnv) {
     this.env[uid] = { ...this.env[uid], ...e };
   }
@@ -240,6 +250,7 @@ export class BenchSim {
       return;
     }
     const pack = batteryPack(this.graph.comps.get(bp.uid)!, bp)!;
+    if (this.soc < 0) this.soc = pack.initialSoc;
     if (dt > 0 && pack.capacity > 0) this.soc = Math.max(0, this.soc - (loadA * dt) / 3600 / (pack.capacity / 1000));
     // open-circuit voltage: full at 100 %, nominal around 50 %, cut-off at 0 % (piecewise linear)
     const ocv = this.soc >= 0.5 ? pack.nominal + (pack.max - pack.nominal) * ((this.soc - 0.5) / 0.5) : pack.min + (pack.nominal - pack.min) * (this.soc / 0.5);
@@ -249,6 +260,7 @@ export class BenchSim {
     const warnings: string[] = [];
     if (volts < pack.min * 1.06) warnings.push(`Low voltage: ${volts.toFixed(2)} V is close to the ${pack.min.toFixed(1)} V cut-off — recharge the pack.`);
     if (Number.isFinite(pack.maxA) && loadA > pack.maxA) warnings.push(`Over-current: ${loadA.toFixed(1)} A is above the pack's ${pack.maxA.toFixed(1)} A continuous rating.`);
+    if (this.soc <= 0.001) warnings.push("The pack is empty: in a real robot the BMS cuts the power here (or, without one, the cells are damaged).");
     if (this.cellTemp > 60) warnings.push(`Cells ≈${this.cellTemp.toFixed(0)} °C (estimate) — too hot.`);
     this.state.battery = {
       uid: bp.uid, volts, soc: this.soc, currentA: loadA, powerW: volts * loadA, nominal: pack.nominal, full: pack.max, empty: pack.min,
@@ -278,6 +290,12 @@ export class BenchSim {
     const volts = this.state.battery?.volts ?? 0;
     this.bridge.update(this.readings, telemetry(volts, this.state.motors));
     if (this.runtime) this.state.runtime = this.runtime.runUntil((this.state.t + dt) * 1e6);
+    else
+      for (const [pin, v] of this.manualPins) {
+        this.bridge.pinMode(pin, "OUTPUT");
+        if ("duty" in v) this.bridge.analogWrite(pin, Math.round(Math.max(0, Math.min(1, v.duty)) * 255));
+        else this.bridge.digitalWrite(pin, v.level);
+      }
     const cmds = this.bridge.motorCommands();
     let load = 0;
     for (const [uid, m] of Object.entries(this.state.motors)) {

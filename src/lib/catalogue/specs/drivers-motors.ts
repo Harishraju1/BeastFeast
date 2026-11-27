@@ -32,6 +32,7 @@ export const DRIVER_SPECS: Record<string, SpecPatch> = {
     bridges: [], pinoutStatus: "datasheet-referenced",
     options: [
       { key: "regJumper", label: "5V regulator jumper fitted", type: "boolean", default: true, help: "Fitted: 5V pin is an output. Remove it when VS > 12 V and supply 5 V yourself." },
+      { key: "regType", label: "On-board 5 V regulator", type: "select", default: "78m05", choices: [{ value: "78m05", label: "78M05 (common red module)" }, { value: "none", label: "None on my module — +5V is an input only" }], help: "Check your board: most red L298N modules carry a 78M05 next to the jumper; some clones have no regulator." },
       { key: "enaJumper", label: "ENA jumper fitted (always full speed)", type: "boolean", default: false },
       { key: "enbJumper", label: "ENB jumper fitted (always full speed)", type: "boolean", default: false },
     ],

@@ -28,7 +28,7 @@ const made: string[] = [];
 async function account(name: string, role: "student" | "super_admin"): Promise<Acct> {
   const email = `${TAG}-${name}-${Date.now()}@example.com`;
   const password = randomBytes(18).toString("base64url");
-  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: `Roles ${name}` } });
+  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { skip_profile_checks: true }, user_metadata: { name: `Roles ${name}` } });
   if (error) throw error;
   made.push(data.user.id);
   if (role === "super_admin") await service.from("profiles").update({ role }).eq("id", data.user.id);

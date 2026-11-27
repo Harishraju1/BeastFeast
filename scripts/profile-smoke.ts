@@ -33,7 +33,7 @@ async function signUpViaApi(email: string, password: string, data: Record<string
 async function confirmedUser(name: string, meta: Record<string, unknown>): Promise<{ id: string; sb: SupabaseClient; session: Session }> {
   const email = `beastfeast-profile-${name}-${tag}@example.com`;
   const password = randomBytes(18).toString("base64url");
-  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: `Profile ${name}`, ...meta } });
+  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { skip_profile_checks: true }, user_metadata: { name: `Profile ${name}`, ...meta } });
   if (error) throw error;
   made.push(data.user.id);
   const sb = createClient(URL_, PUB, { auth: { persistSession: false } });
@@ -53,10 +53,24 @@ function authCookie(session: Session) {
 
 async function main() {
   // ── sign-up validation in the database (the form can be bypassed; the trigger cannot) ──
-  const bad1 = await signUpViaApi(`beastfeast-bad1-${tag}@example.com`, randomBytes(12).toString("hex"), { name: "Bad", niat_id: "N24H0200001", phone: "9876543210" });
+  const bad1 = await signUpViaApi(`beastfeast-bad1-${tag}@example.com`, randomBytes(12).toString("hex"), { name: "Bad", niat_id: "N24H1AB0001", campus: "KKH", phone: "9876543210" });
   check("sign-up with an invalid NIAT ID is rejected by the database", !!bad1.error && !bad1.data.user, bad1.error?.message);
-  const bad2 = await signUpViaApi(`beastfeast-bad2-${tag}@example.com`, randomBytes(12).toString("hex"), { name: "Bad", niat_id: niat(1), phone: "5876543210" });
+  const bad2 = await signUpViaApi(`beastfeast-bad2-${tag}@example.com`, randomBytes(12).toString("hex"), { name: "Bad", niat_id: niat(1), campus: "KKH", phone: "5876543210" });
   check("sign-up with an invalid mobile number is rejected", !!bad2.error && !bad2.data.user, bad2.error?.message);
+  const noCampus = await signUpViaApi(`beastfeast-bad3-${tag}@example.com`, randomBytes(12).toString("hex"), { name: "Bad", niat_id: niat(4), phone: "9876543212" });
+  check("sign-up without a campus name is rejected", !!noCampus.error && !noCampus.data.user, noCampus.error?.message);
+  const noNiat = await signUpViaApi(`beastfeast-bad4-${tag}@example.com`, randomBytes(12).toString("hex"), { name: "Bad", campus: "KKH", phone: "9876543213" });
+  check("sign-up without a NIAT ID is rejected", !!noNiat.error && !noNiat.data.user, noNiat.error?.message);
+  const svcNoChecks = await service.auth.admin.createUser({ email: `beastfeast-bad5-${tag}@example.com`, password: randomBytes(12).toString("hex"), email_confirm: true, user_metadata: { name: "Bad" } });
+  if (svcNoChecks.data.user) made.push(svcNoChecks.data.user.id);
+  check("an email account without NIAT ID and campus is rejected even through the service API (unless flagged)", !!svcNoChecks.error, svcNoChecks.error?.message);
+  const anonFmt = createClient(URL_, PUB, { auth: { persistSession: false } });
+  // unused test IDs in both official shapes (N99 is not a real intake year) — available ⇒ the format was accepted
+  const four = String(Number(tag) % 10000).padStart(4, "0");
+  for (const [id, want] of [[`N99H018${four}`, true], [`N99H01B${four}`, true], [`n99h01b${four}`, true], [`N99H01AB${four.slice(1)}`, false], [`N99H018${four.slice(1)}`, false]] as const) {
+    const r = await anonFmt.rpc("niat_id_available", { p_niat: id });
+    check(`NIAT ID ${id} is ${want ? "accepted" : "rejected"} by the server`, r.data === want, String(r.data ?? r.error?.message));
+  }
 
   const a = await confirmedUser("a", { niat_id: niat(2).toLowerCase() + " ", phone: "98765 43210" });
   const pa = (await service.from("profile_private").select("*").eq("user_id", a.id).single()).data;
@@ -80,6 +94,19 @@ async function main() {
   check("the student can update their mobile number", !phoneUpd.error && phoneUpd.data?.phone === "+919988776655", phoneUpd.error?.message);
   const list = await b.sb.rpc("admin_list_users", {});
   check("students cannot list users or see contact details", !!list.error);
+  const badCampus = await b.sb.from("profiles").update({ campus: "<script>" }).eq("id", b.id).select("campus");
+  check("an invalid campus name is rejected by the database", !!badCampus.error, badCampus.error?.message);
+  const goodCampus = await b.sb.from("profiles").update({ campus: "  Chevella   Campus " }).eq("id", b.id).select("campus").single();
+  check("a campus name is trimmed and stored", goodCampus.data?.campus === "Chevella Campus", goodCampus.error?.message ?? goodCampus.data?.campus);
+  // streak: a positive XP event marks today (Asia/Kolkata, day ends 23:59); a repeat is idempotent
+  await service.from("xp_events").insert({ user_id: b.id, type: "lesson-complete", ref_id: `streak-smoke-${tag}`, amount: 1, source: "learning", description: "streak smoke" });
+  const st = await b.sb.rpc("my_streak");
+  const sr = (st.data ?? [])[0] as { current_streak: number; active_today: boolean; timezone: string } | undefined;
+  check("my_streak counts today's activity", !st.error && sr?.current_streak === 1 && sr?.active_today === true && sr?.timezone === "Asia/Kolkata", st.error?.message ?? JSON.stringify(sr));
+  const days = (await service.from("streak_days").select("day").eq("user_id", b.id)).data ?? [];
+  check("one streak row per day (no duplicates)", days.length === 1, `${days.length}`);
+  const peek = await a.sb.from("streak_days").select("day").eq("user_id", b.id);
+  check("a student cannot read another student's streak days", (peek.data?.length ?? 0) === 0);
   const avatarTamper = await b.sb.from("profiles").update({ avatar: "javascript:alert(1)" }).eq("id", b.id).select("avatar");
   check("profile avatar must be an https URL (no javascript:/data: URLs)", !!avatarTamper.error, avatarTamper.error?.message);
 
@@ -90,6 +117,15 @@ async function main() {
   check("an admin finds a student by NIAT ID with email, phone and NIAT ID", !found.error && row?.niat_id === niat(3) && row?.phone === "+919988776655" && String(row?.email).includes("profile-b"), found.error?.message);
   const byPhone = await a.sb.rpc("admin_list_users", { p_search: "99887" });
   check("an admin can search by phone digits", (byPhone.data ?? []).some((r: { id: string }) => r.id === b.id));
+  check("admin rows include the campus", row?.campus === "Chevella Campus", String(row?.campus));
+  const byCampus = await a.sb.rpc("admin_list_users", { p_campus: "chevella" });
+  check("an admin can filter by campus", (byCampus.data ?? []).some((r: { id: string }) => r.id === b.id), byCampus.error?.message);
+  const setC = await a.sb.rpc("admin_set_campus", { p_user: b.id, p_campus: "SMRU" });
+  check("an admin can correct a campus name (logged)", !setC.error && setC.data === "SMRU", setC.error?.message);
+  const studentSet = await b.sb.rpc("admin_set_campus", { p_user: a.id, p_campus: "KKH" });
+  check("a student cannot use the admin campus editor", !!studentSet.error);
+  const review = await a.sb.rpc("admin_niat_review");
+  check("the NIAT review list loads for admins", !review.error, review.error?.message);
   const leak = JSON.stringify(found.data ?? []);
   check("no password hashes or tokens are returned", !/encrypted_password|\$2[aby]\$|refresh_token|access_token/.test(leak));
 

@@ -45,6 +45,9 @@ export function ScanOverlay() {
   );
 }
 
+/** Report categories, in the order they are shown. */
+const CATEGORIES: [ValidationIssue["area"], string][] = [["safety", "Safety checks"], ["electrical", "Electrical validation"], ["power", "Power validation"], ["compatibility", "Component compatibility"], ["mechanical", "Mechanical validation"], ["simulation", "Simulation support"], ["code", "Code"]];
+
 const SEV = {
   critical: { icon: ShieldAlert, cls: "border-bad/50 bg-bad/10", text: "text-bad", label: "CRITICAL ERROR" },
   warning: { icon: AlertTriangle, cls: "border-warn/40 bg-warn/5", text: "text-warn", label: "WARNING" },
@@ -163,11 +166,20 @@ export function ValidationReportModal({ project }: { project: Project }) {
         </div>
         <div className="max-h-[52vh] space-y-2 overflow-auto p-5">
           {rep.issues.length === 0 && <div className="text-center text-sm text-ok">No issues found. Your robot is ready for Code Studio.</div>}
-          {rep.issues.map((i, n) => (
-            <div key={i.id} onClickCapture={(e) => { if ((e.target as HTMLElement).closest("[data-alt]")) goCircuit(); }}>
-              <IssueCard issue={i} n={n + 1} onFix={() => fix(i)} project={project} />
-            </div>
-          ))}
+          {CATEGORIES.map(([area, title]) => {
+            const list = rep.issues.filter((i) => i.area === area);
+            if (!list.length) return null;
+            return (
+              <section key={area} className="space-y-2" data-testid={`category-${area}`}>
+                <h3 className="font-mono text-[11px] tracking-widest text-muted">{title.toUpperCase()} · {list.filter((i) => i.severity === "critical").length} critical · {list.filter((i) => i.severity === "warning").length} warnings · {list.filter((i) => i.severity === "suggestion").length} suggestions</h3>
+                {list.map((i) => (
+                  <div key={i.id} onClickCapture={(e) => { if ((e.target as HTMLElement).closest("[data-alt]")) goCircuit(); }}>
+                    <IssueCard issue={i} n={rep.issues.indexOf(i) + 1} onFix={() => fix(i)} project={project} />
+                  </div>
+                ))}
+              </section>
+            );
+          })}
           {(rep.passedChecks?.length ?? 0) > 0 && (
             <div className="rounded-lg border border-ok/40 bg-ok/5 p-3 text-sm" data-testid="passed-checks">
               <div className="mb-1 flex items-center gap-2 font-mono text-[10px] tracking-widest text-ok"><CheckCircle2 size={14} /> PASSED</div>

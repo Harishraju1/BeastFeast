@@ -40,7 +40,7 @@ async function setup() {
   const mk = async (name: string) => {
     const email = `${TAG}-${name.toLowerCase()}-${Date.now()}@example.com`;
     const password = randomBytes(18).toString("base64url");
-    const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: `Smoke ${name}`, campus: "KKH", student_id: `T-${name}` } });
+    const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { skip_profile_checks: true }, user_metadata: { name: `Smoke ${name}`, campus: "KKH", student_id: `T-${name}` } });
     if (error) throw new Error(`createUser ${name}: ${error.message}`);
     return { id: data.user.id, email, password };
   };

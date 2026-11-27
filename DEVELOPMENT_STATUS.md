@@ -209,3 +209,24 @@ Bugs found and fixed during browser testing:
 - **Local mode** is per-browser and not tamper-proof. Use Supabase for real competitions.
 - **Dev server quirk:** with Turbopack, newly added Tailwind classes occasionally do not appear until the dev server restarts. Production builds are unaffected.
 - The UI is optimised for laptop/desktop. Phones can browse, learn and take quizzes; the 3D/circuit editors need a mouse and ≥1024 px width.
+
+## Update 2026-11-27 — wiring colours, battery options, NIAT/campus, streaks, video library (not yet deployed)
+
+Code done, tested locally (1,331 unit tests, typecheck, lint 0 errors, production build, secret scan, browser check in local mode):
+- Circuit: wires use three colours only (red +, black GND, blue #2878B5 signal). Motor-driver outputs follow the live H-bridge state. Junction dots appear on pins with 2+ wires. Light-grey canvas; "Lite" low-performance mode.
+- Validation: issues grouped into Safety / Electrical / Power / Compatibility / Mechanical / Simulation / Code. New L298N checks: continuous current, motor pair reversed, left/right on one bridge, uncertain current (once per project). The jumper rule now reads the real regulator option. FIX IT changes nothing until "Apply this fix".
+- Bench: manual LOW/HIGH/PWM pin control when no firmware runs.
+- 18650 packs: chemistry (Li-ion / LiFePO4 sets its voltages), cut-off voltage, internal resistance (mΩ) and starting charge. New safety checks: E_CELL_OVERCHARGE and W_CELL_OVERDISCHARGE.
+- 3D: models for diodes, TO-92 / TO-220 / SOT-23 transistors and MOSFETs, Seeed XIAO boards, brackets, soil probe and MAX30102. The selected part gets a pin-name card (wired pins marked).
+- NIAT ID `^N[0-9]{2}H([0-9]{3}|[0-9]{2}[A-Z])[0-9]{4}$` with the official error text; campus / college name is mandatory.
+  - Admins: campus column, edit, search, filter and CSV export; a NIAT/campus review list (read-only); set an ID after checking it (logged).
+- Streak: the day ends at 23:59 in the student's timezone (default Asia/Kolkata), computed on the server (streak_days + my_streak()), with history kept.
+- Video library: upload MP4/WebM/MOV (≤50 MB) with progress, cancel and retry into a private bucket, played through signed URLs.
+  - Links from YouTube / Shorts / Vimeo / Dailymotion / Instagram / Facebook play only via official embed templates. X is link-only, and anything else shows "Preview unavailable. Open the original video."
+  - /api/oembed (admins only, fixed endpoints). Drafts are hidden from students. The CSP is extended.
+
+Pending (needs authorization — production changes):
+1. Deploy the frontend first (it works with or without the new migrations).
+2. Then `npm run db:backup` and apply `supabase/migrations/0015_niat_campus_streaks.sql` and `0016_video_library.sql`. Migration 0015 makes NIAT ID + campus mandatory in the sign-up trigger, so the old frontend must not be live when it runs.
+3. Then run `npx tsx scripts/profile-smoke.ts https://<site>` (new NIAT / campus / streak / admin checks).
+Existing accounts are not modified: IDs stay as they are (the new pattern accepts every previously valid ID). Missing campus names are asked from the student on next visit.

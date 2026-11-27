@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // generated / local-only (both git-ignored): the self-hosted Monaco editor copy and scratch files
+    "public/monaco/**",
+    ".scratch/**",
   ]),
 ]);
 

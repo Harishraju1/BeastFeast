@@ -1,10 +1,10 @@
 "use client";
+import { VideoThumb } from "@/components/video/VideoPlayer";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AlertTriangle, Bell, CheckCircle2, Info, Megaphone, PlayCircle, Sparkles, X } from "lucide-react";
 import { useApp, type Toast } from "@/lib/store/app";
-import { youtubeId } from "@/lib/youtube";
 
 /* ── what the student has already seen (per browser) ─────────────────────────────── */
 const SEEN_KEY = "bf.seen.v1";
@@ -168,12 +168,10 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
             {videos.length === 0 ? <p className="text-xs text-muted">No videos yet.</p> : (
               <ul className="space-y-2">
                 {videos.map((v) => {
-                  const yt = youtubeId(v.url);
                   return (
                     <li key={v.id}>
                       <Link href={`/announcements?video=${encodeURIComponent(v.id)}#videos`} onClick={onClose} className={`flex items-center gap-2.5 rounded-md border p-1.5 hover:border-accent ${!snapshot.videoIds.includes(v.id) ? "border-accent/60 bg-accent/5" : "border-line"}`}>
-                        {/* eslint-disable-next-line @next/next/no-img-element -- YouTube thumbnail */}
-                        {yt ? <img src={v.thumbnail || `https://i.ytimg.com/vi/${yt}/mqdefault.jpg`} alt="" className="h-10 w-16 shrink-0 rounded object-cover" loading="lazy" /> : <PlayCircle size={20} className="m-2 shrink-0 text-dim" />}
+                        <VideoThumb video={v} className="h-10 w-16 shrink-0 rounded" iconSize={14} />
                         <span className="line-clamp-2 text-xs font-medium">{v.title}</span>
                       </Link>
                     </li>

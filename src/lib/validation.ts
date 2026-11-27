@@ -1,22 +1,42 @@
 /**
- * Sign-up and profile field rules. The database enforces the same rules (migrations 0010–0011), so these exist
+ * Sign-up and profile field rules. The database enforces the same rules (migrations 0010–0015), so these exist
  * for instant feedback in the form and for local mode — they are not the security boundary.
  */
 
-/** Official NIAT student ID, format N00H01X0000: N + 2 digits + H01 + 1 letter + 4 digits, e.g. N24H01A0001. */
-export const NIAT_ID_RE = /^N\d{2}H01[A-Z]\d{4}$/;
-export const NIAT_ID_FORMAT = "N00H01X0000";
-export const NIAT_ID_EXAMPLE = "N24H01A0001";
+/**
+ * Official NIAT student ID: N + 2 digits + H + (3 digits, or 2 digits and a capital letter) + 4 digits,
+ * e.g. N24H0180001 or N24H01B0002.
+ */
+export const NIAT_ID_RE = /^N[0-9]{2}H(?:[0-9]{3}|[0-9]{2}[A-Z])[0-9]{4}$/;
+export const NIAT_ID_FORMAT = "N24H0180001 or N24H01B0002";
+export const NIAT_ID_EXAMPLE = "N24H0180001";
+export const NIAT_ID_ERROR = "Invalid NIAT Student ID. Please enter your ID in the correct NIAT format, for example N24H0180001 or N24H01B0002.";
 
-/** Uppercase and remove spaces (users often type "n24h01 00001"). */
+/** Trim, uppercase and remove spaces (users often type "n24h018 0001"). */
 export function normalizeNiatId(raw: string): string {
-  return raw.replace(/\s+/g, "").toUpperCase();
+  return raw.trim().replace(/\s+/g, "").toUpperCase();
 }
 
 export function niatIdError(raw: string): string | null {
   const v = normalizeNiatId(raw);
-  if (!v) return "Enter your NIAT ID.";
-  if (!NIAT_ID_RE.test(v)) return `Use the format ${NIAT_ID_FORMAT} (letter in the 7th place), e.g. ${NIAT_ID_EXAMPLE}.`;
+  if (!v) return "Enter your NIAT Student ID.";
+  if (!NIAT_ID_RE.test(v)) return NIAT_ID_ERROR;
+  return null;
+}
+
+/** Campus / college name: trimmed, inner spaces collapsed. */
+export function normalizeCampus(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
+export const CAMPUS_PLACEHOLDER = "Enter your campus name (e.g., KKH, Chevella, SMRU)";
+/** Same rule as the database's campus_ok(): 2–60 characters, a letter or digit first, then . , ' ( ) & / - */
+export const CAMPUS_RE = /^[\p{L}\p{N}][\p{L}\p{N} .,'()&/-]{1,59}$/u;
+export function campusError(raw: string): string | null {
+  const v = normalizeCampus(raw);
+  if (!v) return "Enter your campus name.";
+  if (v.length < 2) return "The campus name is too short.";
+  if (v.length > 60) return "Use at most 60 characters for the campus name.";
+  if (!CAMPUS_RE.test(v)) return "Use letters, numbers, spaces and . , ' ( ) & / - only.";
   return null;
 }
 

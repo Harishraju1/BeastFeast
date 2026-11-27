@@ -1,23 +1,24 @@
 "use client";
+import { withOption } from "@/lib/circuit/options";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Contrast, Copy, Download, GraduationCap, Grid3x3, Maximize, Minus, Move, Palette, Pause, Play, Plus, PlusCircle, RotateCcw, RotateCw, ScanLine, SlidersHorizontal, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
+import { Contrast, Copy, Download, Gauge, GraduationCap, Grid3x3, Maximize, Minus, Move, Pause, Play, Plus, PlusCircle, RotateCcw, RotateCw, ScanLine, SlidersHorizontal, Square, Trash2, Undo2, Wrench, X } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { useWorkspace } from "@/lib/store/workspace";
 import { getComponent } from "@/lib/catalogue";
 import { registerCustomComponents } from "@/lib/catalogue/custom";
-import type { ComponentRecord, PartInstance, PinDef, Project, ValidationIssue, Wire, WireColor } from "@/lib/types";
+import type { ComponentRecord, PartInstance, PinDef, Project, ValidationIssue, Wire } from "@/lib/types";
 import { addPart, uid } from "@/lib/robot/assembly";
 import { buildGraph } from "@/lib/circuit/nets";
 import { validateProject } from "@/lib/circuit/validate";
 import { REPAIRABLE, wireColorFor } from "@/lib/circuit/repair";
-import { ROLE_INFO, netRole, type WireRole } from "@/lib/circuit/wireRole";
+import { ROLE_INFO, WIRE_COLOUR, netRole } from "@/lib/circuit/wireRole";
 import { duplicateParts, moveSchematic, removeParts, rotateSchematic, wiresTouching } from "@/lib/robot/edit";
 import { LibraryBrowser } from "@/components/library/LibraryBrowser";
 import { pinColor, pinFunctionText } from "@/components/library/PinoutDiagram";
 import { Button, Field, Tabs } from "@/components/ui";
 import { IssueCard, startFix, useValidate } from "../Validation";
 import { isTypingTarget } from "@/lib/keyboard";
-import { THEME, WIRE_HEX as THEME_WIRES } from "@/lib/theme";
+import { THEME } from "@/lib/theme";
 import { RepairControls, useRepairPlayer } from "./RepairPlayer";
 import { RecommendationPanel } from "./RecommendationPanel";
 import { CustomComponentModal } from "./CustomComponentModal";
@@ -27,10 +28,10 @@ import { BenchPanel, useBench } from "./BenchPanel";
 const W = 170;
 const PITCH = 16;
 const HEAD = 34;
-const WIRE_HEX: Record<WireColor, string> = THEME_WIRES;
 const FLOW_HEX = { power: "#ffffff", ground: "#ffffff", motor: "#ffffff", signal: "#ffffff" };
 /** Light circuit canvas (kept light on purpose: wires and ground must never disappear into the background). */
-const CANVAS = { bg: "#F5F6F8", grid: "#E2E6EB", card: "#FFFFFF", ink: "#17212B", muted: "#5B6875", line: "#C3CBD4", well: "#E9EDF1", select: "#1976D2" };
+/** Light-grey circuit canvas: not white, not dark — wires (red / black / blue) and white cards stay clearly visible. */
+const CANVAS = { bg: "#DFE1E4", grid: "#C8CCD2", dot: "#A9AFB7", card: "#FFFFFF", ink: "#17212B", muted: "#4E5A66", line: "#AEB6BF", well: "#E3E7EB", select: "#F59E0B" };
 type Side = "L" | "R" | "T" | "B";
 const STUB: Record<Side, [number, number]> = { L: [-1, 0], R: [1, 0], T: [0, -1], B: [0, 1] };
 const ROT_SIDE: Record<number, Record<Side, Side>> = {
@@ -78,7 +79,6 @@ export default function CircuitStudio({ project }: { project: Project }) {
   // multi-selection (Shift + click / Shift + drag a box); `selected` stays the primary part for the inspector
   const [multi, setMulti] = useState<string[]>([]);
   const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
-  const [colorMode, setColorMode] = useState<"function" | "custom">("function");
   const [contrast, setContrast] = useState(false);
   const [legendOpen, setLegendOpen] = useState(true);
   const [hoverWire, setHoverWire] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -405,6 +405,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
             <Button size="sm" onClick={bench.reset} title="Reset: restart the code with a fresh battery"><RotateCcw size={13} /> Reset</Button>
             <Button size="sm" variant="secondary" onClick={() => void validate()} title="Validate My Robot"><ScanLine size={14} /><span className="hidden sm:inline"> Validate</span></Button>
             <Button size="sm" variant="secondary" onClick={fixIssues} title="Repair problems step by step" data-testid="fix-issues"><Wrench size={14} /><span className="hidden sm:inline"> Fix issues</span></Button>
+            <Button size="sm" variant={bench.lowPerf ? "primary" : "outline"} aria-pressed={bench.lowPerf} onClick={() => bench.setLowPerf(!bench.lowPerf)} title="Low-performance mode: no wire-flow or spin animation, fewer updates — for slower laptops"><Gauge size={14} /><span className="hidden lg:inline"> Lite</span></Button>
             <Button size="sm" variant={learning ? "primary" : "outline"} aria-pressed={learning} onClick={() => setWs({ learning: !learning })} title="Learning mode: explain the selected component"><GraduationCap size={14} /><span className="hidden sm:inline"> Learn</span></Button>
           </div>
           <div className="pointer-events-none flex items-center gap-1.5 bg-bg2 px-2 pb-1 font-mono text-[10px] md:absolute md:right-3 md:top-[52px] md:z-10 md:rounded md:bg-bg/90 md:px-2 md:py-0.5" aria-live="polite">
@@ -476,7 +477,8 @@ export default function CircuitStudio({ project }: { project: Project }) {
               <filter id="bf-node-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1.5" stdDeviation="2" floodColor="#141A16" floodOpacity="0.45" /></filter>
               <filter id="bf-led-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="3" /></filter>
               <pattern id="grid" width={20} height={20} patternUnits="userSpaceOnUse">
-                <path d="M 20 0 L 0 0 0 20" fill="none" stroke={CANVAS.grid} strokeWidth={1} />
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke={CANVAS.grid} strokeWidth={0.8} />
+                <circle cx={0} cy={0} r={1.1} fill={CANVAS.dot} />
               </pattern>
             </defs>
             <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
@@ -493,20 +495,33 @@ export default function CircuitStudio({ project }: { project: Project }) {
                 const fault = faultWires.has(w.id);
                 const cut = cutWires.has(w.id);
                 const fresh = fx?.wireId === w.id;
+                const role = netRole(graph, net, sim?.bridge.outState ?? null);
                 return (
-                  <g key={w.id} onPointerDown={(e) => { e.stopPropagation(); setSelWire(w.id); clearSelection(); }} onPointerMove={(e) => { const r = svgRef.current!.getBoundingClientRect(); setHoverWire({ id: w.id, x: e.clientX - r.left, y: e.clientY - r.top }); }} onPointerLeave={() => setHoverWire(null)} className="cursor-pointer" data-wire={w.id} data-role={netRole(graph, net)}>
+                  <g key={w.id} onPointerDown={(e) => { e.stopPropagation(); setSelWire(w.id); clearSelection(); }} onPointerMove={(e) => { const r = svgRef.current!.getBoundingClientRect(); setHoverWire({ id: w.id, x: e.clientX - r.left, y: e.clientY - r.top }); }} onPointerLeave={() => setHoverWire(null)} className="cursor-pointer" data-wire={w.id} data-role={role}>
                     <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
                     {(contrast || isSel) && <path d={d} fill="none" stroke={isSel ? CANVAS.select : "#000"} strokeWidth={(fault ? 4 : isSel || bad ? 3.5 : contrast ? 3 : 2) + 2.6} strokeLinejoin="round" opacity={isSel ? 0.35 : 0.9} />}
-                    <path d={d} pathLength={fresh ? 1 : undefined} className={fresh ? "bf-draw" : fault ? "bf-blink" : undefined} fill="none" stroke={fault ? THEME.accent : bad ? THEME.accent : colorMode === "function" ? ROLE_INFO[netRole(graph, net)].hex : WIRE_HEX[w.color]} strokeWidth={fault ? 4 : isSel || bad ? 3.5 : contrast ? 3 : 2.2} strokeLinejoin="round" opacity={cut ? 0.25 : selWire && !isSel ? 0.55 : 1} />
-                    {flow && !cut ? (
+                    <path d={d} pathLength={fresh ? 1 : undefined} className={fresh ? "bf-draw" : fault ? "bf-blink" : undefined} fill="none" stroke={fault ? THEME.accent : bad ? THEME.accent : WIRE_COLOUR[role]} strokeDasharray={role === "undriven" && !fresh ? "5 3" : undefined} strokeWidth={fault ? 4 : isSel || bad ? 3.5 : contrast ? 3 : 2.2} strokeLinejoin="round" opacity={cut ? 0.25 : selWire && !isSel ? 0.55 : 1} />
+                    {flow && !cut && !bench.lowPerf ? (
                       <path d={d} fill="none" stroke={FLOW_HEX[flow.kind]} strokeWidth={flow.kind === "signal" ? 1.2 : 1.6} opacity={0.35 + 0.6 * flow.level} className={`bf-flow ${flow.dir < 0 ? "bf-flow-rev" : ""}`} style={{ animationDuration: `${Math.max(0.25, 1.1 - 0.8 * flow.level)}s`, animationPlayState: bench.mode === "paused" ? "paused" : "running" }} data-flow={flow.kind} />
                     ) : (
-                      !sim && potential && <path d={d} fill="none" stroke="#fff" strokeWidth={1} opacity={0.5} className="bf-flow" />
+                      !sim && potential && !bench.lowPerf && <path d={d} fill="none" stroke="#fff" strokeWidth={1} opacity={0.5} className="bf-flow" />
                     )}
                     {cut && <path d={d} fill="none" stroke={THEME.accent} strokeWidth={3.2} className="bf-cut" />}
                   </g>
                 );
               })}
+              {/* junctions: two or more wires on the same pin */}
+              {(() => {
+                const ends = new Map<string, number>();
+                for (const w of project.wires) for (const e of [w.from, w.to]) ends.set(`${e.part}.${e.pin}`, (ends.get(`${e.part}.${e.pin}`) ?? 0) + 1);
+                return [...ends].filter(([, n]) => n >= 2).map(([k]) => {
+                  const [pu, pi] = [k.slice(0, k.indexOf(".")), k.slice(k.indexOf(".") + 1)];
+                  const xy = pinXY(pu, pi);
+                  if (!xy) return null;
+                  const r = netRole(graph, graph.netOf.get(k), sim?.bridge.outState ?? null);
+                  return <circle key={k} cx={xy.x} cy={xy.y} r={5.2} fill={WIRE_COLOUR[r]} stroke="#fff" strokeWidth={1.2} pointerEvents="none" data-junction={k} />;
+                });
+              })()}
               {/* repair assistant: the new wires being drawn */}
               {ghostWires.map((w) => {
                 const p = wirePathOf(w.from, w.to);
@@ -568,7 +583,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
                     {motor && (
                       <g pointerEvents="none" data-motor-rpm={Math.round(motor.rpm)}>
                         <circle cx={W - 14} cy={13} r={9} fill="#fff" stroke={THEME.cardInk} strokeWidth={1} />
-                        <g className={Math.abs(motor.rpm) > 1 ? "bf-spin" : undefined} style={{ animationDuration: `${Math.max(0.08, 60 / Math.max(1, Math.abs(motor.rpm)))}s`, animationDirection: motor.rpm < 0 ? "reverse" : "normal", animationPlayState: bench.mode === "paused" ? "paused" : "running" }}>
+                        <g className={Math.abs(motor.rpm) > 1 && !bench.lowPerf ? "bf-spin" : undefined} style={{ animationDuration: `${Math.max(0.08, 60 / Math.max(1, Math.abs(motor.rpm)))}s`, animationDirection: motor.rpm < 0 ? "reverse" : "normal", animationPlayState: bench.mode === "paused" ? "paused" : "running" }}>
                           {[0, 120, 240].map((a) => <line key={a} x1={W - 14} y1={13} x2={W - 14 + 7 * Math.cos((a * Math.PI) / 180)} y2={13 + 7 * Math.sin((a * Math.PI) / 180)} stroke={THEME.accent} strokeWidth={1.8} />)}
                         </g>
                         <text x={W - 26} y={22} transform={up(W - 50, 20)} textAnchor="end" fill={CANVAS.ink} fontSize={7.5} fontFamily="JetBrains Mono">{motor.volts === null ? "coast" : `${motor.volts.toFixed(1)}V ${Math.round(motor.rpm)}rpm`}</text>
@@ -702,7 +717,6 @@ export default function CircuitStudio({ project }: { project: Project }) {
             <Button size="sm" onClick={fit} title="Fit"><Maximize size={14} /></Button>
             <Button size="sm" variant={snap ? "secondary" : "outline"} onClick={() => setSnap(!snap)} title="Grid snapping"><Grid3x3 size={14} /></Button>
             <Button size="sm" onClick={() => exportCircuit(project, graph)} title="Export netlist"><Download size={14} /><span className="hidden lg:inline">Export</span></Button>
-            <Button size="sm" variant={colorMode === "function" ? "secondary" : "outline"} onClick={() => setColorMode(colorMode === "function" ? "custom" : "function")} title={colorMode === "function" ? "Wires coloured by electrical function (click for your own colours)" : "Wires in your own colours (click to colour by function)"} aria-pressed={colorMode === "function"}><Palette size={14} /></Button>
             <Button size="sm" variant={contrast ? "secondary" : "outline"} onClick={() => setContrast(!contrast)} title="High-contrast wires" aria-pressed={contrast}><Contrast size={14} /></Button>
           </div>
           {pending && <div className="absolute left-1/2 top-12 -translate-x-1/2 rounded border border-brand/50 bg-bg/90 px-3 py-1 text-xs text-brand">Wiring from {project.parts.find((p) => p.uid === pending.part)?.label}.{pending.pin} — click another pin (Esc to cancel)</div>}
@@ -731,31 +745,31 @@ export default function CircuitStudio({ project }: { project: Project }) {
             </div>
           )}
           <RepairControls player={player} />
-          {colorMode === "function" && project.wires.length > 0 && !plan && (
-            <div className="absolute bottom-3 right-3 max-w-[230px] rounded border border-[#C3CBD4] bg-white/95 p-2 text-[10px] text-[#17212B] shadow" data-testid="wire-legend">
+          {project.wires.length > 0 && !plan && (
+            <div className="absolute bottom-3 right-3 max-w-[220px] rounded border border-[#AEB6BF] bg-white/95 p-2 text-[10px] text-[#17212B] shadow" data-testid="wire-legend">
               <button className="flex w-full items-center justify-between font-mono tracking-widest" onClick={() => setLegendOpen(!legendOpen)} aria-expanded={legendOpen}>WIRE COLOURS <span>{legendOpen ? "−" : "+"}</span></button>
               {legendOpen && (
-                <ul className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5">
-                  {(Object.keys(ROLE_INFO) as WireRole[]).filter((r) => project.wires.some((w) => netRole(graph, graph.netOf.get(`${w.from.part}.${w.from.pin}`)) === r)).map((r) => (
-                    <li key={r} className="flex items-center gap-1"><span className="inline-block h-1.5 w-4 rounded" style={{ background: ROLE_INFO[r].hex }} />{ROLE_INFO[r].label}</li>
+                <ul className="mt-1 space-y-0.5">
+                  {(["positive", "negative", "signal"] as const).map((r) => (
+                    <li key={r} className="flex items-center gap-1.5"><span className="inline-block h-1.5 w-5 rounded" style={{ background: ROLE_INFO[r].hex }} />{r === "positive" ? "Red" : r === "negative" ? "Black" : "Blue"} – {ROLE_INFO[r].label}</li>
                   ))}
                 </ul>
               )}
-              {legendOpen && <div className="mt-1 text-[#5B6875]">Colour shows what the wire carries. Change it in the inspector only in “your colours” mode.</div>}
+              {legendOpen && <div className="mt-1 text-[#4E5A66]">Motor-driver outputs follow the H-bridge: HIGH red, LOW black{sim ? "" : " — dashed until you press Run"}. Colours never change the simulation.</div>}
             </div>
           )}
           {hoverWire && (() => {
             const w = project.wires.find((x) => x.id === hoverWire.id);
             if (!w) return null;
             const net = graph.netOf.get(`${w.from.part}.${w.from.pin}`);
-            const role = netRole(graph, net);
+            const role = netRole(graph, net, sim?.bridge.outState ?? null);
             const v = liveV(net) ?? net?.voltage ?? null;
             const flow = st?.flows[w.id];
             const a = project.parts.find((p) => p.uid === w.from.part)?.label, b = project.parts.find((p) => p.uid === w.to.part)?.label;
             return (
               <div className="pointer-events-none absolute z-20 rounded border border-[#C3CBD4] bg-white px-2 py-1 text-[11px] text-[#17212B] shadow" style={{ left: Math.min(hoverWire.x + 12, 9999), top: hoverWire.y + 12 }} role="tooltip" data-testid="wire-tooltip">
                 <div className="font-mono font-semibold">{a}.{w.from.pin} → {b}.{w.to.pin}</div>
-                <div className="flex items-center gap-1"><span className="inline-block h-1.5 w-3 rounded" style={{ background: ROLE_INFO[role].hex }} />{ROLE_INFO[role].label}{v !== null && !net?.isGround ? ` · ${v.toFixed(2)} V` : ""}{flow?.amps !== undefined ? ` · ≈${flow.amps.toFixed(2)} A` : ""}</div>
+                <div className="flex items-center gap-1"><span className="inline-block h-1.5 w-3 rounded" style={{ background: WIRE_COLOUR[role] }} />{role === "undriven" ? "Motor output — not driven (off / coasting)" : ROLE_INFO[role].label}{v !== null && !net?.isGround ? ` · ${v.toFixed(2)} V` : ""}{flow?.amps !== undefined ? ` · ≈${flow.amps.toFixed(2)} A` : ""}</div>
               </div>
             );
           })()}
@@ -789,7 +803,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
                   b = project.parts.find((p) => p.uid === w.to.part);
                 return (
                   <button key={w.id} onClick={() => setSelWire(w.id)} className={`flex w-full gap-2 rounded px-2 py-0.5 text-left ${selWire === w.id ? "bg-panel2" : "hover:bg-panel"}`}>
-                    <span className="h-2 w-2 shrink-0 self-center rounded-full" style={{ background: WIRE_HEX[w.color] }} />
+                    <span className="h-2 w-2 shrink-0 self-center rounded-full" style={{ background: WIRE_COLOUR[netRole(graph, graph.netOf.get(`${w.from.part}.${w.from.pin}`), sim?.bridge.outState ?? null)] }} />
                     <span>{a?.label}.{w.from.pin}</span>
                     <span className="text-dim">→</span>
                     <span>{b?.label}.{w.to.pin}</span>
@@ -817,20 +831,17 @@ export default function CircuitStudio({ project }: { project: Project }) {
               {project.parts.find((p) => p.uid === selectedWire.from.part)?.label}.{selectedWire.from.pin} → {project.parts.find((p) => p.uid === selectedWire.to.part)?.label}.{selectedWire.to.pin}
             </div>
             {st?.flows[selectedWire.id]?.amps !== undefined && <div className="text-xs text-accent-ink">≈{st.flows[selectedWire.id].amps!.toFixed(2)} A flowing ({st.flows[selectedWire.id].kind})</div>}
-            <Field label="Colour">
-              <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(WIRE_HEX) as WireColor[]).map((c) => (
-                  <button key={c} title={c} onClick={() => updateProject(project.id, (p) => ({ ...p, wires: p.wires.map((w) => (w.id === selectedWire.id ? { ...w, color: c } : w)) }))} className={`h-6 w-6 rounded-full border-2 ${selectedWire.color === c ? "border-white" : "border-transparent"}`} style={{ background: WIRE_HEX[c] }} />
-                ))}
-              </div>
-            </Field>
+            {(() => {
+              const r = netRole(graph, graph.netOf.get(`${selectedWire.from.part}.${selectedWire.from.pin}`), sim?.bridge.outState ?? null);
+              return <div className="flex items-center gap-2 text-xs"><span className="inline-block h-2 w-6 rounded" style={{ background: WIRE_COLOUR[r] }} />{r === "undriven" ? "Motor output (polarity set by the H-bridge while running)" : ROLE_INFO[r].label}</div>;
+            })()}
             <Field label="Label">
               <input className="bf-input" value={selectedWire.label ?? ""} onChange={(e) => updateProject(project.id, (p) => ({ ...p, wires: p.wires.map((w) => (w.id === selectedWire.id ? { ...w, label: e.target.value } : w)) }))} />
             </Field>
             <Button variant="danger" size="sm" onClick={() => { updateProject(project.id, (p) => ({ ...p, wires: p.wires.filter((w) => w.id !== selectedWire.id) })); setSelWire(null); }}>
               <Trash2 size={13} /> Remove connection
             </Button>
-            <p className="text-[11px] text-dim">Convention: red = positive supply, black = ground, yellow = signal, blue = communication.</p>
+            <p className="text-[11px] text-dim">Colours are automatic: red = positive, black = negative / GND, blue = signal.</p>
           </div>
         ) : selPart && selComp ? (
           <div className="space-y-2">
@@ -851,7 +862,7 @@ export default function CircuitStudio({ project }: { project: Project }) {
             ))}
             {selComp.options.filter((o) => o.type === "select").map((o) => (
               <Field key={o.key} label={o.label}>
-                <select className="bf-input" value={String(selPart.config[o.key] ?? o.default)} onChange={(e) => updateProject(project.id, (p) => ({ ...p, parts: p.parts.map((x) => (x.uid === selPart.uid ? { ...x, config: { ...x.config, [o.key]: e.target.value } } : x)) }))}>
+                <select className="bf-input" value={String(selPart.config[o.key] ?? o.default)} onChange={(e) => updateProject(project.id, (p) => ({ ...p, parts: p.parts.map((x) => (x.uid === selPart.uid ? { ...x, config: withOption(selComp, x.config, o.key, e.target.value) as typeof x.config } : x)) }))}>
                   {(o.choices ?? []).map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
                 </select>
               </Field>

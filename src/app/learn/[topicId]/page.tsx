@@ -1,4 +1,5 @@
 "use client";
+import { VideoPlayer } from "@/components/video/VideoPlayer";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect } from "react";
@@ -9,7 +10,6 @@ import { useApp } from "@/lib/store/app";
 import { Badge, Button, Panel } from "@/components/ui";
 import { Diagram, Prose } from "@/components/learn/Diagram";
 import { QuizRunner } from "@/components/learn/QuizRunner";
-import { embedUrl, youtubeId } from "@/lib/youtube";
 
 export default function TopicPage() {
   const { topicId } = useParams<{ topicId: string }>();
@@ -116,9 +116,9 @@ export default function TopicPage() {
         )}
         <section>
           <h2 className="mb-2 font-display text-xl font-semibold">YouTube tutorials</h2>
-          {videos.map((v) => youtubeId(v.url) && (
+          {videos.map((v) => (
             <div key={v.id} className="mb-3 overflow-hidden rounded-lg border border-line">
-              <iframe className="aspect-video w-full" src={embedUrl(youtubeId(v.url)!)} title={v.title} allowFullScreen />
+              <VideoPlayer video={v} />
               <div className="p-2 text-sm">{v.title}</div>
             </div>
           ))}

@@ -28,7 +28,7 @@ function check(name: string, ok: boolean, detail?: unknown) {
 async function account(tag: string, role: "student" | "admin" | "super_admin"): Promise<{ id: string; sb: SupabaseClient }> {
   const email = `monsmoke-${RUN}-${tag}@example.com`;
   const password = `${randomBytes(18).toString("base64url")}Aa1!`;
-  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: `MONSMOKE ${tag}` } });
+  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { skip_profile_checks: true }, user_metadata: { name: `MONSMOKE ${tag}` } });
   if (error || !data.user) throw new Error(`create ${tag}: ${error?.message}`);
   made.push(data.user.id);
   if (role !== "student") await service.from("profiles").update({ role }).eq("id", data.user.id);

@@ -37,7 +37,24 @@ export function useBench(project: Project) {
       st.sim?.setEnv(uid, e);
       st.bump();
     },
+    setManualPin: (pin: number, v: "input" | 0 | 1 | { duty: number }) => {
+      st.sim?.setManualPin(pin, v);
+      st.bump();
+    },
+    lowPerf: st.lowPerf,
+    setLowPerf: st.setLowPerf,
   };
+}
+
+/** Controller pins that are wired to something, for manual control when no firmware runs. */
+function wiredPins(s: NonNullable<ReturnType<typeof useBench>["sim"]>) {
+  const ctrl = s.bridge.controller;
+  if (!ctrl) return [];
+  return ctrl.comp.pins
+    .filter((p) => p.fn === "gpio" && p.arduinoPin !== undefined && !(p.caps ?? []).includes("input-only"))
+    .map((p) => ({ p, net: s.graph.netOf.get(`${ctrl.part.uid}.${p.id}`) }))
+    .filter(({ net }) => net && net.members.some((m) => m.part.uid !== ctrl.part.uid))
+    .map(({ p, net }) => ({ pin: p.arduinoPin!, label: p.label, pwm: (p.caps ?? []).includes("pwm"), to: net!.members.filter((m) => m.part.uid !== ctrl.part.uid).map((m) => `${m.part.label}.${m.pin.label}`).join(", ") }));
 }
 
 const f1 = (x: number) => x.toFixed(1);
@@ -75,7 +92,32 @@ export function BenchPanel({ bench, project }: { bench: ReturnType<typeof useBen
           <div className="text-warn">No battery in the circuit: nothing is powered.</div>
         )}
         {s.compileResult && !s.compileResult.ok && (
-          <div className="rounded border border-bad/50 bg-bad/10 p-2 text-bad">Your code does not compile, so only the wiring is powered: {s.compileResult.diagnostics.find((d) => d.severity === "error")?.message}</div>
+          <div className="rounded border border-bad/50 bg-bad/10 p-2 text-bad">Your code does not compile: {s.compileResult.diagnostics.find((d) => d.severity === "error")?.message}</div>
+        )}
+        {!s.hasProgram && s.bridge.controller && (
+          <div className="rounded border border-warn/50 bg-warn/10 p-2" data-testid="manual-pins">
+            <div className="font-semibold text-warn">Firmware is not running{!s.compileResult ? " (this board's code is not executed by the simulator)" : ""}.</div>
+            <div className="mb-1 text-[11px] text-muted">The electrical circuit is still simulated. Drive the controller pins by hand to test the hardware:</div>
+            {wiredPins(s).length === 0 && <div className="text-muted">No controller pin is wired yet.</div>}
+            {wiredPins(s).map((w) => {
+              const cur = s.manualPins.get(w.pin);
+              const val = !cur ? "input" : "duty" in cur ? "pwm" : String(cur.level);
+              return (
+                <div key={w.pin} className="flex flex-wrap items-center gap-1 py-0.5">
+                  <span className="w-10 font-mono">{w.label}</span>
+                  <select className="bf-input !w-auto !py-0 text-[11px]" value={val} aria-label={`Pin ${w.label}`} onChange={(e) => bench.setManualPin(w.pin, e.target.value === "input" ? "input" : e.target.value === "pwm" ? { duty: 0.5 } : (Number(e.target.value) as 0 | 1))}>
+                    <option value="input">not driven</option>
+                    <option value="0">LOW</option>
+                    <option value="1">HIGH</option>
+                    {w.pwm && <option value="pwm">PWM</option>}
+                  </select>
+                  {cur && "duty" in cur && <input type="range" min={0} max={100} value={Math.round(cur.duty * 100)} aria-label={`PWM duty on ${w.label}`} onChange={(e) => bench.setManualPin(w.pin, { duty: Number(e.target.value) / 100 })} />}
+                  {cur && "duty" in cur && <span className="font-mono">{Math.round(cur.duty * 100)} %</span>}
+                  <span className="truncate text-[10px] text-dim">→ {w.to}</span>
+                </div>
+              );
+            })}
+          </div>
         )}
         {!ctrl && <div className="text-muted">No controller: motors only move if they are wired straight to power.</div>}
         {st.runtime?.error && <div className="rounded border border-bad/50 bg-bad/10 p-2 text-bad">Runtime error (line {st.runtime.error.line ?? "?"}): {st.runtime.error.message}</div>}

@@ -56,17 +56,24 @@ export function batteryPack(comp: ComponentRecord, part: PartInstance) {
   if (b.cellCount) {
     // fixed-count multi-cell pack: series × parallel chosen by the student, ratings per cell
     const { s, p } = parseArrangement(optionValue(comp, part, "arrangement"), b.cellCount);
-    const cellV = Number(optionValue(comp, part, "cellNominal") ?? b.nominalVoltage);
-    const cellMax = Number(optionValue(comp, part, "cellMax") ?? b.maxVoltage);
+    // the cell voltages are exactly what the part is set to (choosing a chemistry in the inspector writes them;
+    // a full-charge / cut-off voltage outside the chemistry's limits is reported by the validator, not hidden)
+    const chemistry = String(optionValue(comp, part, "chemistry") ?? "li-ion") === "lifepo4" ? "lifepo4" : "li-ion";
+    const pick = (k: string, d: number) => Number(optionValue(comp, part, k) ?? d);
+    const cellV = pick("cellNominal", b.nominalVoltage);
+    const cellMax = pick("cellMax", b.maxVoltage);
+    const cellMin = pick("cellMin", b.minVoltage);
+    const rint = pick("cellRint", b.internalResistance_ohm * 1000) / 1000;
+    const initialSoc = Math.max(0.05, Math.min(1, pick("initialSoc", 95) / 100));
     const cellCap = Number(optionValue(comp, part, "capacity") ?? b.capacity_mAh);
     const cellA = Number(optionValue(comp, part, "cellMaxA") ?? b.maxContinuousA);
-    return { nominal: cellV * s, max: cellMax * s, min: b.minVoltage * s, capacity: cellCap * p, rint: (b.internalResistance_ohm * s) / p, maxA: cellA * p, cells: s, parallel: p };
+    return { nominal: cellV * s, max: cellMax * s, min: cellMin * s, capacity: cellCap * p, rint: (rint * s) / p, maxA: cellA * p, cells: s, parallel: p, chemistry, cellMax, cellMin, initialSoc };
   }
   const n = b.perCell ? Number(part.config.series ?? comp.options.find((o) => o.key === "series")?.default ?? 1) : 1;
   const cap = Number(part.config.capacity ?? b.capacity_mAh);
   // fixed packs (e.g. "LiPo 3S") report their own series cell count; cell-based parts use the instance option
   const cells = b.perCell ? n : (seriesCellsOf(comp) ?? 1);
-  return { nominal: b.nominalVoltage * n, max: b.maxVoltage * n, min: b.minVoltage * n, capacity: cap, rint: b.internalResistance_ohm * n, maxA: b.maxContinuousA, cells, parallel: 1 };
+  return { nominal: b.nominalVoltage * n, max: b.maxVoltage * n, min: b.minVoltage * n, capacity: cap, rint: b.internalResistance_ohm * n, maxA: b.maxContinuousA, cells, parallel: 1, chemistry: null as "li-ion" | "lifepo4" | null, cellMax: b.maxVoltage, cellMin: b.minVoltage, initialSoc: 0.95 };
 }
 
 export function optionValue(comp: ComponentRecord, part: PartInstance, key: string) {
@@ -206,7 +213,7 @@ function propagatePower(g: CircuitGraph) {
         const setV = optionValue(c, p, "vout");
         if (c.kind === "regulator" && setV !== undefined) v = Number(setV);
         if (c.id === "l298n" && out.id === "5V") {
-          const jumper = Boolean(optionValue(c, p, "regJumper"));
+          const jumper = Boolean(optionValue(c, p, "regJumper")) && optionValue(c, p, "regType") !== "none";
           if (!jumper) continue;
           const vs = g.netOf.get(`${p.uid}.VS`)?.voltage ?? 0;
           if (vs < 6.5) continue; // 78M05 cannot regulate

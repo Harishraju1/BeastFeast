@@ -1,4 +1,6 @@
 import type { ComponentRecord, Profile, Project } from "@/lib/types";
+import type { VideoProvider } from "@/lib/video/providers";
+import type { UploadOptions } from "@/lib/video/upload";
 import type { TrackDef } from "@/lib/sim/types";
 
 export interface Progress {
@@ -143,7 +145,24 @@ export interface Video {
   topicId?: string;
   difficulty: "beginner" | "intermediate" | "advanced";
   category: "Electronics" | "Arduino" | "Sensors" | "Motor Drivers" | "Chassis" | "Line Following" | "Robo Race" | "Robo War" | "Advanced Robotics";
+  /** "url" (a link to a video platform — every older entry) or "upload" (a file in the private video bucket) */
+  source?: "url" | "upload";
+  provider?: VideoProvider;
+  /** uploaded file: object path in the lesson-videos bucket */
+  storagePath?: string;
+  /** uploaded thumbnail: object path in the lesson-videos bucket (otherwise `thumbnail` is an https URL) */
+  thumbnailPath?: string;
+  mime?: string;
+  sizeBytes?: number;
+  /** portrait player (Shorts / Reels) */
+  vertical?: boolean;
+  /** drafts are visible to administrators only */
+  published?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
+
+export const VIDEO_CATEGORIES: Video["category"][] = ["Electronics", "Arduino", "Sensors", "Motor Drivers", "Chassis", "Line Following", "Robo Race", "Robo War", "Advanced Robotics"];
 
 export interface Announcement {
   id: string;
@@ -213,7 +232,7 @@ export interface PrivateDetails {
   email: string | null;
   /** +919876543210 */
   phone: string | null;
-  /** N00H01X0000 (e.g. N24H01A0001) — set at sign-up, cannot be changed by the student afterwards */
+  /** e.g. N24H0180001 or N24H01B0002 — set at sign-up, cannot be changed by the student afterwards */
   niatId: string | null;
   /** student ID from before the NIAT format was enforced (kept, never reformatted) */
   legacyStudentId: string | null;
@@ -225,8 +244,34 @@ export interface SignUpInput {
   password: string;
   /** +919876543210 */
   phone: string;
-  /** N00H01X0000, e.g. N24H01A0001 */
+  /** e.g. N24H0180001 or N24H01B0002 */
   niatId: string;
+  /** campus / college name, e.g. KKH */
+  campus: string;
+}
+
+/** Daily activity streak (cloud: my_streak(), from the server-side streak_days table). */
+export interface StreakInfo {
+  current: number;
+  longest: number;
+  /** true only when there is activity in today's streak day (a day ends at 23:59 local time) */
+  activeToday: boolean;
+  lastActive: string | null;
+  /** YYYY-MM-DD of the current streak day in the student's timezone */
+  today: string;
+  timezone: string;
+}
+
+export type NiatReviewIssue = "missing" | "legacy-invalid" | "legacy-duplicate" | "legacy-unclaimed" | "campus-missing";
+export interface NiatReviewRow {
+  id: string;
+  name: string;
+  email: string;
+  campus: string;
+  niatId: string | null;
+  legacyStudentId: string | null;
+  issue: NiatReviewIssue;
+  createdAt: string;
 }
 
 export type AccountStatus = "active" | "unconfirmed" | "suspended";
@@ -245,6 +290,7 @@ export interface AdminUserRow {
   createdAt: string;
   lastSignInAt: string | null;
   status: AccountStatus;
+  campus: string;
 }
 export interface AdminUserQuery {
   search?: string;
@@ -252,6 +298,8 @@ export interface AdminUserQuery {
   status?: AccountStatus | "";
   minRank?: number | null;
   maxRank?: number | null;
+  /** campus name contains this text; "(none)" = no campus set */
+  campus?: string;
   limit: number;
   offset: number;
 }
@@ -271,6 +319,26 @@ export interface Backend {
   removeAvatar(): Promise<Profile>;
   /** Admins: registered accounts with contact details (cloud: admin_list_users). */
   adminListUsers(q: AdminUserQuery): Promise<{ rows: AdminUserRow[]; total: number }>;
+  /** Admins: correct a student's campus name (validated on the server, logged). Returns the stored value. */
+  adminSetCampus(userId: string, campus: string): Promise<string>;
+  /** Admins: set or correct a NIAT ID after checking it (validated, unique, logged). */
+  adminSetNiat(userId: string, niatId: string): Promise<string>;
+  /** Admins: accounts whose NIAT ID or campus needs attention. Read-only. */
+  adminNiatReview(): Promise<NiatReviewRow[]>;
+  /** Admins: campus names in use with their student counts (for the filter). */
+  adminCampuses(): Promise<{ campus: string; students: number }[]>;
+  /** The signed-in student's daily streak. */
+  myStreak(): Promise<StreakInfo | null>;
+  /** Admins: every video including drafts, newest first. Students get published videos through getContent(). */
+  adminListVideos(): Promise<Video[]>;
+  /** Admins: create or update one video (links and uploads alike). */
+  saveVideo(v: Video): Promise<Video>;
+  /** Admins: delete a video and its uploaded files. */
+  deleteVideo(v: Video): Promise<void>;
+  /** Admins: upload a video file or thumbnail for a video id; resolves to the stored object path. */
+  uploadVideoAsset(kind: "video" | "thumb", videoId: string, file: File, opts?: UploadOptions): Promise<string>;
+  /** A playable / displayable URL for an uploaded file (cloud: a signed URL valid for an hour). */
+  videoAssetUrl(path: string): Promise<string | null>;
   signIn(email: string, password: string): Promise<Profile>;
   /** Emails a password-reset link (cloud mode). Never reveals whether the email is registered. */
   requestPasswordReset(email: string): Promise<void>;

@@ -9,7 +9,9 @@ import { getBackend } from "@/lib/data";
 import type { XpEvent } from "@/lib/data/types";
 import { RankCard } from "@/components/ranks/RankCard";
 import { XpHistory } from "@/components/xp/XpHistory";
-import { ACHIEVEMENTS, earnedAchievements, streakDays } from "@/lib/gamification";
+import { ACHIEVEMENTS, earnedAchievements } from "@/lib/gamification";
+import { useStreak } from "@/components/xp/useStreak";
+import { CAMPUS_PLACEHOLDER, campusError, normalizeCampus } from "@/lib/validation";
 import { LEARNING_PATHS } from "@/lib/learning";
 import { AvatarEditor } from "@/components/profile/AvatarEditor";
 import { AccountDetails } from "@/components/profile/AccountDetails";
@@ -24,14 +26,17 @@ function Inner() {
   }, [user]);
   const earned = useMemo(() => earnedAchievements(events, projects, progress), [events, projects, progress]);
   const done = new Set(progress?.completedTopics ?? []);
+  const streak = useStreak(user?.id, user?.xp);
 
   const save = async () => {
     if (saving) return;
     if (form.name.trim().length < 2) return toast("error", "Enter your full name.");
+    const ce = campusError(form.campus);
+    if (ce) return toast("error", ce);
     setSaving(true);
     try {
       const b = await getBackend();
-      const p = await b.updateProfile({ id: user!.id, name: form.name.trim(), campus: form.campus.trim() });
+      const p = await b.updateProfile({ id: user!.id, name: form.name.trim(), campus: normalizeCampus(form.campus) });
       useApp.setState({ user: p });
       toast("success", "Profile updated successfully");
     } catch (e) {
@@ -50,7 +55,7 @@ function Inner() {
           <div className="space-y-3">
             <AvatarEditor />
             <Field label="Name"><input className="bf-input" value={form.name} maxLength={80} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Campus"><input className="bf-input" value={form.campus} maxLength={60} onChange={(e) => setForm({ ...form, campus: e.target.value })} /></Field>
+            <Field label="Campus / College Name"><input className="bf-input" value={form.campus} maxLength={60} placeholder={CAMPUS_PLACEHOLDER} onChange={(e) => setForm({ ...form, campus: e.target.value })} /></Field>
             <Button variant="primary" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button>
           </div>
           <div className="mt-5 border-t border-line pt-4">
@@ -64,7 +69,7 @@ function Inner() {
               <Stat label="Lifetime XP" value={user!.xp.toLocaleString()} tone="accent" />
               <Stat label="Today" value={(user!.dailyXp ?? 0).toLocaleString()} sub="since 11:15 PM" />
               <Stat label="Projects" value={projects.length} />
-              <Stat label="Streak" value={`${streakDays(events)} d`} />
+              <Stat label="Streak" value={streak ? `${streak.current} d` : "—"} sub={streak ? (streak.activeToday ? `active today · best ${streak.longest} d` : streak.current > 0 ? "do something today to keep it" : `best ${streak.longest} d`) : undefined} />
             </div>
             <div className="mt-3 flex flex-wrap gap-3 text-xs"><Link href="/learn/performance" className="text-accent-ink hover:underline">My performance analysis →</Link><Link href="/learn/history" className="text-accent-ink hover:underline">Quiz history →</Link></div>
           </Panel>

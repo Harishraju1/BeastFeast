@@ -25,6 +25,17 @@ interface BenchStore {
   stop(): void;
   reset(project: Project, key: string): void;
   bump(): void;
+  /** low-performance mode: fewer UI updates, no decorative motion, lighter 3D */
+  lowPerf: boolean;
+  setLowPerf(v: boolean): void;
+}
+
+function initialLowPerf(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem("bf.lowPerf") === "1";
+  } catch {
+    return false;
+  }
 }
 
 let raf = 0;
@@ -49,7 +60,7 @@ function loop(now: number) {
     const m = st.sim.state.motors[w.attachedTo];
     if (m) angles[w.uid] = (angles[w.uid] ?? 0) + ((m.rpm * Math.PI * 2) / 60) * dt;
   }
-  if (now - lastUi > 50) {
+  if (now - lastUi > (st.lowPerf ? 200 : 50)) {
     lastUi = now;
     useBench3.setState({ tick: st.tick + 1, wheelAngles: { ...angles } });
   }
@@ -97,5 +108,14 @@ export const useBench3 = create<BenchStore>((set, get) => ({
   },
   bump() {
     set({ tick: get().tick + 1 });
+  },
+  lowPerf: initialLowPerf(),
+  setLowPerf(v) {
+    try {
+      window.localStorage.setItem("bf.lowPerf", v ? "1" : "0");
+    } catch {
+      /* storage blocked: keep it for this visit */
+    }
+    set({ lowPerf: v });
   },
 }));

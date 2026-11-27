@@ -66,6 +66,8 @@ interface AppState {
   /** Marks today as a learning day (topic studied, video watched) so the daily penalty doesn't apply. */
   recordActivity(kind: LearningActivityKind, ref: string): Promise<void>;
   saveContent(c: Partial<AdminContent>): Promise<void>;
+  /** Re-read the shared content (e.g. after the video library changed). */
+  refreshContent(): Promise<void>;
   toast(kind: Toast["kind"], text: string): void;
   dismissToast(id: number): void;
   markNoticesRead(): void;
@@ -373,6 +375,11 @@ export const useApp = create<AppState>((set, get) => ({
   async saveContent(c) {
     const be = await getBackend();
     const content = await be.saveContent(c);
+    setCatalogueOverrides(content.componentOverrides, content.addedComponents);
+    set({ content });
+  },
+  async refreshContent() {
+    const content = await (await getBackend()).getContent();
     setCatalogueOverrides(content.componentOverrides, content.addedComponents);
     set({ content });
   },

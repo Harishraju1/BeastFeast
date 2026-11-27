@@ -6,9 +6,48 @@
  */
 import type { Profile, Project } from "@/lib/types";
 import type { TrackDef } from "@/lib/sim/types";
-import { type AdminContent, type Backend, DEFAULT_RULES, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig, sourceOf, type SignUpInput, type PrivateDetails, type AdminUserQuery, type AdminUserRow } from "./types";
+import { type AdminContent, type Backend, DEFAULT_RULES, type LearningActivityKind, type Progress, type QuizAttempt, type RoleAuditEntry, type StaffAccount, type XpConfig, type XpEvent, type XpEventType, LEADERBOARD_MIN_XP, type RankEvent, defaultXpConfig, sourceOf, type SignUpInput, type PrivateDetails, type AdminUserQuery, type AdminUserRow, type NiatReviewRow } from "./types";
 import { blobToDataUrl, squareImage } from "@/lib/avatar-client";
-import { AVATAR_MAX_BYTES, NIAT_ID_RE, avatarFileError, mobileError, niatIdError, normalizeNiatId, toE164India } from "@/lib/validation";
+import { AVATAR_MAX_BYTES, NIAT_ID_RE, avatarFileError, campusError, mobileError, niatIdError, normalizeCampus, normalizeNiatId, toE164India } from "@/lib/validation";
+import { computeStreak } from "@/lib/streak";
+import { type UploadOptions, UploadCancelled, storageName } from "@/lib/video/upload";
+import type { Video } from "./types";
+
+/** Local mode keeps uploaded videos in this browser's IndexedDB (localStorage is far too small). */
+function idb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open("bf5-videos", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("files");
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error ?? new Error("This browser cannot store videos (IndexedDB unavailable)."));
+  });
+}
+async function idbPut(key: string, value: Blob) {
+  const db = await idb();
+  await new Promise<void>((res, rej) => {
+    const t = db.transaction("files", "readwrite");
+    t.objectStore("files").put(value, key);
+    t.oncomplete = () => res();
+    t.onerror = () => rej(t.error ?? new Error("Could not store the video in this browser (storage full?)."));
+  });
+}
+async function idbGet(key: string): Promise<Blob | null> {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const r = db.transaction("files").objectStore("files").get(key);
+    r.onsuccess = () => res((r.result as Blob | undefined) ?? null);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbDelete(key: string) {
+  const db = await idb();
+  await new Promise<void>((res) => {
+    const t = db.transaction("files", "readwrite");
+    t.objectStore("files").delete(key);
+    t.oncomplete = () => res();
+    t.onerror = () => res();
+  });
+}
 import { levelForXp } from "@/lib/ranks";
 import { isStaff, isSuperAdmin } from "@/lib/roles";
 import { gradeQuiz } from "./grading";
@@ -134,12 +173,14 @@ export class LocalBackend implements Backend {
     if (niatErr) throw new Error(niatErr);
     const phoneErr = mobileError(input.phone);
     if (phoneErr) throw new Error(phoneErr);
+    const campusErr = campusError(input.campus ?? "");
+    if (campusErr) throw new Error(campusErr);
     const niatId = normalizeNiatId(input.niatId);
     if (accounts.some((a) => a.email === email)) throw new Error("An account with this email already exists on this device.");
     if (accounts.some((a) => a.niatId === niatId)) throw new Error("This NIAT ID is already registered.");
     const salt = crypto.randomUUID();
     const profile: Profile = {
-      id: rid("u"), name: input.name.trim(), campus: "", studentId: "", avatar: null,
+      id: rid("u"), name: input.name.trim(), campus: normalizeCampus(input.campus), studentId: "", avatar: null,
       role: accounts.length === 0 ? "super_admin" : "student", // the first account on a device is its Super Admin
       xp: 0, createdAt: new Date().toISOString(),
     };
@@ -188,6 +229,11 @@ export class LocalBackend implements Backend {
     void _xp;
     void _sid;
     void _av;
+    if (safe.campus !== undefined && normalizeCampus(safe.campus) !== a.profile.campus) {
+      const e = campusError(safe.campus);
+      if (e) throw new Error(e);
+      safe.campus = normalizeCampus(safe.campus);
+    }
     a.profile = { ...a.profile, ...safe };
     write(K.accounts, accounts);
     return a.profile;
@@ -267,13 +313,67 @@ export class LocalBackend implements Backend {
         return {
           id: a.profile.id, name: a.profile.name, email: a.email, phone: d.phone, niatId: d.niatId, legacyStudentId: d.legacyStudentId, avatar: a.profile.avatar,
           role: a.profile.role, xp: a.profile.xp, dailyXp: a.profile.dailyXp ?? 0, rankLevel: Math.max(a.profile.rankLevel ?? 1, levelForXp(a.profile.xp)),
-          createdAt: a.profile.createdAt, lastSignInAt: null, status: "active",
+          createdAt: a.profile.createdAt, lastSignInAt: null, status: "active", campus: a.profile.campus ?? "",
         };
       })
-      .filter((r) => !s || r.name.toLowerCase().includes(s) || r.email.includes(s) || (r.niatId ?? "").toLowerCase().includes(s) || (r.legacyStudentId ?? "").toLowerCase().includes(s) || (!!digits && (r.phone ?? "").includes(digits)))
+      .filter((r) => { const c = (q.campus ?? "").trim().toLowerCase(); return !c || (c === "(none)" ? !r.campus : r.campus.toLowerCase().includes(c)); })
+      .filter((r) => !s || r.name.toLowerCase().includes(s) || r.email.includes(s) || r.campus.toLowerCase().includes(s) || (r.niatId ?? "").toLowerCase().includes(s) || (r.legacyStudentId ?? "").toLowerCase().includes(s) || (!!digits && (r.phone ?? "").includes(digits)))
       .filter((r) => (!q.role || r.role === q.role) && (!q.status || r.status === q.status) && (q.minRank == null || r.rankLevel >= q.minRank) && (q.maxRank == null || r.rankLevel <= q.maxRank))
       .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
     return { total: all.length, rows: all.slice(q.offset, q.offset + q.limit) };
+  }
+
+  private requireAdmin() {
+    const me = this.me();
+    if (me.profile.role !== "admin" && me.profile.role !== "super_admin") throw new Error("Administrator access required");
+  }
+  async adminSetCampus(userId: string, campus: string) {
+    this.requireAdmin();
+    const e = campusError(campus);
+    if (e) throw new Error(e);
+    const accounts = this.accounts();
+    const a = accounts.find((x) => x.profile.id === userId);
+    if (!a) throw new Error("No such account");
+    a.profile = { ...a.profile, campus: normalizeCampus(campus) };
+    write(K.accounts, accounts);
+    return a.profile.campus;
+  }
+  async adminSetNiat(userId: string, niatId: string) {
+    this.requireAdmin();
+    const v = normalizeNiatId(niatId);
+    const e = niatIdError(v);
+    if (e) throw new Error(e);
+    const accounts = this.accounts();
+    const a = accounts.find((x) => x.profile.id === userId);
+    if (!a) throw new Error("No such account");
+    if (accounts.some((x) => x !== a && this.details(x).niatId === v)) throw new Error("This NIAT ID is already registered to another account.");
+    a.niatId = v;
+    write(K.accounts, accounts);
+    return v;
+  }
+  async adminNiatReview(): Promise<NiatReviewRow[]> {
+    this.requireAdmin();
+    const accounts = this.accounts();
+    return accounts
+      .filter((a) => a.profile.role === "student")
+      .map((a) => ({ a, d: this.details(a) }))
+      .filter(({ a, d }) => !d.niatId || !a.profile.campus)
+      .map(({ a, d }): NiatReviewRow => {
+        const legacy = d.legacyStudentId ? normalizeNiatId(d.legacyStudentId) : "";
+        const issue: NiatReviewRow["issue"] = d.niatId ? "campus-missing" : !legacy ? "missing" : !NIAT_ID_RE.test(legacy) ? "legacy-invalid" : accounts.some((x) => x !== a && this.details(x).niatId === legacy) ? "legacy-duplicate" : "legacy-unclaimed";
+        return { id: a.profile.id, name: a.profile.name, email: a.email, campus: a.profile.campus ?? "", niatId: d.niatId, legacyStudentId: d.legacyStudentId, issue, createdAt: a.profile.createdAt };
+      });
+  }
+  async adminCampuses() {
+    this.requireAdmin();
+    const m = new Map<string, number>();
+    for (const a of this.accounts()) m.set(a.profile.campus || "(none)", (m.get(a.profile.campus || "(none)") ?? 0) + 1);
+    return [...m].map(([campus, students]) => ({ campus, students })).sort((x, y) => y.students - x.students || x.campus.localeCompare(y.campus));
+  }
+  async myStreak() {
+    const me = await this.currentUser();
+    if (!me) return null;
+    return computeStreak(await this.listXpEvents(me.id));
   }
 
   // Same rules as the Supabase admin_set_role() function (local mode is single-device and not tamper-proof).
@@ -515,13 +615,49 @@ export class LocalBackend implements Backend {
   }
 
   async getContent(): Promise<AdminContent> {
-    return { ...EMPTY_CONTENT, ...read<Partial<AdminContent>>(K.content, {}) };
+    const c = { ...EMPTY_CONTENT, ...read<Partial<AdminContent>>(K.content, {}) };
+    return { ...c, videos: c.videos.filter((v) => v.published !== false) };
+  }
+  private allVideos(): Video[] {
+    return read<Partial<AdminContent>>(K.content, {}).videos ?? [];
+  }
+  async adminListVideos() {
+    this.requireAdmin();
+    return [...this.allVideos()].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  }
+  async saveVideo(v: Video) {
+    this.requireAdmin();
+    const now = new Date().toISOString();
+    const list = this.allVideos();
+    const prev = list.find((x) => x.id === v.id);
+    const next: Video = { ...v, createdAt: prev?.createdAt ?? v.createdAt ?? now, updatedAt: now, published: v.published !== false };
+    write(K.content, { ...read<Partial<AdminContent>>(K.content, {}), videos: prev ? list.map((x) => (x.id === v.id ? next : x)) : [next, ...list] });
+    return next;
+  }
+  async deleteVideo(v: Video) {
+    this.requireAdmin();
+    write(K.content, { ...read<Partial<AdminContent>>(K.content, {}), videos: this.allVideos().filter((x) => x.id !== v.id) });
+    for (const p of [v.storagePath, v.thumbnailPath]) if (p) await idbDelete(p).catch(() => undefined);
+  }
+  async uploadVideoAsset(kind: "video" | "thumb", videoId: string, file: File, opts?: UploadOptions) {
+    this.requireAdmin();
+    if (opts?.signal?.aborted) throw new UploadCancelled();
+    const path = `${kind === "video" ? "videos" : "thumbs"}/${videoId}/${storageName(file.name)}`;
+    opts?.onProgress?.(0.5);
+    await idbPut(path, file);
+    opts?.onProgress?.(1);
+    return path;
+  }
+  async videoAssetUrl(path: string) {
+    const blob = await idbGet(path).catch(() => null);
+    return blob ? URL.createObjectURL(blob) : null;
   }
   async saveContent(c: Partial<AdminContent>) {
     const me = await this.currentUser();
     if (!isStaff(me?.role)) throw new Error("Only administrators can edit content.");
-    const next = { ...(await this.getContent()), ...c };
+    // merge into the stored content (getContent() hides draft videos)
+    const next = { ...EMPTY_CONTENT, ...read<Partial<AdminContent>>(K.content, {}), ...c };
     write(K.content, next);
-    return next;
+    return this.getContent();
   }
 }

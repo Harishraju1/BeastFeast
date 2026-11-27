@@ -1,15 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { formatIndianMobile, mobileError, niatIdError, normalizeNiatId, passwordError, sniffImageType, toE164India } from "@/lib/validation";
+import { NIAT_ID_ERROR, campusError, formatIndianMobile, mobileError, niatIdError, normalizeCampus, normalizeNiatId, passwordError, sniffImageType, toE164India } from "@/lib/validation";
 
 describe("NIAT ID", () => {
-  it.each(["N24H01A0001", "N25H01B1234", "N00H01X0000", "N26H01Z9876"])("accepts %s", (id) => expect(niatIdError(id)).toBeNull());
+  it.each(["N24H0180001", "N24H01B0002", "N24H01A0001", "N25H01B1234", "N00H0000000", "N26H99Z9876", "N24H0100001"])("accepts %s", (id) => expect(niatIdError(id)).toBeNull());
   it("normalises case and spaces", () => {
-    expect(normalizeNiatId("  n24h01 a0001 ")).toBe("N24H01A0001");
-    expect(niatIdError("  n24h01a0001 ")).toBeNull();
+    expect(normalizeNiatId("  n24h01 b0002 ")).toBe("N24H01B0002");
+    expect(niatIdError("  n24h0180001 ")).toBeNull();
   });
-  it.each(["", "N24H0100001", "N24H02A0001", "N2H01A0001", "N24H01A001", "N24H01A00011", "M24H01A0001", "N24A01A0001", "NAAH01A0001", "N24H01AA001", "N24H0110001"])("rejects %s", (id) =>
-    expect(niatIdError(id)).not.toBeNull(),
+  it.each(["N2H0180001", "N24H018001", "N24H01800011", "M24H0180001", "N24A0180001", "NAAH0180001", "N24H01AB001", "N24HA180001", "N24H1B00002", "N24H01B000Z", "N24 H01B 0002X"])("rejects %s with the official message", (id) =>
+    expect(niatIdError(id)).toBe(NIAT_ID_ERROR),
   );
+  it("requires a value", () => expect(niatIdError("   ")).not.toBeNull());
+});
+
+describe("campus name", () => {
+  it.each(["KKH", "Chevella", "SMRU", "St. Mary's (Hyderabad)", "NIAT - Campus 2", "R&D / Lab"])("accepts %s", (c) => expect(campusError(c)).toBeNull());
+  it.each(["", "   ", "A", "<script>", "x".repeat(61), "-KKH", "KKH;drop"])("rejects %j", (c) => expect(campusError(c)).not.toBeNull());
+  it("trims and collapses spaces", () => expect(normalizeCampus("  Chevella   Campus ")).toBe("Chevella Campus"));
 });
 
 describe("Indian mobile number", () => {

@@ -1,20 +1,21 @@
 "use client";
+import { VideoThumb } from "@/components/video/VideoPlayer";
 import dynamic from "next/dynamic";
 import { buildFromTemplate, getTemplate } from "@/lib/garage";
 import { getComponent } from "@/lib/catalogue";
 import { Avatar } from "@/components/profile/Avatar";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Award, Flame, Megaphone, PlayCircle, Trophy } from "lucide-react";
+import { ArrowRight, Award, Flame, Megaphone, Trophy } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { getBackend } from "@/lib/data";
 import type { Profile } from "@/lib/types";
 import type { XpEvent } from "@/lib/data/types";
 import { COMPETITIONS } from "@/lib/types";
 import { LEARNING_PATHS, TOPICS, WEEKLY_MISSIONS_DEFAULT, getTopic } from "@/lib/learning";
-import { ACHIEVEMENTS, earnedAchievements, rankFor, streakDays } from "@/lib/gamification";
+import { ACHIEVEMENTS, earnedAchievements, rankFor } from "@/lib/gamification";
+import { useStreak } from "@/components/xp/useStreak";
 import { Badge, LinkButton, Panel, Progress, Stat } from "@/components/ui";
-import { youtubeId } from "@/lib/youtube";
 import { NextSteps } from "@/components/home/NextSteps";
 
 const HeroRobot = dynamic(() => import("@/components/three/HeroRobot"), { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-bg2" /> });
@@ -31,6 +32,7 @@ const HIGHLIGHT_KINDS = ["controller", "motor-driver", "dc-motor", "battery", "w
 
 export default function Home() {
   const { user, projects, progress, content, ready } = useApp();
+  const streak = useStreak(user?.id, user?.xp);
   const [hi, setHi] = useState(0);
   const [robotIdx, setRobotIdx] = useState(0);
   const [pinned, setPinned] = useState(false);
@@ -269,7 +271,7 @@ export default function Home() {
           <Panel title="Become a Robot Beast">
             <div className="mb-3 flex items-center gap-4 text-sm">
               <span className="flex items-center gap-1 text-accent-ink">
-                <Flame size={16} /> {streakDays(events)}-day streak
+                <Flame size={16} /> {streak?.current ?? 0}-day streak{streak && !streak.activeToday && streak.current > 0 ? " — keep it going today" : ""}
               </span>
               <span className="flex items-center gap-1 text-brand">
                 <Award size={16} /> {earned.size}/{ACHIEVEMENTS.length}
@@ -300,15 +302,12 @@ export default function Home() {
           {/* E. featured tutorials */}
           <Panel title="Featured Tutorials" className="lg:col-span-2" actions={<LinkButton href="/learn?tab=videos" size="sm">Video library</LinkButton>}>
             {content.videos.length === 0 ? (
-              <div className="text-sm text-muted">Administrators haven&apos;t added tutorial videos yet. Each Beast Topic links to a YouTube search for its subject in the meantime.</div>
+              <div className="text-sm text-muted">Administrators haven&apos;t added tutorial videos yet. Each Beast Topic links to a video search for its subject in the meantime.</div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-3">
                 {content.videos.slice(0, 3).map((v) => (
                   <Link key={v.id} href={`/learn?tab=videos&v=${v.id}`} className="group overflow-hidden rounded-lg border border-line">
-                    <div className="relative aspect-video bg-bg2">
-                      {youtubeId(v.url) && <img src={v.thumbnail || `https://i.ytimg.com/vi/${youtubeId(v.url)}/hqdefault.jpg`} alt="" className="h-full w-full object-cover opacity-80 group-hover:opacity-100" />}
-                      <PlayCircle className="absolute inset-0 m-auto text-white/90" size={36} />
-                    </div>
+                    <VideoThumb video={v} className="aspect-video" iconSize={36} />
                     <div className="p-2 text-xs font-medium">{v.title}</div>
                   </Link>
                 ))}

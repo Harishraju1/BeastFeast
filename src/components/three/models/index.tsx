@@ -9,7 +9,7 @@ import { ControllerModel, DriverModel } from "./boards";
 import { SensorModel } from "./sensors";
 import { WheelModel } from "./wheels";
 import { BatteryModel, CasterModel } from "./power";
-import { BreadboardModel, CapacitorModel, DhtModel, DisplayModel, LdrModel, LedModel, RegulatorModel, ResistorModel, SwitchModel, To92Model } from "./electronics";
+import { BracketModel, BreadboardModel, CapacitorModel, DhtModel, DiodeModel, DisplayModel, LdrModel, LedModel, PulseOxModel, RegulatorModel, ResistorModel, SoilModel, SwitchModel, To92Model, TransistorModel, XiaoModel } from "./electronics";
 import { EmissiveContext, MM } from "./prims";
 import type { ModelProps } from "./types";
 import type { ComponentRecord } from "@/lib/types";
@@ -50,6 +50,12 @@ export function PartModel(props: ModelProps & { wheelAngle?: number }) {
     case "to92": return <To92Model />;
     case "display": return <DisplayModel {...props} />;
     case "regulator": return <RegulatorModel {...props} />;
+    case "diode": return <DiodeModel {...props} />;
+    case "transistor": return <TransistorModel {...props} />;
+    case "xiao": return <XiaoModel {...props} />;
+    case "bracket": return <BracketModel {...props} />;
+    case "soil": return <SoilModel />;
+    case "pulse-ox": return <PulseOxModel />;
   }
   switch (props.comp.kind) {
     case "dc-motor":

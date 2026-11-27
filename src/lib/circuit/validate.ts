@@ -50,7 +50,7 @@ export function validateProject(project: Project, studentName = "ENGINEER", sumo
 
 export function score(issues: ValidationIssue[]) {
   const area = (a: ValidationIssue["area"]) => {
-    const list = issues.filter((i) => i.area === a);
+    const list = issues.filter((i) => i.area === a || (a === "power" && i.area === "safety"));
     const s = 100 - 30 * list.filter((i) => i.severity === "critical").length - 10 * list.filter((i) => i.severity === "warning").length - 2 * list.filter((i) => i.severity === "suggestion").length;
     return Math.max(0, s);
   };
@@ -102,7 +102,7 @@ function ruleShortsAndConflicts(g: CircuitGraph, add: (i: Issue) => void): numbe
       const src = real[0];
       const bat = net.members.find((m) => m.pin.fn === "bat-");
       add({
-        severity: "critical", area: "power", code: "E_SHORT_CIRCUIT", title: "SHORT CIRCUIT DETECTED!",
+        severity: "critical", area: "safety", code: "E_SHORT_CIRCUIT", title: "SHORT CIRCUIT DETECTED!",
         partUid: src.key.split(".")[0], pinId: src.key.split(".")[1], wireId: net.wires[0]?.id,
         incorrect: `${src.label} is connected straight to ground${bat ? ` (${label(bat)})` : ""}.`,
         explanation: "A supply connected directly to ground has no load to limit the current. A Li-ion or LiPo pack can deliver tens of amps — wires melt, the battery can swell or catch fire.",
@@ -281,7 +281,8 @@ function ruleDrivers(g: CircuitGraph, add: (i: Issue) => void, NAME: string): nu
     if (!wiring) continue;
     n++;
     if (c.id === "l298n") {
-      const jumper = Boolean(optionValue(c, d, "regJumper"));
+      const noReg = optionValue(c, d, "regType") === "none";
+      const jumper = Boolean(optionValue(c, d, "regJumper")) && !noReg;
       const vs = g.netOf.get(key(d, "VS"));
       const vsMax = vs?.vMax ?? vs?.voltage ?? 0;
       // On-board 78M05: absolute maximum input 35 V. Below that the limit is heat in the regulator:
@@ -306,7 +307,7 @@ function ruleDrivers(g: CircuitGraph, add: (i: Issue) => void, NAME: string): nu
       if (!jumper) {
         const five = g.netOf.get(key(d, "5V"));
         if (!five?.voltage)
-          add({ severity: "critical", area: "power", code: "E_L298N_NO_LOGIC", title: `HEY ${NAME}! THE L298N LOGIC HAS NO 5 V!`, partUid: d.uid, pinId: "5V", incorrect: "Regulator jumper removed and nothing supplies the +5V pin.", explanation: "Without the jumper the +5V pin is an INPUT — the L298N logic is unpowered and ignores IN1–IN4.", fix: "Connect the controller's 5V pin to the L298N +5V pin, or refit the jumper (VS ≤ 12 V)." });
+          add({ severity: "critical", area: "power", code: "E_L298N_NO_LOGIC", title: `HEY ${NAME}! THE L298N LOGIC HAS NO 5 V!`, partUid: d.uid, pinId: "5V", incorrect: noReg ? "This module has no on-board regulator (set in its options) and nothing supplies the +5V pin." : "Regulator jumper removed and nothing supplies the +5V pin.", explanation: "Without the jumper the +5V pin is an INPUT — the L298N logic is unpowered and ignores IN1–IN4.", fix: "Connect the controller's 5V pin to the L298N +5V pin, or refit the jumper (VS ≤ 12 V)." });
       }
     }
     if (wiring.logicSupply) void 0; // logic supply checked by the generic missing-power rule
@@ -465,7 +466,7 @@ function ruleBuses(g: CircuitGraph, add: (i: Issue) => void): number {
 function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
   let n = 0;
   // motors in parallel on one driver channel (e.g. the left pair of a 4WD robot): their stall currents add up
-  const perChannel = new Map<string, { driver: PartInstance; comp: ComponentRecord; channel: string; motors: { label: string; stall: number }[] }>();
+  const perChannel = new Map<string, { driver: PartInstance; comp: ComponentRecord; channel: string; outs: [string, string]; motors: { label: string; stall: number; run: number; estimated: boolean; pol: number; side: string | null }[] }>();
   // motor stall vs driver peak
   for (const m of partsOf(g, (c) => c.kind === "dc-motor" && !!c.motor)) {
     n++;
@@ -476,8 +477,14 @@ function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
     const ch = DRIVER_WIRING[out.comp.id]?.channels.find((x) => x.outs.includes(out.pin.id));
     if (ch) {
       const k = `${out.part.uid}.${ch.name}`;
-      const e = perChannel.get(k) ?? { driver: out.part, comp: out.comp, channel: ch.name, motors: [] };
-      e.motors.push({ label: m.label, stall });
+      const e = perChannel.get(k) ?? { driver: out.part, comp: out.comp, channel: ch.name, outs: ch.outs, motors: [] };
+      const custom = Boolean(m.config.customParams);
+      const noLoad = custom ? stall * 0.08 : c.motor!.noLoadCurrentA;
+      const t0 = c.pins.find((p) => p.fn === "motor-term")!;
+      const onFirst = g.netOf.get(key(m, t0.id))?.members.some((x) => x.part.uid === out.part.uid && x.pin.id === ch.outs[0]);
+      const side = /left/.test(m.role ?? "") ? "left" : /right/.test(m.role ?? "") ? "right" : null;
+      // mirrored mounting: right-side motors face the other way, so their "forward" polarity is the opposite one
+      e.motors.push({ label: m.label, stall, run: noLoad + 0.25 * (stall - noLoad), estimated: !custom && !!c.motor!.estimated, pol: onFirst ? 1 : -1, side });
       perChannel.set(k, e);
     }
     if (stall > out.comp.driver.peakCurrentA)
@@ -490,6 +497,19 @@ function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
       add({ severity: "warning", area: "compatibility", code: "W_MOTOR_OVERVOLT", title: "MOTOR VOLTAGE TOO HIGH", partUid: m.uid, incorrect: `${m.label} is rated ${nominal} V but can receive ≈${(vm - out.comp.driver.dropV).toFixed(1)} V (${vm.toFixed(1)} V fully charged supply − ${out.comp.driver.dropV} V driver loss).`, explanation: "Over-volting a motor makes it faster but shortens its life dramatically and raises the stall current.", fix: `Use motors rated for this battery (e.g. 12 V gearmotors on a 3S pack), limit the PWM duty in code, or use a lower-voltage supply.` });
   }
   for (const e of perChannel.values()) {
+    // running (continuous) current — not only the peak: a driver can be "peak-safe" and still overheat when driving
+    const run = e.motors.reduce((a, x) => a + x.run, 0);
+    const cont = e.comp.driver!.contCurrentA;
+    if (run > cont + 1e-9)
+      add({ severity: "warning", area: "compatibility", code: "W_DRIVER_CONTINUOUS", title: "DRIVER CHANNEL OVERLOADED WHILE DRIVING", partUid: e.driver.uid, incorrect: `${e.motors.map((x) => x.label).join(" + ")} on ${e.driver.label} channel ${e.channel}: ≈${run.toFixed(2)} A while driving > ${cont} A continuous rating.`, explanation: `The peak rating only covers short bursts (start-up, stalls). In normal driving the channel carries about ${run.toFixed(2)} A all the time, which is more than it can handle continuously — it will heat up and may shut down. (Running current = no-load current + 25 % of the way to stall${e.motors.some((x) => x.estimated) ? "; motor data are estimates" : ""}.)`, fix: "Use a driver with a higher continuous rating, fewer motors per channel, or lighter motors." });
+    // same-side motors on one channel must have the same polarity, or they fight each other
+    const sides = new Map<string, { label: string; pol: number }[]>();
+    for (const m of e.motors) if (m.side) sides.set(m.side, [...(sides.get(m.side) ?? []), { label: m.label, pol: m.pol }]);
+    for (const [side, list] of sides)
+      if (new Set(list.map((x) => x.pol)).size > 1)
+        add({ severity: "warning", area: "electrical", code: "W_MOTOR_PAIR_REVERSED", title: `${side.toUpperCase()} MOTORS ARE WIRED WITH OPPOSITE POLARITY`, partUid: e.driver.uid, incorrect: `On channel ${e.channel}: ${list.map((x) => `${x.label} ${x.pol > 0 ? "M+ on " + e.outs[0] : "M+ on " + e.outs[1]}`).join(", ")}.`, explanation: "Motors on the same side of the robot turn the same way, so they need the same polarity. Reversed, one drives forward while the other drives backward: they fight, draw stall current and the robot barely moves.", fix: `Swap the two wires of one motor so every ${side} motor has M+ on the same output.` });
+    if (sides.has("left") && sides.has("right"))
+      add({ severity: "warning", area: "electrical", code: "W_MOTOR_WRONG_BRIDGE", title: "LEFT AND RIGHT MOTORS SHARE ONE BRIDGE", partUid: e.driver.uid, incorrect: `${e.driver.label} channel ${e.channel} drives left and right motors together.`, explanation: "A skid-steer robot turns by driving its two sides at different speeds. With both sides on one bridge they always do the same thing — the robot can only go straight.", fix: "Put all left motors on one bridge (e.g. OUT1/OUT2) and all right motors on the other (OUT3/OUT4)." });
     if (e.motors.length < 2) continue;
     n++;
     const total = e.motors.reduce((a, x) => a + x.stall, 0);
@@ -498,6 +518,9 @@ function ruleCurrent(g: CircuitGraph, add: (i: Issue) => void): number {
     if (total > peak + 1e-9 && e.motors.every((x) => x.stall <= peak))
       add({ severity: "warning", area: "compatibility", code: "W_DRIVER_CURRENT", title: "MOTORS IN PARALLEL CAN DRAW MORE THAN THE DRIVER CHANNEL ALLOWS", partUid: e.driver.uid, incorrect: `${e.motors.map((x) => x.label).join(" + ")} share ${e.driver.label} channel ${e.channel}: stall ≈${total.toFixed(1)} A together > ${e.comp.name} peak ${peak} A.`, explanation: "Motors wired in parallel to one channel share its H-bridge, so their currents add up. When they start or stall together the channel must deliver the sum.", fix: "Use a driver with a higher current rating, smaller motors, or give each motor its own channel (a second driver)." });
   }
+  const estimated = [...perChannel.values()].flatMap((e) => e.motors.filter((x) => x.estimated).map((x) => x.label));
+  if (estimated.length)
+    add({ severity: "suggestion", area: "compatibility", code: "S_CURRENT_UNCERTAIN", title: "MOTOR CURRENT IS AN ESTIMATE", incorrect: `${estimated.join(", ")}: no datasheet current values.`, explanation: "The current checks use typical values for these motor types, so they are uncertain. Real motors of the same size can draw noticeably more.", fix: "Enter each motor's datasheet stall current (custom parameters in the inspector) for an exact check." });
   // servo on controller 5V, battery capability
   for (const s of partsOf(g, (c) => c.kind === "servo")) {
     n++;
@@ -536,7 +559,7 @@ function ruleSuggestions(g: CircuitGraph, add: (i: Issue) => void): number {
   if (!hasSwitch) add({ severity: "suggestion", area: "power", code: "S_POWER_SWITCH", title: "ADD A POWER / EMERGENCY SWITCH", explanation: "Optional for the simulator — the battery works without one. On a real robot most competition rules require a way to cut power quickly, and it saves your battery between runs.", fix: "Put a toggle or emergency-stop switch in series with battery +." });
   const lithium = batteries.some((b) => /Li|LiPo|18650|21700|26650/.test(g.comps.get(b.uid)!.name));
   if (lithium && !g.parts.some((p) => /Fuse|Protection|BMS/.test(g.comps.get(p.uid)!.name)) && !batteries.some((b) => g.comps.get(b.uid)!.battery?.cellCount))
-    add({ severity: "suggestion", area: "power", code: "S_FUSE", title: "PROTECT YOUR LITHIUM BATTERY", explanation: "Lithium packs can deliver huge short-circuit currents.", fix: "Add an inline fuse or a protection/BMS board." });
+    add({ severity: "suggestion", area: "safety", code: "S_FUSE", title: "PROTECT YOUR LITHIUM BATTERY", explanation: "Lithium packs can deliver huge short-circuit currents.", fix: "Add an inline fuse or a protection/BMS board." });
   for (const d of partsOf(g, (c) => c.id === "l298n")) {
     const vs = g.netOf.get(key(d, "VS"))?.voltage;
     if (vs && vs <= 8.5) add({ severity: "suggestion", area: "compatibility", code: "S_L298N_DROP", title: "YOUR L298N WASTES A LOT OF YOUR BATTERY VOLTAGE", partUid: d.uid, explanation: `The L298N's bipolar transistors drop ≈2 V, so of ${vs.toFixed(1)} V only ≈${(vs - 2).toFixed(1)} V reaches the motors.`, fix: "A MOSFET driver such as the TB6612FNG or DRV8833 loses only a few tenths of a volt." });
@@ -547,11 +570,16 @@ function ruleSuggestions(g: CircuitGraph, add: (i: Issue) => void): number {
     if (c.battery?.cellCount) {
       const bms = Boolean(optionValue(c, b, "bms"));
       if (pack.cells >= 2 && !bms)
-        add({ severity: "warning", area: "power", code: "W_PACK_NO_BMS", title: "YOUR MULTI-CELL LITHIUM PACK HAS NO PROTECTION", partUid: b.uid, incorrect: `${b.label}: ${pack.cells}S${pack.parallel}P lithium pack without a BMS.`, explanation: "In series, cells drift apart: without a BMS one cell can be over-charged or over-discharged (fire risk), and a short circuit has nothing to stop it. The simulator does not make an unprotected pack safe.", fix: `Fit a ${pack.cells}S BMS / protection board rated above your motors' current (and use matched cells).` });
+        add({ severity: "warning", area: "safety", code: "W_PACK_NO_BMS", title: "YOUR MULTI-CELL LITHIUM PACK HAS NO PROTECTION", partUid: b.uid, incorrect: `${b.label}: ${pack.cells}S${pack.parallel}P lithium pack without a BMS.`, explanation: "In series, cells drift apart: without a BMS one cell can be over-charged or over-discharged (fire risk), and a short circuit has nothing to stop it. The simulator does not make an unprotected pack safe.", fix: `Fit a ${pack.cells}S BMS / protection board rated above your motors' current (and use matched cells).` });
       if (pack.cells === 1 && !bms)
-        add({ severity: "suggestion", area: "power", code: "S_CELL_PROTECTION", title: "USE A PROTECTED 18650 CELL", partUid: b.uid, explanation: "A bare Li-ion cell has no over-discharge or short-circuit protection.", fix: "Use a protected cell or add a 1S protection board." });
+        add({ severity: "suggestion", area: "safety", code: "S_CELL_PROTECTION", title: "USE A PROTECTED 18650 CELL", partUid: b.uid, explanation: "A bare Li-ion cell has no over-discharge or short-circuit protection.", fix: "Use a protected cell or add a 1S protection board." });
+      const lim = pack.chemistry === "lifepo4" ? { max: 3.65, min: 2.0, name: "LiFePO4" } : { max: 4.25, min: 2.5, name: "Li-ion" };
+      if (pack.cellMax > lim.max + 1e-6)
+        add({ severity: "critical", area: "safety", code: "E_CELL_OVERCHARGE", title: "CELL FULL-CHARGE VOLTAGE IS TOO HIGH FOR THIS CHEMISTRY", partUid: b.uid, incorrect: `${b.label}: ${pack.cellMax.toFixed(2)} V per cell is set; ${lim.name} cells must not be charged above ${lim.max.toFixed(2)} V.`, explanation: "Over-charging a lithium cell damages it and can cause venting or fire. The simulated voltages would also be wrong.", fix: `Set the cell full-charge voltage to ${lim.name === "LiFePO4" ? "3.60–3.65" : "4.20"} V (check the cell datasheet), or pick the right chemistry.` });
+      if (pack.cellMin < lim.min - 1e-6)
+        add({ severity: "warning", area: "safety", code: "W_CELL_OVERDISCHARGE", title: "CELL CUT-OFF VOLTAGE IS BELOW THE SAFE LIMIT", partUid: b.uid, incorrect: `${b.label}: cut-off ${pack.cellMin.toFixed(2)} V per cell; ${lim.name} should not go below ${lim.min.toFixed(1)} V.`, explanation: "Discharging below the safe limit permanently damages the cell and makes later charging unsafe.", fix: `Raise the cut-off to at least ${lim.min.toFixed(1)} V (most datasheets give ${lim.name === "LiFePO4" ? "2.5" : "3.0"} V).` });
       if ((pack.parallel ?? 1) > 1)
-        add({ severity: "suggestion", area: "power", code: "S_PARALLEL_MATCHED", title: "PARALLEL CELLS MUST BE MATCHED", partUid: b.uid, explanation: "Cells connected in parallel push current into each other if their voltages differ.", fix: "Only connect cells in parallel when they are the same model and charged to the same voltage." });
+        add({ severity: "suggestion", area: "safety", code: "S_PARALLEL_MATCHED", title: "PARALLEL CELLS MUST BE MATCHED", partUid: b.uid, explanation: "Cells connected in parallel push current into each other if their voltages differ.", fix: "Only connect cells in parallel when they are the same model and charged to the same voltage." });
     }
   }
   // parts the simulator cannot fully model are named, never silently ignored
@@ -560,7 +588,7 @@ function ruleSuggestions(g: CircuitGraph, add: (i: Issue) => void): number {
     const s = supportOf(c);
     if (s.level === "full") continue;
     if (!["controller", "motor-driver", "dc-motor", "sensor", "servo", "display", "wireless", "rc-input", "stepper-driver", "stepper-motor", "esc"].includes(c.kind)) continue;
-    add({ severity: "suggestion", area: "compatibility", code: s.level === "unsupported" ? "S_NOT_SUPPORTED" : "S_LIMITED_SIM", title: s.level === "unsupported" ? `${p.label.toUpperCase()} IS NOT SUPPORTED BY THE SIMULATOR YET` : `${p.label.toUpperCase()} HAS LIMITED SIMULATION`, partUid: p.uid, incorrect: s.limits.join(" "), explanation: s.summary, fix: s.alternative ? `To simulate it fully, use the ${s.alternative.name} instead (open "Show better alternative").` : "Keep it in your design; it is checked for wiring and power only." });
+    add({ severity: "suggestion", area: "simulation", code: s.level === "unsupported" ? "S_NOT_SUPPORTED" : "S_LIMITED_SIM", title: s.level === "unsupported" ? `${p.label.toUpperCase()} IS NOT SUPPORTED BY THE SIMULATOR YET` : `${p.label.toUpperCase()} HAS LIMITED SIMULATION`, partUid: p.uid, incorrect: s.limits.join(" "), explanation: s.summary, fix: s.alternative ? `To simulate it fully, use the ${s.alternative.name} instead (open "Show better alternative").` : "Keep it in your design; it is checked for wiring and power only." });
   }
   const enc = partsOf(g, (c) => c.sensor?.kind === "encoder");
   for (const e of enc) {

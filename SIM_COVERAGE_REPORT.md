@@ -1,6 +1,6 @@
 # SIMULATION COVERAGE REPORT
 
-Generated 2026-11-26T22:16:06.299Z by `npm run sim:coverage` (also checked by `tests/sim/coverage.test.ts`).
+Generated 2026-11-27T07:35:47.631Z by `npm run sim:coverage` (also checked by `tests/sim/coverage.test.ts`).
 
 | | Count |
 |---|---:|
@@ -11,7 +11,7 @@ Generated 2026-11-26T22:16:06.299Z by `npm run sim:coverage` (also checked by `t
 | Functional self-test passed | 153 |
 | Functional self-test failed | 0 |
 | Fully supported electrical parts without a passing self-test | 0 |
-| 3D model of this exact part / family model / plain block | 164 / 106 / 288 |
+| 3D model of this exact part / family model / plain block | 190 / 106 / 262 |
 
 Self-test = a minimal real circuit is built and simulated; the part must behave (deliver current, spin, drive, change its output, show text, hold its voltage). Wheels, casters and chassis are covered by the physics tests instead.
 

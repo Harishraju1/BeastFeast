@@ -1,12 +1,12 @@
 "use client";
+import { VideoPlayer, VideoThumb } from "@/components/video/VideoPlayer";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { Megaphone, PlayCircle, Swords, Trophy, X } from "lucide-react";
+import { Megaphone, Swords, Trophy, X } from "lucide-react";
 import { Badge, PageHeader, Panel } from "@/components/ui";
 import { useApp } from "@/lib/store/app";
 import type { Announcement } from "@/lib/data/types";
-import { embedUrl, youtubeId } from "@/lib/youtube";
 import { markAnnouncementsSeen } from "@/components/shell/Notifications";
 import { COMPETITIONS } from "@/lib/types";
 
@@ -30,7 +30,6 @@ function Inner() {
   const list = useMemo(() => [...content.announcements].sort((a, b) => b.at.localeCompare(a.at)).filter((a) => !kind || a.kind === kind), [content.announcements, kind]);
   const videos = useMemo(() => [...content.videos].reverse(), [content.videos]);
   const current = videos.find((v) => v.id === playing);
-  const currentYt = current ? youtubeId(current.url) : null;
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8">
@@ -87,11 +86,7 @@ function Inner() {
                   </div>
                   <button onClick={() => setPlaying(null)} className="rounded p-1 text-muted hover:text-text" aria-label="Close video"><X size={16} /></button>
                 </div>
-                {currentYt ? (
-                  <iframe className="aspect-video w-full rounded-md" src={embedUrl(currentYt)} title={current.title} allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                ) : (
-                  <a href={current.url} target="_blank" rel="noopener noreferrer" className="text-sm text-accent-ink hover:underline">Open video ↗</a>
-                )}
+                <VideoPlayer key={current.id} video={current} className="rounded-md" />
               </div>
             )}
             {videos.length === 0 ? (
@@ -99,7 +94,6 @@ function Inner() {
             ) : (
               <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 {videos.map((v) => {
-                  const yt = youtubeId(v.url);
                   return (
                     <li key={v.id}>
                       <button
@@ -109,11 +103,7 @@ function Inner() {
                         }}
                         className={`group w-full overflow-hidden rounded-md border text-left hover:border-accent ${playing === v.id ? "border-accent" : "border-line"}`}
                       >
-                        <span className="relative block aspect-video bg-bg2">
-                          {/* eslint-disable-next-line @next/next/no-img-element -- YouTube thumbnail */}
-                          {yt && <img src={v.thumbnail || `https://i.ytimg.com/vi/${yt}/hqdefault.jpg`} alt="" loading="lazy" className="h-full w-full object-cover opacity-80 group-hover:opacity-100" />}
-                          <PlayCircle className="absolute inset-0 m-auto text-white/90" size={34} />
-                        </span>
+                        <VideoThumb video={v} className="block aspect-video" />
                         <span className="block p-2">
                           <span className="block text-xs font-medium">{v.title}</span>
                           <span className="font-mono text-[10px] text-dim">{v.competition === "all" ? "All competitions" : COMPETITIONS[v.competition].short} · {v.difficulty}</span>

@@ -145,10 +145,14 @@ function pack18650(n: number): PlatformDef {
       pinoutStatus: "generic-convention",
       options: [
         { key: "arrangement", label: "Cell arrangement", type: "select", default: `${n}S1P`, choices: arr.map((a) => ({ value: `${a.s}S${a.p}P`, label: label(a) })), help: "S = cells in series (adds voltage), P = cells in parallel (adds capacity and current)." },
+        { key: "chemistry", label: "Cell chemistry", type: "select", default: "li-ion", choices: [{ value: "li-ion", label: "Li-ion (NMC/NCA) — 3.6 V, 4.2 V full" }, { value: "lifepo4", label: "LiFePO4 — 3.2 V, 3.65 V full" }], help: "Sets the voltage limits used when you leave the cell voltages below unchanged. LiFePO4 18650s are lower voltage but much safer." },
         { key: "cellNominal", label: "Cell nominal voltage", type: "number", default: 3.6, min: 3.2, max: 3.8, step: 0.05, unit: "V", help: "Printed on the cell (3.6 V or 3.7 V for most 18650s)." },
         { key: "cellMax", label: "Cell full-charge voltage", type: "number", default: 4.2, min: 3.6, max: 4.35, step: 0.05, unit: "V" },
         { key: "capacity", label: "Cell capacity", type: "number", default: 2500, min: 500, max: 4000, step: 50, unit: "mAh" },
         { key: "cellMaxA", label: "Cell max continuous discharge", type: "number", default: 10, min: 1, max: 30, step: 0.5, unit: "A", help: "From the cell datasheet (e.g. 10 A for a typical 2500 mAh high-drain cell)." },
+        { key: "cellMin", label: "Cell cut-off (empty) voltage", type: "number", default: 3.0, min: 2.0, max: 3.3, step: 0.05, unit: "V", help: "Below this the cell is damaged. Li-ion: 2.5–3.0 V. LiFePO4: 2.0–2.5 V." },
+        { key: "cellRint", label: "Cell internal resistance", type: "number", default: 50, min: 10, max: 300, step: 5, unit: "mΩ", help: "Higher resistance = more voltage sag under load (old or cheap cells: 100–200 mΩ)." },
+        { key: "initialSoc", label: "State of charge at start", type: "number", default: 95, min: 5, max: 100, step: 5, unit: "%", help: "How full the pack is when the simulation starts." },
         { key: "bms", label: "BMS / protection board fitted", type: "boolean", default: false, help: "Protects against over-charge, over-discharge, over-current and short circuit." },
       ],
       specs: {

@@ -1,16 +1,16 @@
 "use client";
+import { VideoManager } from "@/components/admin/VideoManager";
 import { useEffect, useMemo, useState } from "react";
 import { Monitoring } from "@/components/admin/Monitoring";
 import { RequireAuth } from "@/components/shell/AppShell";
 import { Badge, Button, Field, PageHeader, Panel, Tabs } from "@/components/ui";
 import { useApp } from "@/lib/store/app";
 import { getBackend } from "@/lib/data";
-import type { Announcement, Mission, Progress, Video, XpEvent } from "@/lib/data/types";
+import type { Announcement, Mission, Progress, XpEvent } from "@/lib/data/types";
 import type { ComponentRecord, PinDef, Profile, Project, SimStatus, VerificationStatus } from "@/lib/types";
 import { allComponents, getComponent } from "@/lib/catalogue";
 import { TOPICS, WEEKLY_MISSIONS_DEFAULT } from "@/lib/learning";
 import type { QuizQuestion } from "@/lib/learning/types";
-import { youtubeId } from "@/lib/youtube";
 import { AdminManagement } from "@/components/admin/AdminManagement";
 import { XpRulesEditor } from "@/components/admin/XpRulesEditor";
 import { UserManagement } from "@/components/admin/UserManagement";
@@ -131,41 +131,7 @@ function Learning() {
 }
 
 function Videos() {
-  const { content, saveContent, toast } = useApp();
-  const empty: Video = { id: "", title: "", url: "", description: "", competition: "all", difficulty: "beginner", category: "Electronics" };
-  const [v, setV] = useState<Video>(empty);
-  return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Panel title="Add YouTube video">
-        <div className="space-y-3">
-          <Field label="Title"><input className="bf-input" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} /></Field>
-          <Field label="YouTube URL"><input className="bf-input" value={v.url} onChange={(e) => setV({ ...v, url: e.target.value })} /></Field>
-          <Field label="Thumbnail URL (optional)"><input className="bf-input" value={v.thumbnail ?? ""} onChange={(e) => setV({ ...v, thumbnail: e.target.value || undefined })} /></Field>
-          <Field label="Description"><textarea className="bf-input" value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} /></Field>
-          <div className="grid grid-cols-3 gap-2">
-            <Field label="Category"><select className="bf-input" value={v.category} onChange={(e) => setV({ ...v, category: e.target.value as Video["category"] })}>{["Electronics", "Arduino", "Sensors", "Motor Drivers", "Chassis", "Line Following", "Robo Race", "Robo War", "Advanced Robotics"].map((c) => <option key={c}>{c}</option>)}</select></Field>
-            <Field label="Competition"><select className="bf-input" value={v.competition} onChange={(e) => setV({ ...v, competition: e.target.value as Video["competition"] })}>{["all", "race", "line", "sumo"].map((c) => <option key={c}>{c}</option>)}</select></Field>
-            <Field label="Difficulty"><select className="bf-input" value={v.difficulty} onChange={(e) => setV({ ...v, difficulty: e.target.value as Video["difficulty"] })}>{["beginner", "intermediate", "advanced"].map((c) => <option key={c}>{c}</option>)}</select></Field>
-          </div>
-          <Field label="Related topic"><select className="bf-input" value={v.topicId ?? ""} onChange={(e) => setV({ ...v, topicId: e.target.value || undefined })}><option value="">—</option>{TOPICS.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}</select></Field>
-          <Button variant="primary" onClick={async () => {
-            if (!v.title || !youtubeId(v.url)) return toast("error", "Enter a title and a valid YouTube URL.");
-            await saveContent({ videos: [...content.videos, { ...v, id: rid("vid") }] });
-            setV(empty);
-            toast("success", "Video added");
-          }}>Add video</Button>
-        </div>
-      </Panel>
-      <Panel title={`Videos (${content.videos.length})`}>
-        {content.videos.map((x) => (
-          <div key={x.id} className="flex items-center justify-between border-b border-line py-2 text-sm">
-            <span>{x.title} <Badge>{x.category}</Badge></span>
-            <Button size="sm" variant="danger" onClick={() => void saveContent({ videos: content.videos.filter((y) => y.id !== x.id) })}>Remove</Button>
-          </div>
-        ))}
-      </Panel>
-    </div>
-  );
+  return <VideoManager />;
 }
 
 function Missions() {

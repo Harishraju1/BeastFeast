@@ -85,6 +85,12 @@ export type ModelKey =
   | "to92"
   | "display"
   | "regulator"
+  | "diode"
+  | "transistor"
+  | "xiao"
+  | "bracket"
+  | "soil"
+  | "pulse-ox"
   // every other kind keeps its simple block representation
   | "generic";
 
@@ -151,7 +157,8 @@ function driverModel(c: Comp, t: string): ModelInfo {
 function controllerModel(c: Comp, t: string): ModelInfo {
   const b = c.board ?? "";
   if (/esp32-?s3/.test(t)) return /xiao/.test(t) ? m("controller-generic", false, "Small microcontroller board") : m("esp32s3", true, "ESP32-S3 DevKit (two USB-C ports)");
-  if (/xiao|attiny|teensy|stm32|nrf52|rp2040-zero|esp-01\b/.test(t)) return m("controller-generic", false, "Microcontroller board");
+  if (/xiao/.test(t)) return m("xiao", true, `${c.name} (21 × 17.5 mm, USB-C)`);
+  if (/attiny|teensy|stm32|nrf52|rp2040-zero|esp-01\b/.test(t)) return m("controller-generic", false, "Microcontroller board");
   if (b === "esp32-devkit-v1" || /esp32 ?devkit|esp32-devkit/.test(t)) return m("esp32", true, "ESP32 DevKit V1 (WROOM-32 module)");
   if (/esp32|esp8266|nodemcu/.test(t)) return m("esp32", false, "ESP32-style dev board");
   if (b === "pico" || b === "pico-w" || /raspberry-pi-pico/.test(t)) return m("pico", true, /pico-w|pico w/.test(t) ? "Raspberry Pi Pico W" : "Raspberry Pi Pico");
@@ -190,6 +197,8 @@ function sensorModel(c: Comp, t: string): ModelInfo {
   if (k === "imu") return m("imu", false, "IMU breakout board");
   if (/limit-switch/.test(t)) return m("microswitch", true, "Lever micro-switch");
   if (/\bldr\b|photoresistor/.test(t)) return m("ldr", true, "Photoresistor (LDR)");
+  if (/soil/.test(t)) return m("soil", true, "Soil moisture probe + comparator board");
+  if (/max3010/.test(t)) return m("pulse-ox", true, "MAX30102 pulse-oximeter breakout");
   if (/\bdht(11|22)\b/.test(t)) return m("dht", true, /22/.test(t) ? "DHT22 (white grille)" : "DHT11 (blue grille)");
   if (/ds18b20|lm35|tmp36/.test(t)) return m("to92", true, `${c.name} (TO-92 package)`);
   if (k === "bumper") return m("microswitch", false, "Micro-switch bumper");
@@ -256,6 +265,13 @@ export function modelKeyFor(c: Comp): ModelInfo {
       return c.name && /^(red|green|blue|yellow|white) led$|^led diode$/i.test(c.name) ? m("led", true, "5 mm LED") : m("generic", false, "Block representation");
     case "switch":
       return /push|tactile|button/.test(t) ? m("switch", true, "6 × 6 mm tactile push button") : /toggle/.test(t) ? m("switch", true, "Toggle switch (bat lever)") : m("generic", false, "Block representation");
+    case "diode":
+      return m("diode", true, /1n4148/.test(t) ? "Glass small-signal diode (DO-35)" : "Axial diode with cathode band");
+    case "transistor":
+    case "mosfet":
+      return m("transistor", true, /ao3400/.test(t) ? "SOT-23 MOSFET" : /tip|irf|irl|z44|540|channel-mosfet/.test(t) ? "TO-220 power device" : "TO-92 transistor");
+    case "mechanical":
+      return /bracket/.test(t) ? m("bracket", /motor|servo|l-bracket|u-bracket/.test(t), "Folded metal bracket") : m("generic", false, "Block representation");
     case "pcb":
       return /breadboard/.test(t) ? m("breadboard", true, "Solderless breadboard") : m("generic", false, "Block representation");
     case "display":

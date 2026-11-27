@@ -8,10 +8,10 @@ import { Camera, CheckCircle2, X } from "lucide-react";
 import { useApp } from "@/lib/store/app";
 import { BACKEND_MODE, getBackend } from "@/lib/data";
 import { Button } from "@/components/ui";
-import { COUNTRY_CODE, NIAT_ID_EXAMPLE, NIAT_ID_FORMAT, avatarFileError, mobileError, niatIdError, normalizeNiatId, passwordError, toE164India } from "@/lib/validation";
+import { CAMPUS_PLACEHOLDER, COUNTRY_CODE, NIAT_ID_EXAMPLE, NIAT_ID_FORMAT, avatarFileError, campusError, normalizeCampus, mobileError, niatIdError, normalizeNiatId, passwordError, toE164India } from "@/lib/validation";
 
-type Fields = { name: string; email: string; phone: string; niatId: string; password: string; confirm: string };
-const EMPTY: Fields = { name: "", email: "", phone: "", niatId: "", password: "", confirm: "" };
+type Fields = { name: string; email: string; phone: string; niatId: string; campus: string; password: string; confirm: string };
+const EMPTY: Fields = { name: "", email: "", phone: "", niatId: "", campus: "", password: "", confirm: "" };
 
 type Mode = "in" | "up" | "forgot";
 
@@ -28,6 +28,8 @@ function validate(f: Fields, mode: Mode): Partial<Record<keyof Fields, string>> 
   if (m) e.phone = m;
   const n = niatIdError(f.niatId);
   if (n) e.niatId = n;
+  const c = campusError(f.campus);
+  if (c) e.campus = c;
   const p = passwordError(f.password);
   if (p) e.password = p;
   if (!p && f.password !== f.confirm) e.confirm = "The passwords do not match.";
@@ -120,6 +122,7 @@ function LoginInner() {
     let v = e.target.value;
     if (k === "niatId") v = v.toUpperCase().replace(/\s/g, "").slice(0, 11);
     if (k === "phone") v = v.replace(/[^\d\s-]/g, "").slice(0, 14);
+    if (k === "campus") v = v.slice(0, 60);
     setF({ ...f, [k]: v });
     if (k === "niatId") setNiatTaken(null);
   };
@@ -174,7 +177,7 @@ function LoginInner() {
         router.replace(safeNext);
         return;
       }
-      await signUp({ name: f.name.trim(), email: f.email.trim(), password: f.password, phone: toE164India(f.phone), niatId: normalizeNiatId(f.niatId) });
+      await signUp({ name: f.name.trim(), email: f.email.trim(), password: f.password, phone: toE164India(f.phone), niatId: normalizeNiatId(f.niatId), campus: normalizeCampus(f.campus) });
       if (pic) {
         try {
           await (await getBackend()).setAvatar(pic);
@@ -246,11 +249,14 @@ function LoginInner() {
                 <input id="su-phone" className={`${input("phone")} min-w-0 flex-1 font-mono`} type="tel" inputMode="numeric" placeholder="9876543210" value={f.phone} onChange={set("phone")} onBlur={blur("phone")} autoComplete="tel-national" aria-invalid={!!show("phone")} />
               </div>
             </FieldRow>
-            <FieldRow id="su-niat" label="NIAT student ID" error={show("niatId") ?? (niatTaken ? errors.niatId : undefined)} hint={`Format ${NIAT_ID_FORMAT}, e.g. ${NIAT_ID_EXAMPLE}.`}>
+            <FieldRow id="su-niat" label="NIAT Student ID" error={show("niatId") ?? (niatTaken ? errors.niatId : undefined)} hint={`For example ${NIAT_ID_FORMAT}.`}>
               <div className="relative">
                 <input id="su-niat" className={`${input("niatId")} font-mono uppercase tracking-wider`} placeholder={NIAT_ID_EXAMPLE} value={f.niatId} onChange={set("niatId")} onBlur={blur("niatId")} autoComplete="off" spellCheck={false} aria-invalid={!!show("niatId")} />
                 {niatTaken === false && !errors.niatId && <CheckCircle2 size={16} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#2f7a46]" aria-label="NIAT ID available" />}
               </div>
+            </FieldRow>
+            <FieldRow id="su-campus" label="Campus / College Name" error={show("campus")}>
+              <input id="su-campus" className={input("campus")} placeholder={CAMPUS_PLACEHOLDER} value={f.campus} onChange={set("campus")} onBlur={blur("campus")} autoComplete="organization" maxLength={60} aria-invalid={!!show("campus")} aria-required="true" />
             </FieldRow>
           </>
         )}

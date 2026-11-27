@@ -9,7 +9,8 @@ const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT
  * - three.js / WebGL and the simulator need no extra sources; textures come from data:/blob:
  * - Next.js inlines its bootstrap scripts → script-src 'unsafe-inline' (no third-party script origins allowed)
  * - Supabase (REST, Auth, Storage, Realtime) → connect-src; avatars and admin-supplied component images → img-src https:
- * - YouTube lesson videos → frame-src (nocookie domain preferred)
+ * - lesson videos: official players of YouTube (nocookie), Vimeo, Dailymotion, Instagram and Facebook → frame-src;
+ *   uploaded videos play from signed Supabase Storage URLs → media-src
  */
 const csp = [
   "default-src 'self'",
@@ -17,9 +18,9 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
-  "media-src 'self' blob:",
+  `media-src 'self' blob: https://${supabase}`,
   `connect-src 'self' https://${supabase} wss://${supabase}${isDev ? " ws: http://localhost:*" : ""}`,
-  "frame-src https://www.youtube-nocookie.com https://www.youtube.com",
+  "frame-src https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com https://www.dailymotion.com https://geo.dailymotion.com https://www.instagram.com https://www.facebook.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",

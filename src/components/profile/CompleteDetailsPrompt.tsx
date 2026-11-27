@@ -5,30 +5,33 @@ import { Loader2 } from "lucide-react";
 import { getBackend } from "@/lib/data";
 import { useApp } from "@/lib/store/app";
 import { Button } from "@/components/ui";
-import { COUNTRY_CODE, NIAT_ID_EXAMPLE, mobileError, niatIdError, normalizeNiatId, toE164India } from "@/lib/validation";
+import { CAMPUS_PLACEHOLDER, COUNTRY_CODE, NIAT_ID_EXAMPLE, campusError, mobileError, niatIdError, normalizeCampus, normalizeNiatId, toE164India } from "@/lib/validation";
 
 /**
- * NIAT ID and mobile number are required for new accounts. The sign-up form collects them; this prompt
- * covers accounts created any other way (no NIAT ID and no earlier student ID on record).
- * Accounts from before NIAT IDs were required keep working unchanged (their old ID is kept as a legacy ID).
+ * NIAT ID, campus name and mobile number are required for new accounts. The sign-up form collects them; this
+ * prompt covers accounts created any other way (Google sign-in, or no NIAT ID and no earlier student ID on record)
+ * and asks every student without a campus name for it. Nothing is changed until the student saves.
+ * Accounts from before NIAT IDs were required keep their old ID (as a legacy ID) for an administrator to review.
  */
 export function CompleteDetailsPrompt() {
-  const { user, signOut, toast } = useApp();
+  const { user, signOut, toast, refreshUser } = useApp();
   const path = usePathname();
-  const [need, setNeed] = useState<{ niat: boolean; phone: boolean } | null>(null);
+  const [need, setNeed] = useState<{ niat: boolean; phone: boolean; campus: boolean } | null>(null);
   const [niat, setNiat] = useState("");
+  const [campus, setCampus] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
+    const noCampus = !user.campus?.trim();
     void getBackend()
       .then((b) => b.getMyDetails())
       .then((d) => {
         const legacy = !!d.legacyStudentId;
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- set from an async result
-        setNeed(!legacy && (!d.niatId || !d.phone) ? { niat: !d.niatId, phone: !d.phone } : null);
+        const n = { niat: !legacy && !d.niatId, phone: !legacy && !d.phone, campus: noCampus };
+        setNeed(n.niat || n.phone || n.campus ? n : null);
       })
       .catch(() => setNeed(null));
   }, [user]);
@@ -37,12 +40,17 @@ export function CompleteDetailsPrompt() {
 
   async function save() {
     if (busy) return;
-    const e = (need!.niat ? niatIdError(niat) : null) ?? (need!.phone ? mobileError(phone) : null);
+    const e = (need!.niat ? niatIdError(niat) : null) ?? (need!.campus ? campusError(campus) : null) ?? (need!.phone ? mobileError(phone) : null);
     if (e) return setErr(e);
     setBusy(true);
     setErr(null);
     try {
-      await (await getBackend()).completeMyDetails({ niatId: need!.niat ? normalizeNiatId(niat) : undefined, phone: need!.phone ? toE164India(phone) : undefined });
+      const b = await getBackend();
+      if (need!.niat || need!.phone) await b.completeMyDetails({ niatId: need!.niat ? normalizeNiatId(niat) : undefined, phone: need!.phone ? toE164India(phone) : undefined });
+      if (need!.campus && user) {
+        await b.updateProfile({ id: user.id, campus: normalizeCampus(campus) });
+        await refreshUser();
+      }
       setNeed(null);
       toast("success", "Thanks — your details are saved");
     } catch (x) {
@@ -57,12 +65,18 @@ export function CompleteDetailsPrompt() {
       <div className="bf-panel bf-on-ivory bf-raised w-full max-w-sm space-y-4 border-t-4 !border-t-accent p-6">
         <div>
           <h2 id="cd-title" className="font-display text-xl font-bold">Complete your account</h2>
-          <p className="mt-1 text-xs text-muted">BEAST FEAST needs your NIAT student ID and mobile number. Only you and the club administrators can see them.</p>
+          <p className="mt-1 text-xs text-muted">BEAST FEAST needs {[need.niat && "your NIAT Student ID", need.campus && "your campus name", need.phone && "your mobile number"].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1")}.{(need.niat || need.phone) && " Your ID and number are visible only to you and the club administrators."}</p>
         </div>
         {need.niat && (
           <div className="space-y-1">
-            <label htmlFor="cd-niat" className="bf-label block">NIAT student ID</label>
+            <label htmlFor="cd-niat" className="bf-label block">NIAT Student ID</label>
             <input id="cd-niat" className="bf-input font-mono uppercase tracking-wider" placeholder={NIAT_ID_EXAMPLE} value={niat} onChange={(e) => setNiat(e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 11))} />
+          </div>
+        )}
+        {need.campus && (
+          <div className="space-y-1">
+            <label htmlFor="cd-campus" className="bf-label block">Campus / College Name</label>
+            <input id="cd-campus" className="bf-input" placeholder={CAMPUS_PLACEHOLDER} value={campus} maxLength={60} onChange={(e) => setCampus(e.target.value.slice(0, 60))} />
           </div>
         )}
         {need.phone && (

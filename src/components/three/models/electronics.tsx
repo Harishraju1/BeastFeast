@@ -277,3 +277,91 @@ export function RegulatorModel({ comp, d }: ModelProps) {
   );
 }
 
+
+export function DiodeModel({ comp }: ModelProps) {
+  const power = /1N400|schottky|flyback|tvs/i.test(comp.name);
+  const [r, len] = power ? [1.35, 5.2] : [0.9, 3.8];
+  return (
+    <Mm>
+      <Leads x0={-8} x1={8} />
+      <Cyl p={[0, 0, 0]} rad={r} len={len} ax="x" c={/1N4148/i.test(comp.name) ? "#d6732c" : "#1a1a1a"} rough={0.4} seg={12} opacity={/1N4148/i.test(comp.name) ? 0.85 : undefined} />
+      <Cyl p={[len / 2 - 0.5, 0, 0]} rad={r + 0.02} len={0.6} ax="x" c="#c8ccd1" metal={0.5} seg={12} />
+    </Mm>
+  );
+}
+
+/** TO-92 (small-signal), TO-220 (TIP / IRF power) or SOT-23 (AO3400). */
+export function TransistorModel({ comp }: ModelProps) {
+  if (/AO3400|SOT/i.test(comp.name))
+    return (
+      <Mm>
+        <B p={[0, 0.5, 0]} s={[2.9, 1, 1.6]} c="#1a1a1a" />
+        {[-0.95, 0.95].map((x) => <B key={x} p={[x, 0.2, -1.1]} s={[0.4, 0.15, 0.6]} c="#c0c4c8" metal={0.8} hl={false} />)}
+        <B p={[0, 0.2, 1.1]} s={[0.4, 0.15, 0.6]} c="#c0c4c8" metal={0.8} hl={false} />
+      </Mm>
+    );
+  if (/TIP|IRF|IRL|Z44|540|n-channel|p-channel/i.test(comp.name))
+    return (
+      <Mm>
+        <B p={[0, 4.5, 0]} s={[10, 9, 4.5]} c="#141414" />
+        <B p={[0, 12, -1.6]} s={[10, 6.5, 1.3]} c="#c8ccd1" metal={0.85} rough={0.3} />
+        {[-2.54, 0, 2.54].map((x) => <B key={x} p={[x, -5, 0]} s={[0.8, 10, 0.5]} c="#c0c4c8" metal={0.8} hl={false} />)}
+      </Mm>
+    );
+  return <To92Model />;
+}
+
+/** Seeed Studio XIAO: 21 × 17.5 mm with USB-C and 2 × 7 castellated pads. */
+export function XiaoModel({ comp }: ModelProps) {
+  return (
+    <Mm>
+      <B p={[0, 0.6, 0]} s={[21, 1.2, 17.5]} c={/rp2040/i.test(comp.name) ? "#1d2b4a" : "#0f2a1c"} />
+      <B p={[1.5, 1.9, 0]} s={[11, 1.4, 10]} c="#c9ced4" metal={0.85} rough={0.3} />
+      <B p={[-9, 2, 0]} s={[7.4, 3.2, 9]} c="#b8bec6" metal={0.9} rough={0.25} />
+      {Array.from({ length: 7 }, (_, i) => [-1, 1].map((sz) => <B key={`${i}${sz}`} p={[-7.6 + i * 2.54, 1.25, sz * 7.9]} s={[1.3, 0.1, 1.5]} c="#d4b24c" metal={0.9} hl={false} />))}
+    </Mm>
+  );
+}
+
+/** Folded metal bracket (motor / servo / sensor mounts, L- and U-brackets). */
+export function BracketModel({ comp, d }: ModelProps) {
+  const L = Math.max(15, d.x), W = Math.max(10, d.y), H = Math.max(10, d.z);
+  const u = /^u-|U-bracket|servo/i.test(comp.name);
+  return (
+    <Mm>
+      <B p={[0, 0.75, 0]} s={[L, 1.5, W]} c="#b9c0c8" metal={0.85} rough={0.35} />
+      <B p={[-L / 2 + 0.75, H / 2, 0]} s={[1.5, H, W]} c="#b9c0c8" metal={0.85} rough={0.35} />
+      {u && <B p={[L / 2 - 0.75, H / 2, 0]} s={[1.5, H, W]} c="#b9c0c8" metal={0.85} rough={0.35} />}
+      {[-0.25, 0.25].map((t) => (
+        <mesh key={t} position={[-L / 2 - 0.01, H * 0.6, W * t]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[1.6, 1.6, 1.6, 12]} />
+          <meshBasicMaterial color="#2a2f35" />
+        </mesh>
+      ))}
+    </Mm>
+  );
+}
+
+/** Capacitive / resistive soil probe: a two-prong fork on a small board. */
+export function SoilModel() {
+  return (
+    <Mm>
+      <B p={[0, 0.8, 0]} s={[22, 1.6, 20]} c="#1c4fb0" />
+      {[-5, 5].map((z) => <B key={z} p={[-22, 0.8, z]} s={[30, 1.6, 4]} c="#2a63c9" />)}
+      {[-5, 5].map((z) => <B key={`t${z}`} p={[-22, 1.7, z]} s={[28, 0.1, 2.6]} c="#d4b24c" metal={0.9} hl={false} />)}
+      {[0, 1, 2, 3].map((i) => <B key={i} p={[9, 3, -3.8 + i * 2.54]} s={[0.64, 4, 0.64]} c="#c9a227" metal={0.8} hl={false} />)}
+    </Mm>
+  );
+}
+
+/** MAX30102 pulse-oximeter breakout: small purple board with the optical window. */
+export function PulseOxModel() {
+  return (
+    <Mm>
+      <B p={[0, 0.8, 0]} s={[14, 1.6, 12.7]} c="#6a1b9a" />
+      <B p={[0, 2.1, 0]} s={[5.6, 1, 3.3]} c="#111" />
+      <B p={[0, 2.65, 0]} s={[4.2, 0.1, 2]} c="#3a3a3a" metal={0.2} rough={0.1} opacity={0.8} />
+      {Array.from({ length: 7 }, (_, i) => <B key={i} p={[-6 + i * 2, 0.9, 5.8]} s={[1.2, 0.1, 1]} c="#d4b24c" metal={0.9} hl={false} />)}
+    </Mm>
+  );
+}

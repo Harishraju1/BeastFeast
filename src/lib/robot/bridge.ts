@@ -38,6 +38,8 @@ export class RobotElectrical implements ArduinoHost {
   encoderOverride = new Map<string, number>();
   /** human-readable explanation of why each motor got its voltage */
   motorTrace: Record<string, string> = {};
+  /** live H-bridge output states (pin key → high / low / off), refreshed by every motorCommands() */
+  outState = new Map<string, "high" | "low" | "off">();
   /** voltages of passive networks (dividers, LDRs, RC) solved by the circuit bench, keyed by net id */
   passiveVolts: Map<number, number> | null = null;
   /** DHT sensors: who answers on a pin (set by the circuit bench; in the arena no DHT answers → NaN) */
@@ -284,6 +286,7 @@ export class RobotElectrical implements ArduinoHost {
   /** Terminal potentials for every driver output, then the voltage across each motor. */
   motorCommands(): MotorCommands {
     const potential = new Map<string, number>(); // pinKey -> volts (relative), absent = floating
+    this.outState.clear();
     for (const d of this.graph.parts) {
       const c = this.graph.comps.get(d.uid)!;
       const wiring = DRIVER_WIRING[c.id];
@@ -321,6 +324,20 @@ export class RobotElectrical implements ArduinoHost {
               v = (ch.enables ?? []).every((e) => dig(lvl(e))) ? veff * (lvl(ch.inA) - lvl(ch.inB)) : 0;
               break;
           }
+        }
+        // instantaneous state of each output (wire colours, 3D): HIGH = connected to VS, LOW = to GND, off = floating
+        const k0 = `${d.uid}.${ch.outs[0]}`, k1 = `${d.uid}.${ch.outs[1]}`;
+        if (!active || (wiring.scheme === "rpwm-lpwm" && !(ch.enables ?? []).every((e) => dig(lvl(e))))) {
+          this.outState.set(k0, "off");
+          this.outState.set(k1, "off");
+        } else if (wiring.scheme === "pwm-dir") {
+          const on = lvl(ch.inA) > 0, rev = dig(lvl(ch.inB)) === 1;
+          this.outState.set(k0, on && !rev ? "high" : "low");
+          this.outState.set(k1, on && rev ? "high" : "low");
+        } else {
+          const hi = (pin: string) => (wiring.scheme === "in-in" || wiring.scheme === "rpwm-lpwm" ? lvl(pin) > 0 : dig(lvl(pin)) === 1);
+          this.outState.set(k0, hi(ch.inA) ? "high" : "low");
+          this.outState.set(k1, hi(ch.inB) ? "high" : "low");
         }
         if (!active) continue; // floating outputs → motor coasts
         potential.set(`${d.uid}.${ch.outs[0]}`, v / 2);

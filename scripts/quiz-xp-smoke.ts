@@ -26,7 +26,7 @@ const made: string[] = [];
 async function student(name: string): Promise<{ id: string; sb: SupabaseClient }> {
   const email = `${TAG}-${name}-${Date.now()}@example.com`;
   const password = randomBytes(18).toString("base64url");
-  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: `Quiz XP ${name}` } });
+  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { skip_profile_checks: true }, user_metadata: { name: `Quiz XP ${name}` } });
   if (error) throw error;
   made.push(data.user.id);
   const sb = createClient(URL_, PUB, { auth: { persistSession: false } });

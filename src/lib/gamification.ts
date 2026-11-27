@@ -1,4 +1,5 @@
 import type { Project } from "@/lib/types";
+import { computeStreak } from "@/lib/streak";
 import type { Progress, XpEvent } from "@/lib/data/types";
 
 import { rankProgress } from "./ranks";
@@ -37,21 +38,7 @@ export function earnedAchievements(events: XpEvent[], projects: Project[], progr
   return s;
 }
 
-export function streakDays(events: XpEvent[]): number {
-  const days = new Set(events.map((e) => e.at.slice(0, 10)));
-  let n = 0;
-  const d = new Date();
-  for (;;) {
-    const k = d.toISOString().slice(0, 10);
-    if (!days.has(k)) {
-      if (n === 0) {
-        d.setDate(d.getDate() - 1);
-        if (!days.has(d.toISOString().slice(0, 10))) return 0;
-        continue;
-      }
-      return n;
-    }
-    n++;
-    d.setDate(d.getDate() - 1);
-  }
+/** Current daily streak from XP events (day ends 23:59 India time — see lib/streak.ts). */
+export function streakDays(events: XpEvent[], now: Date = new Date()): number {
+  return computeStreak(events, now).current;
 }

@@ -139,7 +139,7 @@ async function main() {
     await Promise.all(
       good.slice(i, i + 5).map(async (g) => {
         const password = tempPassword();
-        const { error } = await admin.auth.admin.createUser({ email: g.email, password, email_confirm: true, user_metadata: { name: g.name, niat_id: g.niat, phone: g.phone } });
+        const { error } = await admin.auth.admin.createUser({ email: g.email, password, email_confirm: true, app_metadata: { skip_profile_checks: true }, user_metadata: { name: g.name, niat_id: g.niat, phone: g.phone } });
         if (!error) {
           created++;
           lines.push([g.name, g.email, password, "created"].map(csvCell).join(","));

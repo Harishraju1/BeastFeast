@@ -26,7 +26,7 @@ const dayIST = (offset: number) => {
 async function user(name: string, daysOld: number): Promise<{ id: string; sb: SupabaseClient }> {
   const email = `beastfeast-xp-${name}-${Date.now()}@example.com`;
   const password = randomBytes(18).toString("base64url");
-  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: `XP ${name}` } });
+  const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { skip_profile_checks: true }, user_metadata: { name: `XP ${name}` } });
   if (error) throw error;
   made.push(data.user.id);
   await service.from("profiles").update({ created_at: new Date(Date.now() - daysOld * 86400000).toISOString() }).eq("id", data.user.id);
