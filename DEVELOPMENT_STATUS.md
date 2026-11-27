@@ -230,3 +230,8 @@ Pending (needs authorization — production changes):
 2. Then `npm run db:backup` and apply `supabase/migrations/0015_niat_campus_streaks.sql` and `0016_video_library.sql`. Migration 0015 makes NIAT ID + campus mandatory in the sign-up trigger, so the old frontend must not be live when it runs.
 3. Then run `npx tsx scripts/profile-smoke.ts https://<site>` (new NIAT / campus / streak / admin checks).
 Existing accounts are not modified: IDs stay as they are (the new pattern accepts every previously valid ID). Missing campus names are asked from the student on next visit.
+
+**Deployed 2026-11-27:**
+- Commit cdfd3ff is live on Vercel. The database was backed up first (beast-feast-backups/2026-11-27T08-25-03-304Z), then migrations 0015, 0016 and 0017 were applied.
+- 0017 fixes 0015: the "NIAT ID + campus required" rule now runs at the end of the sign-up transaction, so service-role accounts flagged with `app_metadata.skip_profile_checks` (bulk-accounts, smoke and load tests) work again.
+- Live checks: `scripts/profile-smoke.ts` passed 43/43. In two of them Supabase Auth rejected the test email address before the database rule ran, but the same rule is shown working by the service-API check. `scripts/video-smoke.ts` passed 6/6 (read-only).
